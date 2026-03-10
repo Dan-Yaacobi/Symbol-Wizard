@@ -166,7 +166,7 @@ function tick(now) {
 
   renderer.beginFrame();
   renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles, combatTextSystem);
-  drawHUD(renderer, player);
+  drawHUD(renderer, player, abilitySystem);
   renderer.composite();
 
   abilityBar.render();
