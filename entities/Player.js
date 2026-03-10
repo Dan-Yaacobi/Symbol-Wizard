@@ -9,6 +9,7 @@ export class Player extends Entity {
       radius: 1.8,
       hp: 20,
       maxHp: 20,
+      speed: 12,
       spriteKey: 'player',
       gold: 0,
       castCooldown: 0,
