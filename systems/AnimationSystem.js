@@ -7,19 +7,27 @@ export function updateEntityAnimation(entity, dt, moving) {
   if (entity.animationState !== nextState) {
     entity.animationState = nextState;
     entity.frameIndex = 0;
+    entity.currentFrame = 0;
     entity.frameTimer = 0;
   }
 
   const stateFrames = sprites[entity.spriteKey]?.[entity.animationState];
   if (!stateFrames || stateFrames.length <= 1) return;
 
-  const frameDuration = entity.frameDurations[entity.animationState] ?? 0.2;
+  const baseFrameDuration = entity.frameDurations[entity.animationState] ?? 0.2;
+  const speed = Math.hypot(entity.vx ?? 0, entity.vy ?? 0);
+  const speedRatio = moving ? Math.max(0.35, Math.min(2, speed / (entity.speed || 1))) : 1;
+  const frameDuration = baseFrameDuration / speedRatio;
+
+  entity.animationFrames = stateFrames;
   entity.frameTimer += dt;
 
   while (entity.frameTimer >= frameDuration) {
     entity.frameTimer -= frameDuration;
     entity.frameIndex = (entity.frameIndex + 1) % stateFrames.length;
   }
+
+  entity.currentFrame = entity.frameIndex;
 }
 
 export function updateProjectileAnimation(projectiles, dt) {

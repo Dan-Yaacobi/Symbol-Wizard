@@ -7,7 +7,7 @@ function getEntitySprite(entity) {
   const state = entity.animationState ?? 'idle';
   const stateFrames = spriteEntry?.[state] ?? spriteEntry?.idle;
   if (!stateFrames) return null;
-  const frameIndex = entity.frameIndex % stateFrames.length;
+  const frameIndex = (entity.currentFrame ?? entity.frameIndex ?? 0) % stateFrames.length;
   return stateFrames[frameIndex];
 }
 
