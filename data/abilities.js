@@ -30,6 +30,15 @@ function castFireBurst({ player, system, abilityLevel }) {
   const radius = 6 + abilityLevel * 0.6;
   const damage = 4 + abilityLevel * 2;
 
+  system.spawnEffect({
+    type: 'burst',
+    x: player.x,
+    y: player.y,
+    radius,
+    color: '#ff8a3d',
+    ttl: 0.22,
+  });
+
   for (const enemy of system.enemies) {
     if (!enemy.alive) continue;
     const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
@@ -53,17 +62,37 @@ function castBlink({ player, target, system, abilityLevel }) {
   }
 }
 
-function castLightningArc({ player, target, system, abilityLevel }) {
-  const chainRange = 10;
+function castLightningArc({ player, system, abilityLevel }) {
+  const targetRange = 12 + abilityLevel * 0.8;
+  const chainRange = 8 + abilityLevel * 0.35;
   const baseDamage = 4 + abilityLevel * 2;
-  const firstTarget = system.findClosestEnemyInRange(target.x, target.y, chainRange);
+  const firstTarget = system.findClosestEnemyInRange(player.x, player.y, targetRange);
 
   if (!firstTarget) return;
 
   const hit = new Set();
-  let source = firstTarget;
-  system.damageEnemy(source, baseDamage);
-  hit.add(source);
+  let sourceX = player.x;
+  let sourceY = player.y;
+  let sourceEnemy = firstTarget;
+
+  const applyArcHit = (enemy, damage) => {
+    system.spawnEffect({
+      type: 'line',
+      fromX: sourceX,
+      fromY: sourceY,
+      toX: enemy.x,
+      toY: enemy.y,
+      color: '#b8dbff',
+      ttl: 0.14,
+    });
+    system.damageEnemy(enemy, damage);
+    hit.add(enemy);
+    sourceX = enemy.x;
+    sourceY = enemy.y;
+    sourceEnemy = enemy;
+  };
+
+  applyArcHit(firstTarget, baseDamage);
 
   const chains = 1 + Math.floor(abilityLevel / 2);
   for (let i = 0; i < chains; i += 1) {
@@ -72,7 +101,7 @@ function castLightningArc({ player, target, system, abilityLevel }) {
 
     for (const enemy of system.enemies) {
       if (!enemy.alive || hit.has(enemy)) continue;
-      const dist = Math.hypot(enemy.x - source.x, enemy.y - source.y);
+      const dist = Math.hypot(enemy.x - sourceEnemy.x, enemy.y - sourceEnemy.y);
       if (dist <= chainRange && dist < nextDist) {
         nextDist = dist;
         nextEnemy = enemy;
@@ -80,9 +109,7 @@ function castLightningArc({ player, target, system, abilityLevel }) {
     }
 
     if (!nextEnemy) break;
-    system.damageEnemy(nextEnemy, Math.max(1, Math.round(baseDamage * 0.7)));
-    source = nextEnemy;
-    hit.add(nextEnemy);
+    applyArcHit(nextEnemy, Math.max(1, Math.round(baseDamage * 0.7)));
   }
 }
 
