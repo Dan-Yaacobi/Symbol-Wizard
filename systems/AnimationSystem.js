@@ -3,7 +3,7 @@ import { sprites } from '../entities/SpriteLibrary.js';
 export function updateEntityAnimation(entity, dt, moving) {
   if (!entity.frameDurations) return;
 
-  const nextState = moving ? 'walk' : 'idle';
+  const nextState = entity.isAttacking ? 'attack' : (moving ? 'walk' : 'idle');
   if (entity.animationState !== nextState) {
     entity.animationState = nextState;
     entity.frameIndex = 0;
