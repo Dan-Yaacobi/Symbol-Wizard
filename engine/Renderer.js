@@ -115,16 +115,31 @@ export class Renderer {
     }
   }
 
-  drawEffectText(text, fg, x, y, alpha = 1, bg = 'rgba(0,0,0,0)') {
+  drawEffectText(text, fg, x, y, alpha = 1, bg = 'rgba(0,0,0,0)', style = null) {
     const ctx = this.effects.ctx;
     const clampedAlpha = Math.max(0, Math.min(1, alpha));
     if (clampedAlpha <= 0) return;
 
-    ctx.globalAlpha = clampedAlpha;
-    for (let i = 0; i < text.length; i += 1) {
-      this.#drawGlyphToLayer(ctx, text[i], fg, bg, (x + i) | 0, y | 0);
+    const fontScale = Number.isFinite(style?.fontScale) ? style.fontScale : 1;
+    const fontWeight = style?.fontWeight ?? '700';
+
+    if (fontScale <= 1) {
+      ctx.globalAlpha = clampedAlpha;
+      for (let i = 0; i < text.length; i += 1) {
+        this.#drawGlyphToLayer(ctx, text[i], fg, bg, (x + i) | 0, y | 0);
+      }
+      ctx.globalAlpha = 1;
+      return;
     }
-    ctx.globalAlpha = 1;
+
+    ctx.save();
+    ctx.globalAlpha = clampedAlpha;
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'left';
+    ctx.font = `${fontWeight} ${Math.round(this.cellH * fontScale)}px monospace`;
+    ctx.fillStyle = fg;
+    ctx.fillText(text, x * this.cellW, y * this.cellH);
+    ctx.restore();
   }
 
   composite() {
