@@ -1,0 +1,55 @@
+:root {
+  --bg: #0b0d10;
+  --panel: #121822;
+  --panel-border: #2d3b52;
+  --text: #d9e4ff;
+  --accent: #82a6ff;
+}
+
+body {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: var(--bg);
+  color: var(--text);
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+
+.game-shell {
+  display: grid;
+  gap: 8px;
+}
+
+#gameCanvas {
+  border: 2px solid var(--panel-border);
+  background: #000;
+  image-rendering: pixelated;
+}
+
+.chat-box {
+  width: 1280px;
+  min-height: 120px;
+  border: 2px solid var(--panel-border);
+  background: var(--panel);
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+
+.chat-speaker {
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.chat-line {
+  min-height: 20px;
+}
+
+.chat-options {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.chat-options li {
+  margin-bottom: 3px;
+}
