@@ -158,108 +158,103 @@ At 60 FPS target:
 ## 11. Floating Combat Text System
 
 ### Purpose
-The Floating Combat Text (FCT) system provides immediate visual feedback for scoring events when a player clicks a bubble. It displays a short-lived text indicator at the clicked bubble location so players can quickly understand whether the action was correct or incorrect.
+The Floating Combat Text system provides immediate visual feedback for combat and reward events in the symbol-based wizard RPG. Text appears near the relevant entity so players can read combat outcomes at a glance without shifting attention away from gameplay.
 
-- Correct click: show `"+1"`
-- Incorrect click: show `"-1"`
+Spawn floating text for:
+- Enemy takes damage (e.g., `-12`, `-7`)
+- Player takes damage (e.g., `-5`)
+- Critical hit (e.g., `*25*`)
+- Gold pickup (e.g., `+10$`)
+- Healing and neutral informational events as needed by combat logic
 
-This feature is implemented entirely on the frontend and requires no backend changes.
+### Symbol RPG Text Style
+Floating text should match the game's symbol aesthetic and remain concise.
 
-### Backend Contract Usage
-The backend already returns the fields:
-- `scoreDelta`
-- `correct`
+Examples:
+- Damage: `-12`, `-7`
+- Critical hit: `*25*`
+- Gold pickup: `+10$`
 
-The frontend uses `scoreDelta` to determine whether to create positive or negative floating text and what value to render.
+Text is rendered in-canvas using the same symbol rendering rules, font treatment, and grid alignment conventions as the rest of the game.
 
-### Client-Side Runtime Data Structure
+### Color Rules
+Use semantic color mapping for readability and quick parsing:
+- **Red**: enemy or player damage
+- **Yellow**: critical hits
+- **Green**: healing
+- **Gold**: gold collected
+- **White**: neutral info
+
+### Spawn Location Rules
+Combat text should spawn near the entity that triggered the event:
+- Enemy takes damage → spawn above the enemy sprite
+- Player takes damage → spawn above the player sprite
+- Gold pickup → spawn above the player sprite
+- Other events → spawn above the event source entity
+
+Use world-space coordinates so text remains anchored correctly under camera movement.
+
+### Animation Behavior
+Each combat text entry should:
+- Move upward slightly
+- Fade out over time
+- Disappear automatically when expired
+
+Recommended lifetime per entry:
+- `0.8–1.2s`
+
+### CombatTextSystem (New System)
+Add a dedicated runtime system:
+- `CombatTextSystem`
+
+Responsibilities:
+- Spawn combat text entries from combat/loot events
+- Update text position and opacity over lifetime
+- Expire and remove completed entries
+- Render active entries above entities in world space
+
+`CombatTextSystem` should expose a simple spawn API usable by `CombatSystem`, `LootSystem`, and any future system that needs transient feedback.
+
+### Example Data Structure
 Maintain a transient runtime array:
-- `floatingTexts[]`
+- `combatTexts[]`
 
-Each item should follow:
+Example entry:
 
 ```json
 {
-  "id": "fct_1",
+  "id": "ct_1",
   "x": 320,
-  "y": 410,
-  "text": "+1",
-  "color": "green",
+  "y": 200,
+  "text": "-12",
+  "color": "red",
   "createdAt": "timestamp"
 }
 ```
 
-#### Field Definitions
-- `id`: unique identifier for React keying and cleanup
-- `x`: spawn x-coordinate at bubble position
-- `y`: spawn y-coordinate at bubble position
-- `text`: rendered value, e.g. `"+1"` or `"-1"`
-- `color`: semantic style (`green` for positive, `red` for negative)
-- `createdAt`: creation timestamp used for lifecycle expiration
+Recommended optional fields for robust lifecycle/rendering:
+- `lifetimeMs`: total lifetime (e.g., `1000`)
+- `velocityY`: upward drift speed
+- `opacity`: cached render alpha
 
-### Frontend Behavior
-When the bubble click response is received:
-1. Read `scoreDelta` from the API response.
-2. If `scoreDelta > 0`, create a green `"+1"` floating text entry.
-3. If `scoreDelta < 0`, create a red `"-1"` floating text entry.
-4. Spawn the text at the bubble's screen/world-projected position.
-5. Let it animate upward and fade out.
-6. Remove it automatically after animation completes.
+### Rendering Approach
+Floating combat text must be rendered through the same symbol rendering pipeline used by the game.
 
-`correct` may still be used for other UX behavior, but FCT creation should be driven by `scoreDelta` so no API contract changes are needed.
+Requirements:
+- Render inside the game canvas
+- Use the same font and symbol styling as other glyphs
+- Preserve grid alignment expectations where applicable
+- Avoid DOM overlays or HTML UI elements for FCT
 
-### Frontend Architecture Update
-Add a new UI component:
-- `FloatingTextLayer`
+Render pass guidance:
+1. Game world and entities render normally.
+2. `CombatTextSystem` renders active text entries in world/camera space above entity sprites.
+3. UI/HUD renders after world-space combat text as needed.
 
-Updated hierarchy:
-- `App`
-- `GameMenu`
-- `GameScreen`
-- `HeaderBar`
-- `PromptDisplay`
-- `BubbleField`
-- `FloatingTextLayer`
-- `Bubble`
-- `GameOverModal`
+### Performance Rule
+Combat text must remain lightweight and decoupled from core simulation:
+- No interaction with physics resolution
+- No mutation of entity movement/combat state
+- Bounded, short-lived entries with automatic cleanup
 
-#### Responsibilities
-- **BubbleField**
-  - handles bubble clicks
-  - interprets response data
-  - enqueues floating text entries into `floatingTexts[]`
-
-- **FloatingTextLayer**
-  - renders all active floating text elements
-  - applies animation classes/styles
-  - handles lifecycle completion and removal of expired entries
-
-### Animation Design
-Floating text animation should include:
-- Upward movement (approximately `30–50px`)
-- Opacity fade-out to fully transparent
-- Slight scale pop at spawn for readability and polish
-
-Recommended total duration:
-- `0.8–1.2s`
-
-Implementation options:
-- CSS keyframe animation (preferred for combined transform + opacity)
-- CSS transitions (acceptable alternative)
-
-### Lifecycle Management
-Each floating text entry is ephemeral:
-1. Create and append entry on scoring response.
-2. Render immediately in `FloatingTextLayer`.
-3. Animate from initial state to end state.
-4. On animation end (or timeout guard), remove entry from `floatingTexts[]`.
-
-The system should guarantee automatic cleanup so no stale entries remain in state.
-
-### Performance Notes
-Floating combat text is intentionally lightweight:
-- Very short lifespan per entry
-- Small number of concurrent items
-- No coupling with bubble physics/update loop
-
-FCT must remain a UI-layer concern and **must not** be integrated into the physics engine.
+This keeps the feature visually expressive without affecting combat, AI, or physics update performance.
