@@ -53,3 +53,75 @@ body {
 .chat-options li {
   margin-bottom: 3px;
 }
+
+.ability-bar,
+.skill-tree-window {
+  width: 1280px;
+  border: 2px solid var(--panel-border);
+  background: var(--panel);
+  padding: 8px 10px;
+  box-sizing: border-box;
+}
+
+.ability-slots {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ability-slot,
+.ability-pool-item,
+.skill-card button {
+  background: #1a2230;
+  color: var(--text);
+  border: 1px solid #3d4f6e;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.ability-slot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.slot-hotkey {
+  color: var(--accent);
+  font-weight: bold;
+}
+
+.ability-pool-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.skill-tree-window.hidden {
+  display: none;
+}
+
+.skill-tree-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.skill-card {
+  border: 1px solid #3d4f6e;
+  padding: 8px;
+  background: #111827;
+}
+
+.upgrade-list {
+  padding-left: 18px;
+}
+
+.upgrade-list .unlocked {
+  color: #8ef7ad;
+}
+
+.meta {
+  color: #9eb3d9;
+}
