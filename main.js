@@ -166,6 +166,10 @@ function tick(now) {
   combatTextSystem.update(dt);
 
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1);
+  for (const enemy of enemies) {
+    if (!enemy.alive) continue;
+    updateEntityAnimation(enemy, dt, Math.hypot(enemy.vx, enemy.vy) > 0.1);
+  }
 
   handleDialogue();
   camera.follow(player);
