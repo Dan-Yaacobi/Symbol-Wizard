@@ -36,3 +36,26 @@ export function updateProjectiles(projectiles, map, enemies, dt, combatTextSyste
     slain,
   };
 }
+
+export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem = null) {
+  for (const enemy of enemies) {
+    if (!enemy.alive) continue;
+
+    enemy.attackTimer = Math.max(0, (enemy.attackTimer ?? 0) - dt);
+    if (!collides(enemy, player) || enemy.attackTimer > 0) continue;
+
+    const damage = enemy.attackDamage ?? 1;
+    player.hp = Math.max(0, player.hp - damage);
+    combatTextSystem?.spawnDamageText(player, damage, false);
+
+    const dx = enemy.x - player.x;
+    const dy = enemy.y - player.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const push = enemy.hitKnockback ?? 8;
+
+    enemy.x += (dx / len) * push * dt;
+    enemy.y += (dy / len) * push * dt;
+
+    enemy.attackTimer = enemy.attackCooldown ?? 0.6;
+  }
+}
