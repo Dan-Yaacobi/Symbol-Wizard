@@ -9,8 +9,11 @@ export class Camera {
   }
 
   follow(target) {
-    this.x = Math.round(target.x - this.viewW / 2);
-    this.y = Math.round(target.y - this.viewH / 2);
+    const snappedTargetX = Math.round(target.x);
+    const snappedTargetY = Math.round(target.y);
+
+    this.x = snappedTargetX - Math.floor(this.viewW / 2);
+    this.y = snappedTargetY - Math.floor(this.viewH / 2);
     this.x = Math.max(0, Math.min(this.x, this.worldW - this.viewW));
     this.y = Math.max(0, Math.min(this.y, this.worldH - this.viewH));
   }
