@@ -57,6 +57,31 @@ function drawProjectile(renderer, camera, projectile) {
 function drawAbilityEffect(renderer, camera, effect) {
   if (!effect) return;
 
+  if (effect.type === 'lightning') {
+    const dx = effect.toX - effect.fromX;
+    const dy = effect.toY - effect.fromY;
+    const distance = Math.hypot(dx, dy) || 1;
+    const steps = Math.max(4, Math.round(distance * 3));
+    const nx = -dy / distance;
+    const ny = dx / distance;
+    const jitterAmplitude = Math.min(1.2, 0.45 + distance * 0.04) * (effect.intensity ?? 1);
+
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const pulse = 1 - Math.abs(0.5 - t) * 2;
+      const jitter = (Math.random() - 0.5) * jitterAmplitude * pulse;
+      const x = effect.fromX + dx * t + nx * jitter;
+      const y = effect.fromY + dy * t + ny * jitter;
+      const sx = Math.round(x) - camera.x;
+      const sy = Math.round(y) - camera.y;
+
+      renderer.drawEntityGlyph('*', effect.glowColor ?? '#87bfff', '#0b1016', sx, sy);
+      renderer.drawEntityGlyph('⚡', effect.color ?? '#e5f3ff', '#0b1016', sx, sy);
+    }
+
+    return;
+  }
+
   if (effect.type === 'line') {
     const steps = Math.max(2, Math.round(Math.hypot(effect.toX - effect.fromX, effect.toY - effect.fromY) * 2));
     for (let i = 0; i <= steps; i += 1) {
