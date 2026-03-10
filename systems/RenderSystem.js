@@ -50,7 +50,7 @@ function drawProjectile(renderer, camera, projectile) {
   }
 }
 
-export function renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles) {
+export function renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles, combatTextSystem = null) {
   renderer.renderBackground(map, camera);
 
   drawSprite(renderer, camera, npc, palette.npc);
@@ -74,4 +74,6 @@ export function renderWorld(renderer, camera, map, player, enemies, npc, project
   const px = Math.round(player.x) - camera.x;
   const py = Math.round(player.y) - camera.y;
   renderer.drawEntityGlyph('!', palette.playerAccent, '#0b1016', px, py - 2);
+
+  combatTextSystem?.render(renderer, camera);
 }

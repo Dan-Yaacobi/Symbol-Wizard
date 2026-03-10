@@ -1,6 +1,6 @@
 import { collides } from './CollisionSystem.js';
 
-export function updateProjectiles(projectiles, map, enemies, dt) {
+export function updateProjectiles(projectiles, map, enemies, dt, combatTextSystem = null) {
   const deadProjectiles = new Set();
   const slain = [];
 
@@ -18,7 +18,10 @@ export function updateProjectiles(projectiles, map, enemies, dt) {
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
       if (collides({ ...p, radius: p.radius ?? 0.8 }, enemy)) {
-        enemy.hp -= p.damage;
+        const isCritical = Math.random() < 0.2;
+        const damage = isCritical ? p.damage * 2 : p.damage;
+        enemy.hp -= damage;
+        combatTextSystem?.spawnDamageText(enemy, damage, isCritical);
         deadProjectiles.add(p);
         if (enemy.hp <= 0) {
           enemy.alive = false;
