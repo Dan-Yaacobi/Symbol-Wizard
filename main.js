@@ -11,6 +11,7 @@ import { updateEnemies } from './systems/AISystem.js';
 import { updateProjectiles } from './systems/CombatSystem.js';
 import { spawnGold, collectGold } from './systems/LootSystem.js';
 import { renderWorld } from './systems/RenderSystem.js';
+import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
 import { ChatBox } from './ui/ChatBox.js';
 import { drawHUD } from './ui/HUD.js';
 import { dialogueTree } from './systems/DialogueSystem.js';
@@ -114,11 +115,17 @@ function tick(now) {
       resolveMapCollision(enemy, map);
     }
 
+    updateProjectileAnimation(projectiles, dt);
     const combat = updateProjectiles(projectiles, map, enemies, dt);
     projectiles = combat.projectiles;
     for (const dead of combat.slain) goldPiles.push(spawnGold(dead));
     goldPiles = collectGold(player, goldPiles);
+  } else {
+    player.vx = 0;
+    player.vy = 0;
   }
+
+  updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1);
 
   handleDialogue();
   camera.follow(player);

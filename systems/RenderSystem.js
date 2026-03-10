@@ -1,7 +1,20 @@
 import { palette, sprites } from '../entities/SpriteLibrary.js';
 
+function getEntitySprite(entity) {
+  const spriteEntry = sprites[entity.spriteKey];
+  if (Array.isArray(spriteEntry)) return spriteEntry;
+
+  const state = entity.animationState ?? 'idle';
+  const stateFrames = spriteEntry?.[state] ?? spriteEntry?.idle;
+  if (!stateFrames) return null;
+  const frameIndex = entity.frameIndex % stateFrames.length;
+  return stateFrames[frameIndex];
+}
+
 function drawSprite(renderer, camera, entity, color) {
-  const sprite = sprites[entity.spriteKey];
+  const sprite = getEntitySprite(entity);
+  if (!sprite) return;
+
   const baseX = Math.round(entity.x) - 3;
   const baseY = Math.round(entity.y) - 3;
 
@@ -17,6 +30,26 @@ function drawSprite(renderer, camera, entity, color) {
   }
 }
 
+function drawProjectile(renderer, camera, projectile) {
+  const frames = projectile.spriteFrames;
+  if (!frames || frames.length === 0) return;
+
+  const sprite = frames[projectile.frameIndex % frames.length];
+  const baseX = Math.round(projectile.x) - 2;
+  const baseY = Math.round(projectile.y) - 1;
+
+  for (let sy = 0; sy < sprite.length; sy += 1) {
+    const row = sprite[sy];
+    for (let sx = 0; sx < row.length; sx += 1) {
+      const ch = row[sx];
+      if (ch === ' ') continue;
+      const screenX = baseX + sx - camera.x;
+      const screenY = baseY + sy - camera.y;
+      renderer.drawEntityGlyph(ch, projectile.color, '#0b1016', screenX, screenY);
+    }
+  }
+}
+
 export function renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles) {
   renderer.renderBackground(map, camera);
 
@@ -28,10 +61,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npc, project
   }
 
   for (const p of projectiles) {
-    const px = Math.round(p.x) - camera.x;
-    const py = Math.round(p.y) - camera.y;
-    const frame = p.frames[Math.floor((1 - p.ttl) * 10) % p.frames.length];
-    renderer.drawEntityGlyph(frame, p.color, '#0b1016', px, py);
+    drawProjectile(renderer, camera, p);
   }
 
   for (const g of goldPiles) {

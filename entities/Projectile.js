@@ -8,7 +8,23 @@ export class Projectile {
     this.speed = 65;
     this.damage = 3;
     this.ttl = 0.9;
-    this.color = '#66aaff';
-    this.frames = ['-', '-', '-', '>'];
+    this.color = '#4eb2ff';
+    this.radius = 1.1;
+
+    this.spriteFrames = [
+      [
+        ' ===> ',
+        '====> ',
+        ' ===> ',
+      ],
+      [
+        ' >==> ',
+        '>>==> ',
+        ' >==> ',
+      ],
+    ];
+    this.frameIndex = 0;
+    this.frameTimer = 0;
+    this.frameDuration = 0.06;
   }
 }
