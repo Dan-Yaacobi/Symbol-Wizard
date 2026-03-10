@@ -2,13 +2,16 @@ import { palette, sprites } from '../entities/SpriteLibrary.js';
 
 function getEntitySprite(entity) {
   const spriteEntry = sprites[entity.spriteKey];
-  if (Array.isArray(spriteEntry)) return spriteEntry;
+  if (Array.isArray(spriteEntry)) return { art: spriteEntry, offsetY: 0 };
 
   const state = entity.animationState ?? 'idle';
   const stateFrames = spriteEntry?.[state] ?? spriteEntry?.idle;
   if (!stateFrames) return null;
   const frameIndex = (entity.currentFrame ?? entity.frameIndex ?? 0) % stateFrames.length;
-  return stateFrames[frameIndex];
+
+  const frame = stateFrames[frameIndex];
+  if (Array.isArray(frame)) return { art: frame, offsetY: 0 };
+  return frame;
 }
 
 function drawSprite(renderer, camera, entity, color) {
@@ -16,10 +19,10 @@ function drawSprite(renderer, camera, entity, color) {
   if (!sprite) return;
 
   const baseX = Math.round(entity.x) - 3;
-  const baseY = Math.round(entity.y) - 3;
+  const baseY = Math.round(entity.y) - 3 + (sprite.offsetY ?? 0);
 
-  for (let sy = 0; sy < sprite.length; sy += 1) {
-    const row = sprite[sy];
+  for (let sy = 0; sy < sprite.art.length; sy += 1) {
+    const row = sprite.art[sy];
     for (let sx = 0; sx < row.length; sx += 1) {
       const ch = row[sx];
       if (ch === ' ') continue;
@@ -50,7 +53,7 @@ function drawProjectile(renderer, camera, projectile) {
   }
 }
 
-export function renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles) {
+export function renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles, combatTextSystem = null) {
   renderer.renderBackground(map, camera);
 
   drawSprite(renderer, camera, npc, palette.npc);
@@ -74,4 +77,6 @@ export function renderWorld(renderer, camera, map, player, enemies, npc, project
   const px = Math.round(player.x) - camera.x;
   const py = Math.round(player.y) - camera.y;
   renderer.drawEntityGlyph('!', palette.playerAccent, '#0b1016', px, py - 2);
+
+  combatTextSystem?.render(renderer, camera);
 }
