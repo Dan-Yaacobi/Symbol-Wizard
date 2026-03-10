@@ -10,6 +10,7 @@ import { resolveMapCollision } from './systems/CollisionSystem.js';
 import { updateEnemies } from './systems/AISystem.js';
 import { updateProjectiles } from './systems/CombatSystem.js';
 import { spawnGold, collectGold } from './systems/LootSystem.js';
+import { CombatTextSystem } from './systems/CombatTextSystem.js';
 import { renderWorld } from './systems/RenderSystem.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
 import { ChatBox } from './ui/ChatBox.js';
@@ -33,6 +34,7 @@ const npc = new NPC(28, 20);
 const enemies = [new Enemy('slime', 90, 64), new Enemy('skeleton', 110, 78), new Enemy('slime', 130, 85)];
 let projectiles = [];
 let goldPiles = [];
+const combatTextSystem = new CombatTextSystem();
 
 let dialogueOpen = false;
 let dialogueNode = 'start';
@@ -116,14 +118,16 @@ function tick(now) {
     }
 
     updateProjectileAnimation(projectiles, dt);
-    const combat = updateProjectiles(projectiles, map, enemies, dt);
+    const combat = updateProjectiles(projectiles, map, enemies, dt, combatTextSystem);
     projectiles = combat.projectiles;
     for (const dead of combat.slain) goldPiles.push(spawnGold(dead));
-    goldPiles = collectGold(player, goldPiles);
+    goldPiles = collectGold(player, goldPiles, combatTextSystem);
   } else {
     player.vx = 0;
     player.vy = 0;
   }
+
+  combatTextSystem.update(dt);
 
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1);
 
@@ -131,7 +135,7 @@ function tick(now) {
   camera.follow(player);
 
   renderer.beginFrame();
-  renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles);
+  renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles, combatTextSystem);
   drawHUD(renderer, player);
   renderer.composite();
 

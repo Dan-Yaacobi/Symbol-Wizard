@@ -9,6 +9,7 @@ export class Renderer {
 
     this.background = this.#createLayer();
     this.entities = this.#createLayer();
+    this.effects = this.#createLayer();
     this.ui = this.#createLayer();
 
     this.glyphCache = new Map();
@@ -18,10 +19,12 @@ export class Renderer {
     this.ctx.imageSmoothingEnabled = false;
     this.background.ctx.imageSmoothingEnabled = false;
     this.entities.ctx.imageSmoothingEnabled = false;
+    this.effects.ctx.imageSmoothingEnabled = false;
     this.ui.ctx.imageSmoothingEnabled = false;
 
     this.#setTextStyle(this.background.ctx);
     this.#setTextStyle(this.entities.ctx);
+    this.#setTextStyle(this.effects.ctx);
     this.#setTextStyle(this.ui.ctx);
   }
 
@@ -94,6 +97,7 @@ export class Renderer {
 
   beginFrame() {
     this.entities.ctx.clearRect(0, 0, this.entities.canvas.width, this.entities.canvas.height);
+    this.effects.ctx.clearRect(0, 0, this.effects.canvas.width, this.effects.canvas.height);
     this.ui.ctx.clearRect(0, 0, this.ui.canvas.width, this.ui.canvas.height);
   }
 
@@ -111,10 +115,23 @@ export class Renderer {
     }
   }
 
+  drawEffectText(text, fg, x, y, alpha = 1, bg = 'rgba(0,0,0,0)') {
+    const ctx = this.effects.ctx;
+    const clampedAlpha = Math.max(0, Math.min(1, alpha));
+    if (clampedAlpha <= 0) return;
+
+    ctx.globalAlpha = clampedAlpha;
+    for (let i = 0; i < text.length; i += 1) {
+      this.#drawGlyphToLayer(ctx, text[i], fg, bg, (x + i) | 0, y | 0);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   composite() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.drawImage(this.background.canvas, 0, 0);
     this.ctx.drawImage(this.entities.canvas, 0, 0);
+    this.ctx.drawImage(this.effects.canvas, 0, 0);
     this.ctx.drawImage(this.ui.canvas, 0, 0);
   }
 }
