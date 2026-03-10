@@ -123,10 +123,10 @@ function tick(now) {
   handleDialogue();
   camera.follow(player);
 
-  renderer.clear();
+  renderer.beginFrame();
   renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles);
   drawHUD(renderer, player);
-  renderer.draw();
+  renderer.composite();
 
   input.endFrame();
   requestAnimationFrame(tick);
