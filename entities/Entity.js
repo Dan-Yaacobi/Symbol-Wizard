@@ -11,6 +11,9 @@ export class Entity {
       hp: 1,
       maxHp: 1,
       alive: true,
+      spriteFrames: null,
+      frameIndex: 0,
+      frameTimer: 0,
       ...props,
     });
   }

@@ -17,7 +17,7 @@ export function updateProjectiles(projectiles, map, enemies, dt) {
 
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
-      if (collides({ ...p, radius: 0.8 }, enemy)) {
+      if (collides({ ...p, radius: p.radius ?? 0.8 }, enemy)) {
         enemy.hp -= p.damage;
         deadProjectiles.add(p);
         if (enemy.hp <= 0) {
