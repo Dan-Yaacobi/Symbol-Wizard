@@ -12,7 +12,9 @@ export class Entity {
       maxHp: 1,
       alive: true,
       spriteFrames: null,
+      animationFrames: null,
       frameIndex: 0,
+      currentFrame: 0,
       frameTimer: 0,
       ...props,
     });
