@@ -7,7 +7,7 @@ import { NPC } from './entities/NPC.js';
 import { generateDungeon } from './world/MapGenerator.js';
 import { resolveMapCollision } from './systems/CollisionSystem.js';
 import { updateEnemies } from './systems/AISystem.js';
-import { updateProjectiles } from './systems/CombatSystem.js';
+import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/CombatSystem.js';
 import { spawnGold, collectGold } from './systems/LootSystem.js';
 import { CombatTextSystem } from './systems/CombatTextSystem.js';
 import { renderWorld } from './systems/RenderSystem.js';
@@ -146,6 +146,8 @@ function tick(now) {
       if (isWalkable(enemy.x, enemy.y)) continue;
       resolveMapCollision(enemy, map);
     }
+
+    updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem);
 
     updateProjectileAnimation(projectiles, dt);
     const combat = updateProjectiles(projectiles, map, enemies, dt, combatTextSystem);
