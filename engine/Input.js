@@ -1,13 +1,22 @@
 export class Input {
   constructor(canvas, cellW, cellH) {
-    this.keys = new Set();
+    this.keys = {
+      w: false,
+      a: false,
+      s: false,
+      d: false,
+      e: false,
+    };
     this.mouse = { x: 0, y: 0, left: false, clicked: false };
 
     window.addEventListener('keydown', (e) => {
-      this.keys.add(e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      this.keys[key] = true;
     });
+
     window.addEventListener('keyup', (e) => {
-      this.keys.delete(e.key.toLowerCase());
+      const key = e.key.toLowerCase();
+      this.keys[key] = false;
     });
 
     canvas.addEventListener('mousemove', (e) => {
@@ -15,19 +24,21 @@ export class Input {
       this.mouse.x = Math.floor((e.clientX - rect.left) / cellW);
       this.mouse.y = Math.floor((e.clientY - rect.top) / cellH);
     });
+
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) {
         this.mouse.left = true;
         this.mouse.clicked = true;
       }
     });
+
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.mouse.left = false;
     });
   }
 
   isDown(key) {
-    return this.keys.has(key);
+    return Boolean(this.keys[key.toLowerCase()]);
   }
 
   endFrame() {

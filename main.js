@@ -44,20 +44,20 @@ function isWalkable(x, y) {
 }
 
 function handlePlayer(dt) {
-  let ax = 0;
-  let ay = 0;
-  if (input.isDown('w')) ay -= 1;
-  if (input.isDown('s')) ay += 1;
-  if (input.isDown('a')) ax -= 1;
-  if (input.isDown('d')) ax += 1;
-  const mag = Math.hypot(ax, ay) || 1;
-  ax /= mag;
-  ay /= mag;
+  let moveX = 0;
+  let moveY = 0;
 
-  player.vx += ax * 65 * dt;
-  player.vy += ay * 65 * dt;
-  player.vx *= 0.84;
-  player.vy *= 0.84;
+  if (input.isDown('w')) moveY -= 1;
+  if (input.isDown('s')) moveY += 1;
+  if (input.isDown('a')) moveX -= 1;
+  if (input.isDown('d')) moveX += 1;
+
+  const magnitude = Math.hypot(moveX, moveY) || 1;
+  moveX /= magnitude;
+  moveY /= magnitude;
+
+  player.vx = moveX * player.speed;
+  player.vy = moveY * player.speed;
 
   player.x += player.vx * dt;
   if (!isWalkable(player.x, player.y)) resolveMapCollision(player, map);
