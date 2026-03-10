@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Symbol Wizard Prototype</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="game-shell">
+    <canvas id="gameCanvas" width="1280" height="800"></canvas>
+    <section id="chatBox" class="chat-box" aria-live="polite">
+      <div id="chatSpeaker" class="chat-speaker">System</div>
+      <div id="chatLine" class="chat-line">Enter the dungeon and speak with the wizard (press E nearby).</div>
+      <ol id="chatOptions" class="chat-options"></ol>
+    </section>
+  </main>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
