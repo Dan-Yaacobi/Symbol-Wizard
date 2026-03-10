@@ -63,8 +63,8 @@ function castBlink({ player, target, system, abilityLevel }) {
 }
 
 function castLightningArc({ player, system, abilityLevel }) {
-  const targetRange = 12 + abilityLevel * 0.8;
-  const chainRange = 8 + abilityLevel * 0.35;
+  const targetRange = 20 + abilityLevel * 1.5;
+  const chainRange = 10 + abilityLevel * 0.8;
   const baseDamage = 4 + abilityLevel * 2;
   const firstTarget = system.findClosestEnemyInRange(player.x, player.y, targetRange);
 
@@ -77,13 +77,15 @@ function castLightningArc({ player, system, abilityLevel }) {
 
   const applyArcHit = (enemy, damage) => {
     system.spawnEffect({
-      type: 'line',
+      type: 'lightning',
       fromX: sourceX,
       fromY: sourceY,
       toX: enemy.x,
       toY: enemy.y,
-      color: '#b8dbff',
-      ttl: 0.14,
+      color: '#e5f3ff',
+      glowColor: '#87bfff',
+      ttl: 0.24,
+      intensity: 1 + abilityLevel * 0.04,
     });
     system.damageEnemy(enemy, damage);
     hit.add(enemy);
