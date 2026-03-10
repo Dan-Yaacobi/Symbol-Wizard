@@ -53,7 +53,32 @@ function drawProjectile(renderer, camera, projectile) {
   }
 }
 
-export function renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles, combatTextSystem = null) {
+
+function drawAbilityEffect(renderer, camera, effect) {
+  if (!effect) return;
+
+  if (effect.type === 'line') {
+    const steps = Math.max(2, Math.round(Math.hypot(effect.toX - effect.fromX, effect.toY - effect.fromY) * 2));
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const x = effect.fromX + (effect.toX - effect.fromX) * t;
+      const y = effect.fromY + (effect.toY - effect.fromY) * t;
+      renderer.drawEntityGlyph('~', effect.color ?? '#b8dbff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+    }
+    return;
+  }
+
+  if (effect.type === 'burst') {
+    const points = Math.max(8, Math.round(effect.radius * 8));
+    for (let i = 0; i < points; i += 1) {
+      const angle = (Math.PI * 2 * i) / points;
+      const x = effect.x + Math.cos(angle) * effect.radius;
+      const y = effect.y + Math.sin(angle) * effect.radius;
+      renderer.drawEntityGlyph('*', effect.color ?? '#ff8a3d', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+    }
+  }
+}
+export function renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles, combatTextSystem = null, abilityEffects = []) {
   renderer.renderBackground(map, camera);
 
   drawSprite(renderer, camera, npc, palette.npc);
@@ -65,6 +90,10 @@ export function renderWorld(renderer, camera, map, player, enemies, npc, project
 
   for (const p of projectiles) {
     drawProjectile(renderer, camera, p);
+  }
+
+  for (const effect of abilityEffects) {
+    drawAbilityEffect(renderer, camera, effect);
   }
 
   for (const g of goldPiles) {

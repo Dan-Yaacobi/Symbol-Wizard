@@ -1,7 +1,17 @@
 import { Projectile } from '../entities/Projectile.js';
 
 export class AbilitySystem {
-  constructor({ definitions, player, enemies, map, camera, spawnProjectile, spendGold }) {
+  constructor({
+    definitions,
+    player,
+    enemies,
+    map,
+    camera,
+    spawnProjectile,
+    spendGold,
+    reportDamage,
+    onEnemySlain,
+  }) {
     this.definitions = new Map(definitions.map((ability) => [ability.id, ability]));
     this.player = player;
     this.enemies = enemies;
@@ -9,10 +19,13 @@ export class AbilitySystem {
     this.camera = camera;
     this.spawnProjectile = spawnProjectile;
     this.spendGold = spendGold;
+    this.reportDamage = reportDamage;
+    this.onEnemySlain = onEnemySlain;
 
     this.cooldowns = new Map();
     this.upgrades = new Map();
     this.slots = [null, null, null, null];
+    this.effects = [];
 
     for (const ability of definitions) {
       this.upgrades.set(ability.id, 1);
@@ -24,6 +37,10 @@ export class AbilitySystem {
     for (const [abilityId, value] of this.cooldowns.entries()) {
       this.cooldowns.set(abilityId, Math.max(0, value - dt));
     }
+
+    this.effects = this.effects
+      .map((effect) => ({ ...effect, ttl: effect.ttl - dt }))
+      .filter((effect) => effect.ttl > 0);
   }
 
   assignAbilityToSlot(slotIndex, abilityId) {
@@ -95,6 +112,15 @@ export class AbilitySystem {
     this.spawnProjectile(projectile);
   }
 
+  spawnEffect(effect) {
+    if (!effect || typeof effect !== 'object') return;
+    this.effects.push({ ttl: 0.2, ...effect });
+  }
+
+  getActiveEffects() {
+    return this.effects;
+  }
+
   findClosestEnemyInRange(x, y, range) {
     let best = null;
     let bestDist = Infinity;
@@ -113,8 +139,13 @@ export class AbilitySystem {
 
   damageEnemy(enemy, amount) {
     if (!enemy || !enemy.alive) return false;
-    enemy.hp -= amount;
-    if (enemy.hp <= 0) enemy.alive = false;
+    const damage = Math.max(0, amount);
+    enemy.hp -= damage;
+    this.reportDamage?.(enemy, damage, false);
+    if (enemy.hp <= 0) {
+      enemy.alive = false;
+      this.onEnemySlain?.(enemy);
+    }
     return true;
   }
 

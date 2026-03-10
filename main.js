@@ -51,6 +51,10 @@ const abilitySystem = new AbilitySystem({
     player.gold -= cost;
     return true;
   },
+  reportDamage: (enemy, damage, isCritical) => combatTextSystem.spawnDamageText(enemy, damage, isCritical),
+  onEnemySlain: (enemy) => {
+    goldPiles.push(spawnGold(enemy));
+  },
 });
 
 abilitySystem.assignAbilityToSlot(0, 'magic-bolt');
@@ -165,7 +169,18 @@ function tick(now) {
   camera.follow(player);
 
   renderer.beginFrame();
-  renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles, combatTextSystem);
+  renderWorld(
+    renderer,
+    camera,
+    map,
+    player,
+    enemies,
+    npc,
+    projectiles,
+    goldPiles,
+    combatTextSystem,
+    abilitySystem.getActiveEffects(),
+  );
   drawHUD(renderer, player, abilitySystem);
   renderer.composite();
 
