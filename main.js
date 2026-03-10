@@ -4,7 +4,6 @@ import { Input } from './engine/Input.js';
 import { Player } from './entities/Player.js';
 import { Enemy } from './entities/Enemy.js';
 import { NPC } from './entities/NPC.js';
-import { Projectile } from './entities/Projectile.js';
 import { generateDungeon } from './world/MapGenerator.js';
 import { resolveMapCollision } from './systems/CollisionSystem.js';
 import { updateEnemies } from './systems/AISystem.js';
@@ -16,6 +15,10 @@ import { updateEntityAnimation, updateProjectileAnimation } from './systems/Anim
 import { ChatBox } from './ui/ChatBox.js';
 import { drawHUD } from './ui/HUD.js';
 import { dialogueTree } from './systems/DialogueSystem.js';
+import { abilityDefinitions } from './data/abilities.js';
+import { AbilitySystem } from './systems/AbilitySystem.js';
+import { AbilityBar } from './ui/AbilityBar.js';
+import { SkillTreeWindow } from './ui/SkillTreeWindow.js';
 
 const VIEW_W = 160;
 const VIEW_H = 100;
@@ -36,9 +39,33 @@ let projectiles = [];
 let goldPiles = [];
 const combatTextSystem = new CombatTextSystem();
 
+const abilitySystem = new AbilitySystem({
+  definitions: abilityDefinitions,
+  player,
+  enemies,
+  map,
+  camera,
+  spawnProjectile: (projectile) => projectiles.push(projectile),
+  spendGold: (cost) => {
+    if (player.gold < cost) return false;
+    player.gold -= cost;
+    return true;
+  },
+});
+
+abilitySystem.assignAbilityToSlot(0, 'magic-bolt');
+abilitySystem.assignAbilityToSlot(1, 'fire-burst');
+abilitySystem.assignAbilityToSlot(2, 'blink');
+abilitySystem.assignAbilityToSlot(3, 'lightning-arc');
+
+const uiRoot = document.querySelector('.game-shell');
+const abilityBar = new AbilityBar({ root: uiRoot, abilitySystem });
+const skillTree = new SkillTreeWindow({ root: uiRoot, abilitySystem, player });
+
 let dialogueOpen = false;
 let dialogueNode = 'start';
 let interactLatch = false;
+let slotPressLatch = [false, false, false, false];
 
 function isWalkable(x, y) {
   const tx = Math.round(x);
@@ -67,14 +94,17 @@ function handlePlayer(dt) {
   player.y += player.vy * dt;
   if (!isWalkable(player.x, player.y)) resolveMapCollision(player, map);
 
-  player.castCooldown -= dt;
-  if (input.mouse.clicked && player.castCooldown <= 0 && !dialogueOpen) {
-    const target = camera.screenToWorld(input.mouse.x, input.mouse.y);
-    const dx = target.x - player.x;
-    const dy = target.y - player.y;
-    const len = Math.hypot(dx, dy) || 1;
-    projectiles.push(new Projectile(player.x + 1.8, player.y, dx / len, dy / len));
-    player.castCooldown = 0.22;
+  player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
+  abilitySystem.tick(dt);
+
+  const target = camera.screenToWorld(input.mouse.x, input.mouse.y);
+  for (let i = 0; i < 4; i += 1) {
+    const hotkey = String(i + 1);
+    const down = input.isDown(hotkey);
+    if (down && !slotPressLatch[i]) {
+      abilitySystem.castSlot(i, { player, target });
+    }
+    slotPressLatch[i] = down;
   }
 }
 
@@ -89,7 +119,7 @@ function handleDialogue() {
   interactLatch = pressedInteract;
 
   if (!dialogueOpen) {
-    chat.setMessage('System', nearNpc ? 'Press E to talk to Gate Wizard.' : 'Explore the dungeon. Left click casts Magic Bolt.');
+    chat.setMessage('System', nearNpc ? 'Press E to talk to Gate Wizard.' : 'Explore the dungeon. Use 1-4 for abilities, K for SkillTreeWindow.');
     return;
   }
 
@@ -139,6 +169,7 @@ function tick(now) {
   drawHUD(renderer, player);
   renderer.composite();
 
+  abilityBar.render();
   input.endFrame();
   requestAnimationFrame(tick);
 }
