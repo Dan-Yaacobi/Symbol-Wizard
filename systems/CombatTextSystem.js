@@ -14,6 +14,14 @@ const COLOR_MAP = {
   white: '#ffffff',
 };
 
+const TEXT_STYLES = {
+  damage: { color: COLOR_MAP.red, fontScale: 2.25, fontWeight: '700' },
+  critical: { color: COLOR_MAP.yellow, fontScale: 2.45, fontWeight: '700' },
+  gold: { color: COLOR_MAP.gold, fontScale: 2.2, fontWeight: '700' },
+  heal: { color: COLOR_MAP.green, fontScale: 2.2, fontWeight: '700' },
+  info: { color: COLOR_MAP.white, fontScale: 2.1, fontWeight: '600' },
+};
+
 function isFiniteNumber(value) {
   return Number.isFinite(value);
 }
@@ -33,8 +41,7 @@ export class CombatTextSystem {
 
     const amount = Math.max(0, Math.round(damage));
     const text = isCritical ? `*${amount}*` : `-${amount}`;
-    const color = isCritical ? 'yellow' : 'red';
-    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, text, color);
+    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, text, isCritical ? TEXT_STYLES.critical : TEXT_STYLES.damage);
   }
 
   spawnGoldText(entity, amount) {
@@ -45,7 +52,7 @@ export class CombatTextSystem {
     }
 
     const value = Math.max(0, Math.round(amount));
-    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, `+${value}$`, 'gold');
+    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, `+${value}$`, TEXT_STYLES.gold);
   }
 
   spawnHealText(entity, amount) {
@@ -56,7 +63,7 @@ export class CombatTextSystem {
     }
 
     const value = Math.max(0, Math.round(amount));
-    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, `+${value}`, 'green');
+    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, `+${value}`, TEXT_STYLES.heal);
   }
 
   spawnInfoText(entity, text) {
@@ -66,7 +73,7 @@ export class CombatTextSystem {
       return;
     }
 
-    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, text, 'white');
+    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, text, TEXT_STYLES.info);
   }
 
   update(dt, nowSeconds = performance.now() / 1000) {
@@ -107,7 +114,7 @@ export class CombatTextSystem {
         console.debug('[CombatText] render', { id: entry.id, text: entry.text, screenX, screenY, opacity: entry.opacity });
       }
 
-      renderer.drawEffectText(entry.text, entry.color, screenX, screenY, entry.opacity);
+      renderer.drawEffectText(entry.text, entry.style.color, screenX, screenY, entry.opacity, 'rgba(0,0,0,0)', entry.style);
     }
   }
 
@@ -115,16 +122,16 @@ export class CombatTextSystem {
     return Boolean(entity) && isFiniteNumber(entity.x) && isFiniteNumber(entity.y);
   }
 
-  #spawnText(x, y, text, colorName, nowSeconds = performance.now() / 1000) {
+  #spawnText(x, y, text, style, nowSeconds = performance.now() / 1000) {
     if (!isFiniteNumber(x) || !isFiniteNumber(y)) {
       // Defensive guard: never enqueue entries with invalid positions.
-      console.warn('[CombatText] skipped spawn: invalid coordinates.', { x, y, text, colorName });
+      console.warn('[CombatText] skipped spawn: invalid coordinates.', { x, y, text, style });
       return;
     }
 
     const safeText = String(text ?? '').trim();
     if (!safeText) {
-      console.warn('[CombatText] skipped spawn: empty text value.', { x, y, text, colorName });
+      console.warn('[CombatText] skipped spawn: empty text value.', { x, y, text, style });
       return;
     }
 
@@ -132,13 +139,19 @@ export class CombatTextSystem {
       this.combatTexts.shift();
     }
 
+    const resolvedStyle = {
+      color: style?.color ?? COLOR_MAP.white,
+      fontScale: Number.isFinite(style?.fontScale) ? style.fontScale : 2,
+      fontWeight: style?.fontWeight ?? '700',
+    };
+
     const lifetime = MIN_LIFETIME + Math.random() * (MAX_LIFETIME - MIN_LIFETIME);
     const entry = {
       id: `ct_${this.nextId}`,
       x,
       y,
       text: safeText,
-      color: COLOR_MAP[colorName] ?? COLOR_MAP.white,
+      style: resolvedStyle,
       createdAt: nowSeconds,
       lifetime,
       velocityY: DEFAULT_UPWARD_SPEED,
