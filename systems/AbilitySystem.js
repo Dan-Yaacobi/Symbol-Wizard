@@ -190,7 +190,16 @@ export class AbilitySystem {
     this.cooldowns.set(ability.id, ability.cooldown);
 
     const level = this.upgrades.get(ability.id) ?? 1;
-    ability.cast({ ...context, system: this, abilityLevel: level, ability });
+
+    try {
+      ability.cast({ ...context, system: this, abilityLevel: level, ability });
+    } catch (error) {
+      this.player.mana = Math.min(this.player.maxMana, this.player.mana + ability.manaCost);
+      this.cooldowns.set(ability.id, 0);
+      console.error(`[AbilitySystem] Failed to cast ability "${ability.id}".`, error);
+      return { ok: false, reason: 'cast-error', abilityId: ability.id };
+    }
+
     return { ok: true, reason: 'cast', abilityId: ability.id };
   }
 
@@ -223,9 +232,29 @@ export class AbilitySystem {
   }
 
   createProjectile(x, y, dx, dy, overrides = {}) {
+    const hasValidPosition = Number.isFinite(x) && Number.isFinite(y);
+    const hasValidDirection = Number.isFinite(dx) && Number.isFinite(dy);
+
+    if (!hasValidPosition || !hasValidDirection) {
+      console.error('[AbilitySystem] Projectile creation aborted: invalid position or direction.', { x, y, dx, dy, overrides });
+      return null;
+    }
+
+    if (typeof this.spawnProjectile !== 'function') {
+      console.error('[AbilitySystem] Projectile creation aborted: spawnProjectile callback is missing.');
+      return null;
+    }
+
     const projectile = new Projectile(x, y, dx, dy);
-    Object.assign(projectile, overrides);
+    if (overrides && typeof overrides === 'object') Object.assign(projectile, overrides);
+
+    if (!Array.isArray(projectile.spriteFrames) || projectile.spriteFrames.length === 0) {
+      console.error('[AbilitySystem] Projectile creation aborted: projectile spriteFrames are missing.', projectile);
+      return null;
+    }
+
     this.spawnProjectile(projectile);
+    return projectile;
   }
 
   spawnEffect(effect) {
