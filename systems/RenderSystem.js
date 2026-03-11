@@ -152,7 +152,7 @@ function drawAbilityEffect(renderer, camera, effect) {
   }
 }
 
-export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, combatTextSystem = null, abilityEffects = []) {
+export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, combatTextSystem = null, abilityEffects = [], debugCursor = null) {
   renderer.renderBackground(map, camera);
 
   for (const object of worldObjects) {
@@ -189,6 +189,12 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     const gx = Math.round(g.x) - camera.x;
     const gy = Math.round(g.y) - camera.y;
     renderer.drawEntityGlyph('$', palette.gold, '#0b1016', gx, gy);
+  }
+
+  if (debugCursor) {
+    const cursorScreenX = Math.round(debugCursor.x) - camera.x;
+    const cursorScreenY = Math.round(debugCursor.y) - camera.y;
+    renderer.drawEntityGlyph('•', '#ff4d8b', '#0b1016', cursorScreenX, cursorScreenY);
   }
 
   drawSprite(renderer, camera, player, palette.player);

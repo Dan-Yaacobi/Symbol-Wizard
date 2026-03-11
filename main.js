@@ -92,6 +92,7 @@ let activeNpc = null;
 let dialogueNode = 'start';
 let interactLatch = false;
 let slotPressLatch = [false, false, false, false];
+let debugCursorWorld = { x: 0, y: 0 };
 
 function isWalkable(x, y) {
   const tx = Math.round(x);
@@ -126,7 +127,12 @@ function handlePlayer(dt) {
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
 
-  const target = camera.screenToWorld(input.mouse.x, input.mouse.y);
+  const target = {
+    x: input.mouse.x + camera.x,
+    y: input.mouse.y + camera.y,
+  };
+  debugCursorWorld = target;
+
   for (let i = 0; i < 4; i += 1) {
     const hotkey = String(i + 1);
     const down = input.isDown(hotkey);
@@ -222,6 +228,7 @@ function tick(now) {
     goldPiles,
     combatTextSystem,
     abilitySystem.getActiveEffects(),
+    debugCursorWorld,
   );
   drawHUD(renderer, player, abilitySystem);
   renderer.composite();

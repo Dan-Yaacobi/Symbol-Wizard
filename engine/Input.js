@@ -1,5 +1,8 @@
 export class Input {
   constructor(canvas, cols, rows) {
+    this.canvas = canvas;
+    this.cols = cols;
+    this.rows = rows;
     this.keys = {
       w: false,
       a: false,
@@ -7,7 +10,14 @@ export class Input {
       d: false,
       e: false,
     };
-    this.mouse = { x: 0, y: 0, left: false, clicked: false };
+    this.mouse = {
+      x: 0,
+      y: 0,
+      canvasX: 0,
+      canvasY: 0,
+      left: false,
+      clicked: false,
+    };
 
     window.addEventListener('keydown', (e) => {
       const key = e.key.toLowerCase();
@@ -21,10 +31,25 @@ export class Input {
 
     canvas.addEventListener('mousemove', (e) => {
       const rect = canvas.getBoundingClientRect();
-      const relX = (e.clientX - rect.left) / Math.max(1, rect.width);
-      const relY = (e.clientY - rect.top) / Math.max(1, rect.height);
-      this.mouse.x = Math.max(0, Math.min(cols - 1, Math.floor(relX * cols)));
-      this.mouse.y = Math.max(0, Math.min(rows - 1, Math.floor(relY * rows)));
+      const localX = e.clientX - rect.left;
+      const localY = e.clientY - rect.top;
+
+      const clampedLocalX = Math.max(0, Math.min(localX, rect.width));
+      const clampedLocalY = Math.max(0, Math.min(localY, rect.height));
+
+      const widthScale = canvas.width / Math.max(1, canvas.clientWidth);
+      const heightScale = canvas.height / Math.max(1, canvas.clientHeight);
+
+      const scaledX = clampedLocalX * widthScale;
+      const scaledY = clampedLocalY * heightScale;
+
+      const cellWidth = canvas.width / Math.max(1, cols);
+      const cellHeight = canvas.height / Math.max(1, rows);
+
+      this.mouse.canvasX = scaledX;
+      this.mouse.canvasY = scaledY;
+      this.mouse.x = Math.max(0, Math.min(cols - 1, scaledX / cellWidth));
+      this.mouse.y = Math.max(0, Math.min(rows - 1, scaledY / cellHeight));
     });
 
     canvas.addEventListener('mousedown', (e) => {
