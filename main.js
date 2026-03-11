@@ -27,7 +27,7 @@ const WORLD_H = 140;
 const canvas = document.getElementById('gameCanvas');
 const renderer = new Renderer(canvas, VIEW_W, VIEW_H, 8, 8);
 const camera = new Camera(VIEW_W, VIEW_H, WORLD_W, WORLD_H);
-const input = new Input(canvas, VIEW_W, VIEW_H);
+const input = new Input(canvas, VIEW_W, VIEW_H, camera, renderer.cellW, renderer.cellH);
 const chat = new ChatBox();
 
 const town = generateMainTown(WORLD_W, WORLD_H);
@@ -126,7 +126,7 @@ function handlePlayer(dt) {
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
 
-  const target = camera.screenToWorld(input.mouse.x, input.mouse.y);
+  const target = { x: input.mouse.worldX, y: input.mouse.worldY };
   for (let i = 0; i < 4; i += 1) {
     const hotkey = String(i + 1);
     const down = input.isDown(hotkey);
@@ -222,6 +222,7 @@ function tick(now) {
     goldPiles,
     combatTextSystem,
     abilitySystem.getActiveEffects(),
+    input.mouse,
   );
   drawHUD(renderer, player, abilitySystem);
   renderer.composite();
