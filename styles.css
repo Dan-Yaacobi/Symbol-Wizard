@@ -4,6 +4,8 @@
   --panel-border: #2d3b52;
   --text: #d9e4ff;
   --accent: #82a6ff;
+  --canvas-base-width: 1280;
+  --canvas-base-height: 720;
 }
 
 body {
@@ -19,28 +21,43 @@ body {
   height: 100vh;
   box-sizing: border-box;
   padding: 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 8px;
+  overflow: hidden;
+}
+
+.game-stage {
+  min-height: 0;
+  display: grid;
+  place-items: center;
 }
 
 #gameCanvas {
-  flex: 1 1 auto;
-  min-height: 0;
-  width: auto;
+  width: calc(var(--canvas-base-width) * 1px);
+  height: calc(var(--canvas-base-height) * 1px);
   max-width: 100%;
   max-height: 100%;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
   border: 2px solid var(--panel-border);
   background: #000;
   image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.ui-panels {
+  width: min(1600px, 100%);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: 8px;
+  align-items: stretch;
 }
 
 .chat-box {
-  width: min(1280px, 100%);
-  min-height: 104px;
-  max-height: 20vh;
+  width: 100%;
+  min-height: 112px;
+  max-height: 24vh;
   border: 2px solid var(--panel-border);
   background: var(--panel);
   padding: 8px 10px;
@@ -68,20 +85,26 @@ body {
 
 .ability-bar,
 .skill-tree-window {
-  width: min(1280px, 100%);
-  max-height: 26vh;
+  width: 100%;
+  min-height: 112px;
+  max-height: 24vh;
   border: 2px solid var(--panel-border);
   background: var(--panel);
-  padding: 8px 10px;
+  padding: 6px 8px;
   box-sizing: border-box;
   overflow-y: auto;
+}
+
+.ability-bar h3,
+.ability-bar h4 {
+  margin: 0 0 6px;
 }
 
 .ability-slots {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 6px;
+  margin-bottom: 6px;
 }
 
 .ability-slot,
@@ -114,6 +137,17 @@ body {
 
 .skill-tree-window.hidden {
   display: none;
+}
+
+.skill-tree-window {
+  position: fixed;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%, -50%);
+  width: min(1200px, 94vw);
+  max-height: min(78vh, 760px);
+  z-index: 20;
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.5);
 }
 
 
@@ -167,4 +201,15 @@ body {
 
 .meta {
   color: #9eb3d9;
+}
+
+@media (max-width: 1200px) {
+  .ui-panels {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-box,
+  .ability-bar {
+    max-height: 18vh;
+  }
 }

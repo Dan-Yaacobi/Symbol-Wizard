@@ -1,5 +1,5 @@
 export class Input {
-  constructor(canvas, cellW, cellH) {
+  constructor(canvas, cols, rows) {
     this.keys = {
       w: false,
       a: false,
@@ -21,8 +21,10 @@ export class Input {
 
     canvas.addEventListener('mousemove', (e) => {
       const rect = canvas.getBoundingClientRect();
-      this.mouse.x = Math.floor((e.clientX - rect.left) / cellW);
-      this.mouse.y = Math.floor((e.clientY - rect.top) / cellH);
+      const relX = (e.clientX - rect.left) / Math.max(1, rect.width);
+      const relY = (e.clientY - rect.top) / Math.max(1, rect.height);
+      this.mouse.x = Math.max(0, Math.min(cols - 1, Math.floor(relX * cols)));
+      this.mouse.y = Math.max(0, Math.min(rows - 1, Math.floor(relY * rows)));
     });
 
     canvas.addEventListener('mousedown', (e) => {
