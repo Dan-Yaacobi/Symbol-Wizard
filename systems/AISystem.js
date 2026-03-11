@@ -2,6 +2,15 @@ export function updateEnemies(enemies, player, dt) {
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
 
+    if (enemy.frozen) {
+      enemy.vx = 0;
+      enemy.vy = 0;
+      enemy.isAttacking = false;
+      enemy.attackElapsed = 0;
+      enemy.attackDamageApplied = false;
+      continue;
+    }
+
     enemy.attackTimer = Math.max(0, (enemy.attackTimer ?? 0) - dt);
 
     const dx = player.x - enemy.x;

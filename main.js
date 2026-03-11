@@ -13,7 +13,7 @@ import { updateEntityAnimation, updateProjectileAnimation } from './systems/Anim
 import { ChatBox } from './ui/ChatBox.js';
 import { drawHUD } from './ui/HUD.js';
 import { dialogueTree } from './systems/DialogueSystem.js';
-import { abilityDefinitions } from './data/abilities.js';
+import { abilityDefinitions, defaultAbilitySlots } from './data/abilities.js';
 import { AbilitySystem } from './systems/AbilitySystem.js';
 import { AbilityBar } from './ui/AbilityBar.js';
 import { SkillTreeWindow } from './ui/SkillTreeWindow.js';
@@ -58,10 +58,9 @@ const abilitySystem = new AbilitySystem({
   },
 });
 
-abilitySystem.assignAbilityToSlot(0, 'magic-bolt');
-abilitySystem.assignAbilityToSlot(1, 'fire-burst');
-abilitySystem.assignAbilityToSlot(2, 'blink');
-abilitySystem.assignAbilityToSlot(3, 'lightning-arc');
+defaultAbilitySlots.forEach((abilityId, slotIndex) => {
+  abilitySystem.assignAbilityToSlot(slotIndex, abilityId);
+});
 
 const uiRoot = document.querySelector('.game-shell');
 const abilityBar = new AbilityBar({ root: uiRoot, abilitySystem });
@@ -172,10 +171,7 @@ function tick(now) {
     updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem);
 
     updateProjectileAnimation(projectiles, dt);
-    const combat = updateProjectiles(projectiles, map, enemies, dt, combatTextSystem, worldObjects, (object) => {
-      const drop = object.rollGoldDrop();
-      if (drop > 0) goldPiles.push({ x: object.x, y: object.y, amount: drop });
-    });
+    const combat = updateProjectiles(projectiles, map, enemies, dt, combatTextSystem, abilitySystem);
     projectiles = combat.projectiles;
     for (const dead of combat.slain) goldPiles.push(spawnGold(dead));
     goldPiles = collectGold(player, goldPiles, combatTextSystem);

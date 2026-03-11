@@ -118,6 +118,29 @@ function drawAbilityEffect(renderer, camera, effect) {
     return;
   }
 
+
+  if (effect.type === 'freeze-wave') {
+    const points = Math.max(20, Math.round(effect.radius * 2.5));
+    for (let i = 0; i < points; i += 1) {
+      const angle = (Math.PI * 2 * i) / points;
+      const x = effect.x + Math.cos(angle) * effect.radius;
+      const y = effect.y + Math.sin(angle) * effect.radius;
+      renderer.drawEntityGlyph('·', effect.color ?? '#9adfff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+    }
+    return;
+  }
+
+  if (effect.type === 'freeze-burst') {
+    const glyphs = ['*', '❄', '+'];
+    for (let i = 0; i < 10; i += 1) {
+      const angle = (Math.PI * 2 * i) / 10;
+      const x = effect.x + Math.cos(angle) * (effect.radius ?? 2);
+      const y = effect.y + Math.sin(angle) * (effect.radius ?? 2);
+      renderer.drawEntityGlyph(glyphs[i % glyphs.length], effect.color ?? '#b7ecff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+    }
+    return;
+  }
+
   if (effect.type === 'burst') {
     const points = Math.max(8, Math.round(effect.radius * 8));
     for (let i = 0; i < points; i += 1) {
@@ -149,7 +172,14 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
 
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
-    drawSprite(renderer, camera, enemy, enemy.kind === 'slime' ? palette.slime : palette.skeleton);
+    const baseColor = enemy.kind === 'slime' ? palette.slime : palette.skeleton;
+    drawSprite(renderer, camera, enemy, enemy.frozen ? (enemy.freezeTint ?? '#9edbff') : baseColor);
+
+    if (enemy.frozen) {
+      const sx = Math.round(enemy.x) - camera.x;
+      const sy = Math.round(enemy.y) - 3 - camera.y;
+      renderer.drawEntityGlyph('❄', enemy.freezeGlow ?? '#d8f4ff', '#0b1016', sx, sy);
+    }
   }
 
   for (const p of projectiles) drawProjectile(renderer, camera, p);
