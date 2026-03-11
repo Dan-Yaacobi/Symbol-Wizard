@@ -8,7 +8,7 @@ const DEBUG_COMBAT_TEXT = false;
 
 const COLOR_MAP = {
   red: '#ff5a5a',
-  yellow: '#ffd65a',
+  magenta: '#ff3df2',
   green: '#69de79',
   gold: '#e6c95a',
   white: '#ffffff',
@@ -16,7 +16,13 @@ const COLOR_MAP = {
 
 const TEXT_STYLES = {
   damage: { color: COLOR_MAP.red, fontScale: 2.25, fontWeight: '700' },
-  critical: { color: COLOR_MAP.yellow, fontScale: 2.45, fontWeight: '700' },
+  critical: {
+    color: COLOR_MAP.magenta,
+    fontScale: 2.85,
+    fontWeight: '800',
+    popAmplitude: 0.18,
+    popDuration: 0.14,
+  },
   gold: { color: COLOR_MAP.gold, fontScale: 2.2, fontWeight: '700' },
   heal: { color: COLOR_MAP.green, fontScale: 2.2, fontWeight: '700' },
   info: { color: COLOR_MAP.white, fontScale: 2.1, fontWeight: '600' },
@@ -88,6 +94,7 @@ export class CombatTextSystem {
 
       entry.y -= entry.velocityY * dt;
       entry.opacity = 1 - age / entry.lifetime;
+      entry.age = age;
       this.combatTexts[writeIndex] = entry;
       writeIndex += 1;
     }
@@ -114,8 +121,27 @@ export class CombatTextSystem {
         console.debug('[CombatText] render', { id: entry.id, text: entry.text, screenX, screenY, opacity: entry.opacity });
       }
 
-      renderer.drawEffectText(entry.text, entry.style.color, screenX, screenY, entry.opacity, 'rgba(0,0,0,0)', entry.style);
+      const drawStyle = this.#getAnimatedStyle(entry);
+      renderer.drawEffectText(entry.text, drawStyle.color, screenX, screenY, entry.opacity, 'rgba(0,0,0,0)', drawStyle);
     }
+  }
+
+  #getAnimatedStyle(entry) {
+    const baseScale = entry.style.fontScale;
+    const popAmplitude = Number.isFinite(entry.style.popAmplitude) ? entry.style.popAmplitude : 0;
+    const popDuration = Number.isFinite(entry.style.popDuration) ? entry.style.popDuration : 0;
+
+    if (popAmplitude <= 0 || popDuration <= 0 || entry.age >= popDuration) {
+      return entry.style;
+    }
+
+    const popProgress = Math.max(0, Math.min(1, entry.age / popDuration));
+    const popMultiplier = 1 + Math.sin(popProgress * Math.PI) * popAmplitude;
+
+    return {
+      ...entry.style,
+      fontScale: baseScale * popMultiplier,
+    };
   }
 
   #hasValidEntityPosition(entity) {
@@ -143,6 +169,8 @@ export class CombatTextSystem {
       color: style?.color ?? COLOR_MAP.white,
       fontScale: Number.isFinite(style?.fontScale) ? style.fontScale : 2,
       fontWeight: style?.fontWeight ?? '700',
+      popAmplitude: Number.isFinite(style?.popAmplitude) ? style.popAmplitude : 0,
+      popDuration: Number.isFinite(style?.popDuration) ? style.popDuration : 0,
     };
 
     const lifetime = MIN_LIFETIME + Math.random() * (MAX_LIFETIME - MIN_LIFETIME);
@@ -156,6 +184,7 @@ export class CombatTextSystem {
       lifetime,
       velocityY: DEFAULT_UPWARD_SPEED,
       opacity: 1,
+      age: 0,
     };
 
     this.combatTexts.push(entry);
