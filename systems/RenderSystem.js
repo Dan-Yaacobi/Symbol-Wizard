@@ -152,7 +152,17 @@ function drawAbilityEffect(renderer, camera, effect) {
   }
 }
 
-export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, combatTextSystem = null, abilityEffects = []) {
+
+
+function drawDebugCursorOverlay(renderer, camera, mouse) {
+  if (!mouse) return;
+
+  const worldScreen = camera.worldToScreen(mouse.worldX, mouse.worldY);
+  renderer.drawEntityGlyph('+', '#ff3f7f', '#0b1016', worldScreen.x, worldScreen.y);
+
+  renderer.drawUiGlyph('+', '#53f7ff', '#0b1016', mouse.canvasCellX, mouse.canvasCellY);
+}
+export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, combatTextSystem = null, abilityEffects = [], mouse = null) {
   renderer.renderBackground(map, camera);
 
   for (const object of worldObjects) {
@@ -196,5 +206,6 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   const py = Math.round(player.y) - camera.y;
   renderer.drawEntityGlyph('!', palette.playerAccent, '#0b1016', px, py - 2);
 
+  drawDebugCursorOverlay(renderer, camera, mouse);
   combatTextSystem?.render(renderer, camera);
 }
