@@ -164,6 +164,13 @@ export const abilityDefinitions = [
   },
 ];
 
+export const defaultAbilitySlots = [
+  'magic-bolt',
+  'fire-burst',
+  'blink',
+  'time-freeze',
+];
+
 export const abilityDesignCatalog = [
   {
     id: 'arcane-spear', name: 'Arcane Spear', theme: 'Arcane', category: 'Projectile',
@@ -193,7 +200,7 @@ export const abilityDesignCatalog = [
     id: 'storm-lance', name: 'Storm Lance', theme: 'Lightning', category: 'Projectile',
     description: 'High-speed bolt that marks conductive targets.', gameplayRole: 'Single-target burst and mark.',
     upgradePath: ['Higher crit', 'Penetration', 'Chain on marked kill'],
-    synergyNotes: 'Amplifies Lightning Arc chains.',
+    synergyNotes: 'Amplifies Storm Lance chains.',
   },
   {
     id: 'thunder-totem', name: 'Thunder Totem', theme: 'Lightning', category: 'Control',
@@ -223,7 +230,7 @@ export const abilityDesignCatalog = [
     id: 'void-pull', name: 'Void Pull', theme: 'Void', category: 'Control',
     description: 'Pulls enemies to a central singularity.', gameplayRole: 'Grouping and setup.',
     upgradePath: ['Stronger pull', 'Longer hold', 'Applies vulnerable'],
-    synergyNotes: 'Groups targets for Fire Burst and Lightning Arc.',
+    synergyNotes: 'Groups targets for Fire Burst and Storm Lance.',
   },
   {
     id: 'rift-step', name: 'Rift Step', theme: 'Void', category: 'Mobility',
