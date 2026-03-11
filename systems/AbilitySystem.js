@@ -27,6 +27,8 @@ export class AbilitySystem {
     this.slots = [null, null, null, null];
     this.effects = [];
 
+    this.activeFreeze = null;
+
     for (const ability of definitions) {
       this.upgrades.set(ability.id, 1);
       this.cooldowns.set(ability.id, 0);
@@ -41,6 +43,120 @@ export class AbilitySystem {
     this.effects = this.effects
       .map((effect) => ({ ...effect, ttl: effect.ttl - dt }))
       .filter((effect) => effect.ttl > 0);
+
+    this.updateFreeze(dt);
+  }
+
+  updateFreeze(dt) {
+    if (!this.activeFreeze) return;
+
+    this.activeFreeze.remaining -= dt;
+
+    if (this.activeFreeze.chainFreeze) {
+      this.freezeVisibleEnemies(this.activeFreeze, false);
+    }
+
+    if (this.activeFreeze.remaining <= 0) {
+      this.endFreeze(this.activeFreeze);
+      this.activeFreeze = null;
+    }
+  }
+
+  isEnemyInFreezeRange(enemy, radiusPadding = 0) {
+    const left = this.camera.x - radiusPadding;
+    const top = this.camera.y - radiusPadding;
+    const right = this.camera.x + this.camera.viewW + radiusPadding;
+    const bottom = this.camera.y + this.camera.viewH + radiusPadding;
+    return enemy.x >= left && enemy.x <= right && enemy.y >= top && enemy.y <= bottom;
+  }
+
+  freezeEnemy(enemy, freezeData, resetTimer = true) {
+    if (!enemy || !enemy.alive || enemy.frozen) return false;
+
+    enemy.frozen = true;
+    enemy.freezeTint = '#9edbff';
+    enemy.freezeGlow = '#d8f4ff';
+    enemy.vx = 0;
+    enemy.vy = 0;
+    enemy.isAttacking = false;
+    enemy.attackElapsed = 0;
+    enemy.attackDamageApplied = false;
+
+    if (resetTimer) {
+      enemy.attackTimer = Math.max(enemy.attackTimer ?? 0, freezeData.freezeDuration * 0.5);
+    }
+
+    freezeData.targets.add(enemy);
+
+    this.spawnEffect({
+      type: 'freeze-burst',
+      x: enemy.x,
+      y: enemy.y,
+      radius: 2,
+      color: '#a8e7ff',
+      ttl: 0.16,
+    });
+
+    return true;
+  }
+
+  freezeVisibleEnemies(freezeData, resetTimer) {
+    for (const enemy of this.enemies) {
+      if (!enemy.alive) continue;
+      if (!this.isEnemyInFreezeRange(enemy, freezeData.radiusPadding)) continue;
+      this.freezeEnemy(enemy, freezeData, resetTimer);
+    }
+  }
+
+  endFreeze(freezeData) {
+    for (const enemy of freezeData.targets) {
+      if (!enemy.alive) continue;
+      enemy.frozen = false;
+      enemy.freezeTint = null;
+      enemy.freezeGlow = null;
+
+      if (freezeData.shatterDamage > 0) {
+        this.damageEnemy(enemy, freezeData.shatterDamage);
+      }
+    }
+  }
+
+  applyTimeFreeze({ freezeDuration, cooldownReduction, shatterDamage, vulnerabilityMultiplier, radiusPadding, chainFreeze }) {
+    const ability = this.definitions.get('time-freeze');
+    if (!ability) return;
+
+    this.cooldowns.set('time-freeze', Math.max(1, ability.cooldown - cooldownReduction));
+
+    if (this.activeFreeze) {
+      this.endFreeze(this.activeFreeze);
+      this.activeFreeze = null;
+    }
+
+    this.activeFreeze = {
+      remaining: freezeDuration,
+      freezeDuration,
+      shatterDamage,
+      vulnerabilityMultiplier,
+      radiusPadding,
+      chainFreeze,
+      targets: new Set(),
+    };
+
+    this.spawnEffect({
+      type: 'freeze-wave',
+      x: this.player.x,
+      y: this.player.y,
+      radius: Math.max(this.camera.viewW, this.camera.viewH) * 0.5 + radiusPadding,
+      color: '#9adfff',
+      ttl: 0.22,
+    });
+
+    this.freezeVisibleEnemies(this.activeFreeze, true);
+  }
+
+  getDamageMultiplier(enemy) {
+    if (!enemy || !enemy.alive || !enemy.frozen || !this.activeFreeze) return 1;
+    return this.activeFreeze.vulnerabilityMultiplier ?? 1;
   }
 
   assignAbilityToSlot(slotIndex, abilityId) {
@@ -139,7 +255,8 @@ export class AbilitySystem {
 
   damageEnemy(enemy, amount) {
     if (!enemy || !enemy.alive) return false;
-    const damage = Math.max(0, amount);
+    const scaled = amount * this.getDamageMultiplier(enemy);
+    const damage = Math.max(0, scaled);
     enemy.hp -= damage;
     this.reportDamage?.(enemy, damage, false);
     if (enemy.hp <= 0) {

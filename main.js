@@ -60,7 +60,7 @@ const abilitySystem = new AbilitySystem({
 abilitySystem.assignAbilityToSlot(0, 'magic-bolt');
 abilitySystem.assignAbilityToSlot(1, 'fire-burst');
 abilitySystem.assignAbilityToSlot(2, 'blink');
-abilitySystem.assignAbilityToSlot(3, 'lightning-arc');
+abilitySystem.assignAbilityToSlot(3, 'time-freeze');
 
 const uiRoot = document.querySelector('.game-shell');
 const abilityBar = new AbilityBar({ root: uiRoot, abilitySystem });
@@ -154,7 +154,7 @@ function tick(now) {
     updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem);
 
     updateProjectileAnimation(projectiles, dt);
-    const combat = updateProjectiles(projectiles, map, enemies, dt, combatTextSystem);
+    const combat = updateProjectiles(projectiles, map, enemies, dt, combatTextSystem, abilitySystem);
     projectiles = combat.projectiles;
     for (const dead of combat.slain) goldPiles.push(spawnGold(dead));
     goldPiles = collectGold(player, goldPiles, combatTextSystem);

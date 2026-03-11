@@ -62,57 +62,28 @@ function castBlink({ player, target, system, abilityLevel }) {
   }
 }
 
-function castLightningArc({ player, system, abilityLevel }) {
-  const targetRange = 20 + abilityLevel * 1.5;
-  const chainRange = 10 + abilityLevel * 0.8;
-  const baseDamage = 4 + abilityLevel * 2;
-  const firstTarget = system.findClosestEnemyInRange(player.x, player.y, targetRange);
+function castTimeFreeze({ system, abilityLevel }) {
+  const extendedFreezeLevels = abilityLevel >= 2 ? 1 : 0;
+  const reducedCooldownLevels = abilityLevel >= 3 ? 1 : 0;
+  const shatterUnlocked = abilityLevel >= 4;
+  const vulnerabilityUnlocked = abilityLevel >= 5;
+  const largerRadiusUnlocked = abilityLevel >= 6;
+  const chainFreezeUnlocked = abilityLevel >= 7;
 
-  if (!firstTarget) return;
+  const freezeDuration = 2 + extendedFreezeLevels * 0.5;
+  const cooldownReduction = reducedCooldownLevels * 1;
+  const radiusPadding = largerRadiusUnlocked ? 8 : 0;
+  const shatterDamage = shatterUnlocked ? 6 : 0;
+  const vulnerabilityMultiplier = vulnerabilityUnlocked ? 1.3 : 1;
 
-  const hit = new Set();
-  let sourceX = player.x;
-  let sourceY = player.y;
-  let sourceEnemy = firstTarget;
-
-  const applyArcHit = (enemy, damage) => {
-    system.spawnEffect({
-      type: 'lightning',
-      fromX: sourceX,
-      fromY: sourceY,
-      toX: enemy.x,
-      toY: enemy.y,
-      color: '#e5f3ff',
-      glowColor: '#87bfff',
-      ttl: 0.24,
-      intensity: 1 + abilityLevel * 0.04,
-    });
-    system.damageEnemy(enemy, damage);
-    hit.add(enemy);
-    sourceX = enemy.x;
-    sourceY = enemy.y;
-    sourceEnemy = enemy;
-  };
-
-  applyArcHit(firstTarget, baseDamage);
-
-  const chains = 1 + Math.floor(abilityLevel / 2);
-  for (let i = 0; i < chains; i += 1) {
-    let nextEnemy = null;
-    let nextDist = Infinity;
-
-    for (const enemy of system.enemies) {
-      if (!enemy.alive || hit.has(enemy)) continue;
-      const dist = Math.hypot(enemy.x - sourceEnemy.x, enemy.y - sourceEnemy.y);
-      if (dist <= chainRange && dist < nextDist) {
-        nextDist = dist;
-        nextEnemy = enemy;
-      }
-    }
-
-    if (!nextEnemy) break;
-    applyArcHit(nextEnemy, Math.max(1, Math.round(baseDamage * 0.7)));
-  }
+  system.applyTimeFreeze({
+    freezeDuration,
+    cooldownReduction,
+    shatterDamage,
+    vulnerabilityMultiplier,
+    radiusPadding,
+    chainFreeze: chainFreezeUnlocked,
+  });
 }
 
 export const abilityDefinitions = [
@@ -171,22 +142,25 @@ export const abilityDefinitions = [
     cast: castBlink,
   },
   {
-    id: 'lightning-arc',
-    name: 'Lightning Arc',
-    theme: 'Lightning',
-    category: 'Chain Magic',
-    description: 'Strike the nearest enemy with lightning. The lightning can chain to nearby enemies.',
-    gameplayRole: 'Medium-range chain DPS and soft crowd clear.',
-    cooldown: 2,
+    id: 'time-freeze',
+    name: 'Time Freeze',
+    theme: 'Ice',
+    category: 'Control',
+    description: 'Freeze all visible enemies in time, stopping their movement and attacks for a short duration.',
+    gameplayRole: 'Global crowd control with upgrade-driven utility and damage windows.',
+    cooldown: 12,
     manaCost: 14,
-    baseDamage: 5,
+    baseDamage: 0,
     upgrades: [
-      { level: 2, name: 'Conductive Reach', cost: 50, effect: '+20% chain radius per level.' },
-      { level: 3, name: 'Forked Current', cost: 110, effect: 'Lightning chains to one additional enemy.' },
-      { level: 4, name: 'Storm Core', cost: 180, effect: 'Shocked enemies take +20% follow-up damage.' },
+      { level: 2, name: 'Extended Freeze', cost: 60, effect: '+0.5s freeze duration.' },
+      { level: 3, name: 'Reduced Cooldown', cost: 90, effect: '-1s cooldown.' },
+      { level: 4, name: 'Shatter Damage', cost: 130, effect: 'Enemies take bonus damage when freeze ends.' },
+      { level: 5, name: 'Frozen Vulnerability', cost: 165, effect: 'Frozen enemies take 30% increased damage.' },
+      { level: 6, name: 'Larger Freeze Radius', cost: 195, effect: 'Also affects enemies slightly outside the screen.' },
+      { level: 7, name: 'Chain Freeze', cost: 240, effect: 'Enemies entering view during freeze are also frozen.' },
     ],
-    synergyNotes: 'Deals extra chain value against Wet enemies and grouped packs.',
-    cast: castLightningArc,
+    synergyNotes: 'Creates safe windows for burst combos and objective control.',
+    cast: castTimeFreeze,
   },
 ];
 
