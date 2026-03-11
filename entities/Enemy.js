@@ -25,6 +25,9 @@ export class Enemy extends Entity {
       hitKnockback: slime ? 7 : 9,
       spriteKey: slime ? 'slime' : 'skeleton',
       animationState: 'idle',
+      frozen: false,
+      freezeTint: null,
+      freezeGlow: null,
       frameDurations: {
         idle: 0.32,
         walk: 0.14,
