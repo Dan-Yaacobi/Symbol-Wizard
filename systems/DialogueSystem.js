@@ -1,20 +1,20 @@
 export const dialogueTree = {
   start: {
-    speaker: 'Gate Wizard',
-    line: 'Welcome, wizard. The dungeon wakes. What do you seek?',
+    speaker: 'Townfolk',
+    line: 'Welcome, traveler. Sunmeadow is peaceful today. What do you seek?',
     options: [
-      { text: 'Who are you?', next: 'who' },
-      { text: 'Show me the dungeon.', next: 'hint' },
+      { text: 'Tell me about this town.', next: 'who' },
+      { text: 'Where do the roads lead?', next: 'hint' },
     ],
   },
   who: {
-    speaker: 'Gate Wizard',
-    line: 'I guard this threshold and count the gold of the fallen.',
+    speaker: 'Townfolk',
+    line: 'Craftspeople, guards, and merchants live here. We all keep the crossroads alive.',
     options: [{ text: 'Back', next: 'start' }],
   },
   hint: {
-    speaker: 'Gate Wizard',
-    line: 'Blue bolts strike true. Keep moving, kite the skeletons.',
+    speaker: 'Townfolk',
+    line: 'North road enters the forest. East path descends to old ruins. West leads to outskirts farms.',
     options: [{ text: 'Back', next: 'start' }],
   },
 };

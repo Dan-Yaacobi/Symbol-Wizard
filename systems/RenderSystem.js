@@ -14,11 +14,37 @@ function getEntitySprite(entity) {
   return frame;
 }
 
-function drawSprite(renderer, camera, entity, color) {
-  const sprite = getEntitySprite(entity);
+function colorForEntity(entity) {
+  if (entity.type === 'npc') return palette[entity.role] ?? palette.npc;
+  if (entity.type === 'house') {
+    if (entity.variant?.includes('blue')) return '#8fd4ff';
+    if (entity.variant?.includes('brown')) return '#d4a374';
+    return '#ff8888';
+  }
+  if (entity.type === 'destructible') {
+    if (entity.kind === 'vase') return '#d8c6ff';
+    if (entity.kind === 'crate') return '#d29e69';
+    return '#b2804b';
+  }
+  if (entity.type === 'nature') {
+    if (entity.spriteKey?.includes('flower-red')) return '#ff6f8a';
+    if (entity.spriteKey?.includes('flower-yellow')) return '#ffd45f';
+    if (entity.spriteKey?.includes('flower-blue')) return '#79b8ff';
+    if (entity.spriteKey?.includes('tree-dark')) return '#59a66f';
+    if (entity.spriteKey?.includes('tree-bright')) return '#7fdd7c';
+    if (entity.spriteKey?.includes('stone')) return '#afbbcc';
+    return '#79cf86';
+  }
+  if (entity.type === 'fence') return '#d2b28f';
+  return palette.npc;
+}
+
+function drawSprite(renderer, camera, entity, color, forceSprite = null) {
+  const sprite = forceSprite ?? getEntitySprite(entity);
   if (!sprite) return;
 
-  const baseX = Math.round(entity.x) - 3;
+  const width = sprite.art[0]?.length ?? 7;
+  const baseX = Math.round(entity.x) - Math.floor(width / 2);
   const baseY = Math.round(entity.y) - 3 + (sprite.offsetY ?? 0);
 
   for (let sy = 0; sy < sprite.art.length; sy += 1) {
@@ -52,7 +78,6 @@ function drawProjectile(renderer, camera, projectile) {
     }
   }
 }
-
 
 function drawAbilityEffect(renderer, camera, effect) {
   if (!effect) return;
@@ -103,23 +128,32 @@ function drawAbilityEffect(renderer, camera, effect) {
     }
   }
 }
-export function renderWorld(renderer, camera, map, player, enemies, npc, projectiles, goldPiles, combatTextSystem = null, abilityEffects = []) {
+
+export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, combatTextSystem = null, abilityEffects = []) {
   renderer.renderBackground(map, camera);
 
-  drawSprite(renderer, camera, npc, palette.npc);
+  for (const object of worldObjects) {
+    if (object.type === 'destructible' && object.destroyed && object.breakTimer > 0) {
+      const progress = 1 - object.breakTimer / object.breakDuration;
+      const index = Math.min(object.breakFrames.length - 1, Math.floor(progress * object.breakFrames.length));
+      const breakArt = sprites[object.breakFrames[index]];
+      if (breakArt) drawSprite(renderer, camera, object, colorForEntity(object), { art: breakArt, offsetY: 0 });
+      continue;
+    }
+
+    if (object.destroyed) continue;
+    drawSprite(renderer, camera, object, colorForEntity(object));
+  }
+
+  for (const npc of npcs) drawSprite(renderer, camera, npc, colorForEntity(npc));
 
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
     drawSprite(renderer, camera, enemy, enemy.kind === 'slime' ? palette.slime : palette.skeleton);
   }
 
-  for (const p of projectiles) {
-    drawProjectile(renderer, camera, p);
-  }
-
-  for (const effect of abilityEffects) {
-    drawAbilityEffect(renderer, camera, effect);
-  }
+  for (const p of projectiles) drawProjectile(renderer, camera, p);
+  for (const effect of abilityEffects) drawAbilityEffect(renderer, camera, effect);
 
   for (const g of goldPiles) {
     const gx = Math.round(g.x) - camera.x;
