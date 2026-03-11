@@ -171,7 +171,7 @@ function tick(now) {
     updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem);
 
     updateProjectileAnimation(projectiles, dt);
-    const combat = updateProjectiles(projectiles, map, enemies, dt, combatTextSystem, abilitySystem);
+    const combat = updateProjectiles(projectiles, map, enemies, dt, combatTextSystem, abilitySystem, worldObjects);
     projectiles = combat.projectiles;
     for (const dead of combat.slain) goldPiles.push(spawnGold(dead));
     goldPiles = collectGold(player, goldPiles, combatTextSystem);

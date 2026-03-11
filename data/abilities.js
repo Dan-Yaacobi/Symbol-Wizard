@@ -16,7 +16,7 @@ function castMagicBolt({ player, target, system, abilityLevel }) {
   const dy = target.y - player.y;
   const len = Math.hypot(dx, dy) || 1;
 
-  system.createProjectile(player.x + 1.8, player.y, dx / len, dy / len, {
+  const projectile = system.createProjectile(player.x + 1.8, player.y, dx / len, dy / len, {
     color: '#7cc2ff',
     speed: 65 + abilityLevel * 6,
     damage: 3 + abilityLevel,
@@ -24,6 +24,10 @@ function castMagicBolt({ player, target, system, abilityLevel }) {
     radius: 1.1,
     spriteFrames: projectileSprite,
   });
+
+  if (!projectile) {
+    console.error('[Ability:Magic Bolt] Projectile creation failed.');
+  }
 }
 
 function castFireBurst({ player, system, abilityLevel }) {

@@ -1,6 +1,15 @@
 import { collides } from './CollisionSystem.js';
 
-export function updateProjectiles(projectiles, map, enemies, dt, combatTextSystem = null, abilitySystem = null) {
+export function updateProjectiles(
+  projectiles,
+  map,
+  enemies,
+  dt,
+  combatTextSystem = null,
+  abilitySystem = null,
+  worldObjects = [],
+  onDestructibleDestroyed = null,
+) {
   const deadProjectiles = new Set();
   const slain = [];
 
