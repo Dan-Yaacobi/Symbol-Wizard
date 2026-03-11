@@ -8,11 +8,16 @@
 </head>
 <body>
   <main class="game-shell">
-    <canvas id="gameCanvas" width="1280" height="800"></canvas>
-    <section id="chatBox" class="chat-box" aria-live="polite">
-      <div id="chatSpeaker" class="chat-speaker">System</div>
-      <div id="chatLine" class="chat-line">Enter the dungeon and speak with the wizard (press E nearby).</div>
-      <ol id="chatOptions" class="chat-options"></ol>
+    <section class="game-stage" aria-label="Gameplay area">
+      <canvas id="gameCanvas" width="1280" height="720"></canvas>
+    </section>
+
+    <section id="uiPanels" class="ui-panels" aria-label="Game interface panels">
+      <section id="chatBox" class="chat-box" aria-live="polite">
+        <div id="chatSpeaker" class="chat-speaker">System</div>
+        <div id="chatLine" class="chat-line">Enter the dungeon and speak with the wizard (press E nearby).</div>
+        <ol id="chatOptions" class="chat-options"></ol>
+      </section>
     </section>
   </main>
 

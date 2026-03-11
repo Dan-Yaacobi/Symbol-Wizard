@@ -20,14 +20,14 @@ import { SkillTreeWindow } from './ui/SkillTreeWindow.js';
 import { resolveObjectCollision, updateDestructibleAnimations, updateTownNpcs } from './systems/WorldObjectSystem.js';
 
 const VIEW_W = 160;
-const VIEW_H = 100;
+const VIEW_H = 90;
 const WORLD_W = 220;
 const WORLD_H = 140;
 
 const canvas = document.getElementById('gameCanvas');
 const renderer = new Renderer(canvas, VIEW_W, VIEW_H, 8, 8);
 const camera = new Camera(VIEW_W, VIEW_H, WORLD_W, WORLD_H);
-const input = new Input(canvas, 8, 8);
+const input = new Input(canvas, VIEW_W, VIEW_H);
 const chat = new ChatBox();
 
 const town = generateMainTown(WORLD_W, WORLD_H);
@@ -62,9 +62,30 @@ defaultAbilitySlots.forEach((abilityId, slotIndex) => {
   abilitySystem.assignAbilityToSlot(slotIndex, abilityId);
 });
 
-const uiRoot = document.querySelector('.game-shell');
+const uiRoot = document.getElementById('uiPanels');
 const abilityBar = new AbilityBar({ root: uiRoot, abilitySystem });
 const skillTree = new SkillTreeWindow({ root: uiRoot, abilitySystem, player });
+
+const BASE_CANVAS_WIDTH = 1280;
+const BASE_CANVAS_HEIGHT = 720;
+
+function resizeLayout() {
+  const shell = document.querySelector('.game-shell');
+  const stage = document.querySelector('.game-stage');
+  const panels = document.getElementById('uiPanels');
+  if (!shell || !stage || !panels) return;
+
+  const maxCanvasWidth = stage.clientWidth;
+  const maxCanvasHeight = Math.max(120, stage.clientHeight);
+  const rawScale = Math.min(maxCanvasWidth / BASE_CANVAS_WIDTH, maxCanvasHeight / BASE_CANVAS_HEIGHT);
+  const scale = rawScale >= 1 ? Math.floor(rawScale) : rawScale;
+
+  canvas.style.width = `${BASE_CANVAS_WIDTH * scale}px`;
+  canvas.style.height = `${BASE_CANVAS_HEIGHT * scale}px`;
+}
+
+window.addEventListener('resize', resizeLayout);
+resizeLayout();
 
 let dialogueOpen = false;
 let activeNpc = null;
