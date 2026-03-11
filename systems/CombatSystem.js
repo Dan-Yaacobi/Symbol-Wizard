@@ -15,6 +15,15 @@ export function updateProjectiles(projectiles, map, enemies, dt, combatTextSyste
     const ty = Math.round(p.y);
     if (!map[ty] || !map[ty][tx] || !map[ty][tx].walkable) deadProjectiles.add(p);
 
+    for (const object of worldObjects) {
+      if (object.type !== 'destructible' || object.destroyed) continue;
+      if (collides({ ...p, radius: p.radius ?? 0.8 }, object)) {
+        deadProjectiles.add(p);
+        const broke = object.applyDamage(p.damage ?? 2);
+        if (broke) onDestructibleDestroyed?.(object);
+      }
+    }
+
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
       if (collides({ ...p, radius: p.radius ?? 0.8 }, enemy)) {

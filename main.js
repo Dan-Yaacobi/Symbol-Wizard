@@ -2,9 +2,7 @@ import { Renderer } from './engine/Renderer.js';
 import { Camera } from './engine/Camera.js';
 import { Input } from './engine/Input.js';
 import { Player } from './entities/Player.js';
-import { Enemy } from './entities/Enemy.js';
-import { NPC } from './entities/NPC.js';
-import { generateDungeon } from './world/MapGenerator.js';
+import { generateMainTown } from './world/MapGenerator.js';
 import { resolveMapCollision } from './systems/CollisionSystem.js';
 import { updateEnemies } from './systems/AISystem.js';
 import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/CombatSystem.js';
@@ -19,6 +17,7 @@ import { abilityDefinitions, defaultAbilitySlots } from './data/abilities.js';
 import { AbilitySystem } from './systems/AbilitySystem.js';
 import { AbilityBar } from './ui/AbilityBar.js';
 import { SkillTreeWindow } from './ui/SkillTreeWindow.js';
+import { resolveObjectCollision, updateDestructibleAnimations, updateTownNpcs } from './systems/WorldObjectSystem.js';
 
 const VIEW_W = 160;
 const VIEW_H = 100;
@@ -31,10 +30,12 @@ const camera = new Camera(VIEW_W, VIEW_H, WORLD_W, WORLD_H);
 const input = new Input(canvas, 8, 8);
 const chat = new ChatBox();
 
-const map = generateDungeon(WORLD_W, WORLD_H);
-const player = new Player(20, 20);
-const npc = new NPC(28, 20);
-const enemies = [new Enemy('slime', 90, 64), new Enemy('skeleton', 110, 78), new Enemy('slime', 130, 85)];
+const town = generateMainTown(WORLD_W, WORLD_H);
+const map = town.map;
+const player = new Player(town.playerSpawn.x, town.playerSpawn.y);
+const enemies = [];
+const npcs = town.npcs;
+const worldObjects = town.worldObjects;
 let projectiles = [];
 let goldPiles = [];
 const combatTextSystem = new CombatTextSystem();
@@ -66,6 +67,7 @@ const abilityBar = new AbilityBar({ root: uiRoot, abilitySystem });
 const skillTree = new SkillTreeWindow({ root: uiRoot, abilitySystem, player });
 
 let dialogueOpen = false;
+let activeNpc = null;
 let dialogueNode = 'start';
 let interactLatch = false;
 let slotPressLatch = [false, false, false, false];
@@ -94,8 +96,11 @@ function handlePlayer(dt) {
 
   player.x += player.vx * dt;
   if (!isWalkable(player.x, player.y)) resolveMapCollision(player, map);
+  resolveObjectCollision(player, worldObjects);
+
   player.y += player.vy * dt;
   if (!isWalkable(player.x, player.y)) resolveMapCollision(player, map);
+  resolveObjectCollision(player, worldObjects);
 
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
@@ -112,22 +117,34 @@ function handlePlayer(dt) {
 }
 
 function handleDialogue() {
-  const nearNpc = Math.hypot(player.x - npc.x, player.y - npc.y) <= npc.interactRadius;
+  let nearest = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  for (const npc of npcs) {
+    const d = Math.hypot(player.x - npc.x, player.y - npc.y);
+    if (d < nearestDistance) {
+      nearest = npc;
+      nearestDistance = d;
+    }
+  }
+
+  const nearNpc = nearest && nearestDistance <= nearest.interactRadius;
   const pressedInteract = input.isDown('e');
 
   if (pressedInteract && !interactLatch && nearNpc) {
     dialogueOpen = !dialogueOpen;
+    activeNpc = nearest;
     dialogueNode = 'start';
   }
   interactLatch = pressedInteract;
 
-  if (!dialogueOpen) {
-    chat.setMessage('System', nearNpc ? 'Press E to talk to Gate Wizard.' : 'Explore the dungeon. Use 1-4 for abilities, K for SkillTreeWindow.');
+  if (!dialogueOpen || !activeNpc) {
+    const exitText = `${town.exits.north.label} | ${town.exits.east.label} | ${town.exits.west.label}`;
+    chat.setMessage('Town Crier', nearNpc ? `Press E to talk to ${nearest.name}. ${exitText}` : `Welcome to Sunmeadow Town. ${exitText}`);
     return;
   }
 
   const node = dialogueTree[dialogueNode];
-  chat.setMessage(node.speaker, node.line, node.options);
+  chat.setMessage(node.speaker.replace('Gate Wizard', activeNpc.name), node.line.replace('dungeon', 'town').replace('threshold', 'crossroads'), node.options);
 
   for (let i = 1; i <= 9; i += 1) {
     if (input.isDown(String(i))) {
@@ -142,13 +159,14 @@ function tick(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
 
+  updateTownNpcs(npcs, map, dt);
+  for (const npc of npcs) {
+    updateEntityAnimation(npc, dt, Math.hypot(npc.vx, npc.vy) > 0.1);
+  }
+
   if (!dialogueOpen) {
     handlePlayer(dt);
     updateEnemies(enemies, player, dt);
-    for (const enemy of enemies) {
-      if (isWalkable(enemy.x, enemy.y)) continue;
-      resolveMapCollision(enemy, map);
-    }
 
     updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem);
 
@@ -162,13 +180,10 @@ function tick(now) {
     player.vy = 0;
   }
 
+  updateDestructibleAnimations(worldObjects, dt);
   combatTextSystem.update(dt);
 
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1);
-  for (const enemy of enemies) {
-    if (!enemy.alive) continue;
-    updateEntityAnimation(enemy, dt, Math.hypot(enemy.vx, enemy.vy) > 0.1);
-  }
 
   handleDialogue();
   camera.follow(player);
@@ -180,7 +195,8 @@ function tick(now) {
     map,
     player,
     enemies,
-    npc,
+    npcs,
+    worldObjects,
     projectiles,
     goldPiles,
     combatTextSystem,
