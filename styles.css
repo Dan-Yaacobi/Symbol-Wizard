@@ -34,8 +34,8 @@ body {
 }
 
 #gameCanvas {
-  width: calc(var(--canvas-base-width) * 1px);
-  height: calc(var(--canvas-base-height) * 1px);
+  width: calc(var(--canvas-base-width) * 1px) !important;
+  height: calc(var(--canvas-base-height) * 1px) !important;
   aspect-ratio: 16 / 9;
   border: 2px solid var(--panel-border);
   background: #000;
