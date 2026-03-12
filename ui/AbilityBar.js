@@ -31,9 +31,18 @@ export class AbilityBar {
       slot.dataset.slotIndex = String(i);
       slot.innerHTML = `<span class="slot-hotkey">${i + 1}</span><span class="slot-label">${ability?.name ?? 'Empty'}</span>`;
 
-      slot.draggable = true;
-      slot.addEventListener('dragstart', () => {
-        this.dragPayload = { type: 'slot', slotIndex: i, abilityId: ability?.id ?? null };
+      slot.draggable = Boolean(ability);
+      slot.addEventListener('dragstart', (event) => {
+        if (!ability) {
+          event.preventDefault();
+          return;
+        }
+
+        event.dataTransfer?.setData('application/x-ability-source', 'slot');
+        event.dataTransfer?.setData('text/plain', String(i));
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+
+        this.dragPayload = { type: 'slot', slotIndex: i, abilityId: ability.id };
         slot.classList.add('dragging');
       });
       slot.addEventListener('dragend', () => {
@@ -41,14 +50,30 @@ export class AbilityBar {
         this.dragPayload = null;
       });
 
-      slot.addEventListener('dragover', (event) => event.preventDefault());
-      slot.addEventListener('drop', () => {
-        if (!this.dragPayload) return;
+      slot.addEventListener('dragover', (event) => {
+        event.preventDefault();
+      });
+      slot.addEventListener('drop', (event) => {
+        event.preventDefault();
 
-        if (this.dragPayload.type === 'slot') {
-          this.abilitySystem.swapSlots(this.dragPayload.slotIndex, i);
-        } else if (this.dragPayload.type === 'pool') {
-          this.abilitySystem.assignAbilityToSlot(i, this.dragPayload.abilityId);
+        const sourceType = event.dataTransfer?.getData('application/x-ability-source') || this.dragPayload?.type;
+
+        if (sourceType === 'slot') {
+          const fromIndexRaw = event.dataTransfer?.getData('text/plain');
+          const fromIndex = Number(fromIndexRaw);
+          if (Number.isNaN(fromIndex)) return;
+
+          this.abilitySystem.swapSlots(fromIndex, i);
+        } else if (sourceType === 'pool') {
+          const abilityId =
+            event.dataTransfer?.getData('application/x-ability-id') ||
+            event.dataTransfer?.getData('text/plain') ||
+            this.dragPayload?.abilityId;
+          if (!abilityId) return;
+
+          this.abilitySystem.assignAbilityToSlot(i, abilityId);
+        } else {
+          return;
         }
 
         this.render();
@@ -76,7 +101,11 @@ export class AbilityBar {
       item.textContent = ability.name;
       item.draggable = true;
 
-      item.addEventListener('dragstart', () => {
+      item.addEventListener('dragstart', (event) => {
+        event.dataTransfer?.setData('application/x-ability-source', 'pool');
+        event.dataTransfer?.setData('application/x-ability-id', ability.id);
+        event.dataTransfer?.setData('text/plain', ability.id);
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copyMove';
         this.dragPayload = { type: 'pool', abilityId: ability.id };
       });
 
