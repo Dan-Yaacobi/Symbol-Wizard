@@ -251,21 +251,7 @@ function drawDebugCursorOverlay(renderer, camera, mouse) {
   const worldScreen = camera.worldToScreen(mouse.worldX, mouse.worldY);
   renderer.drawEntityGlyph('+', '#ff3f7f', '#0b1016', worldScreen.x, worldScreen.y);
 
-  const cursorUiX = mouse.canvasCellX;
-  const cursorUiY = mouse.canvasCellY;
-  renderer.drawUiGlyph('+', '#53f7ff', '#0b1016', cursorUiX, cursorUiY);
-
-  if (mouse.diagRenderLoggedEventId !== mouse.diagEventId) {
-    console.info('[CursorPipeline][Render]', {
-      eventId: mouse.diagEventId,
-      mouseWorld: { x: mouse.worldX, y: mouse.worldY },
-      worldToScreen: { x: worldScreen.x, y: worldScreen.y },
-      markerDrawCell: { x: worldScreen.x, y: worldScreen.y },
-      uiMarkerDrawCell: { x: cursorUiX, y: cursorUiY },
-      camera: { x: camera.x, y: camera.y },
-    });
-    mouse.diagRenderLoggedEventId = mouse.diagEventId;
-  }
+  renderer.drawUiGlyph('+', '#53f7ff', '#0b1016', mouse.canvasCellX, mouse.canvasCellY);
 }
 export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, combatTextSystem = null, abilityEffects = [], mouse = null) {
   renderer.renderBackground(map, camera);

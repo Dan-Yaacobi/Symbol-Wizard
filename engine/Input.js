@@ -25,9 +25,6 @@ export class Input {
       worldY: 0,
       left: false,
       clicked: false,
-      diagEventId: 0,
-      diagRenderLoggedEventId: -1,
-      diagAbilityLoggedEventId: -1,
     };
 
     window.addEventListener('keydown', (e) => {
@@ -76,25 +73,6 @@ export class Input {
     this.mouse.canvasCellY = canvasCellY;
     this.mouse.worldX = worldPos.x;
     this.mouse.worldY = worldPos.y;
-    this.mouse.diagEventId += 1;
-
-    console.info('[CursorPipeline][Input]', {
-      eventId: this.mouse.diagEventId,
-      screenX: this.mouse.screenX,
-      screenY: this.mouse.screenY,
-      canvasX: this.mouse.canvasX,
-      canvasY: this.mouse.canvasY,
-      canvasCellX: this.mouse.canvasCellX,
-      canvasCellY: this.mouse.canvasCellY,
-      worldX: this.mouse.worldX,
-      worldY: this.mouse.worldY,
-      viewport: {
-        canvasWidth: this.viewport.canvasWidth,
-        canvasHeight: this.viewport.canvasHeight,
-        cellW: this.cellW,
-        cellH: this.cellH,
-      },
-    });
   }
 
   getMouseWorldPosition() {

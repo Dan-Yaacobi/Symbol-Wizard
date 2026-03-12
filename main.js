@@ -284,7 +284,7 @@ function handlePlayer(dt) {
       const hotkey = String(i + 1);
       const down = input.isDown(hotkey);
       if (down && !slotPressLatch[i]) {
-        abilitySystem.castSlot(i, { player, target, mouse: input.mouse });
+        abilitySystem.castSlot(i, { player, target });
       }
       slotPressLatch[i] = down;
     }
