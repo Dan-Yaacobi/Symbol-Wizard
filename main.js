@@ -74,6 +74,10 @@ const skillTree = new SkillTreeWindow({ root: uiRoot, abilitySystem, player });
 const BASE_CANVAS_WIDTH = 1280;
 const BASE_CANVAS_HEIGHT = 720;
 
+console.info('[startup] Game scene loaded');
+console.info('[startup] World generated', { width: map?.[0]?.length ?? 0, height: map?.length ?? 0 });
+console.info('[startup] Player spawned', { x: player.x, y: player.y });
+
 function resizeLayout() {
   const shell = document.querySelector('.game-shell');
   const stage = document.querySelector('.game-stage');
@@ -82,8 +86,14 @@ function resizeLayout() {
 
   const maxCanvasWidth = stage.clientWidth;
   const maxCanvasHeight = Math.max(120, stage.clientHeight);
+
+  if (maxCanvasWidth <= 0 || maxCanvasHeight <= 0) {
+    requestAnimationFrame(resizeLayout);
+    return;
+  }
+
   const rawScale = Math.min(maxCanvasWidth / BASE_CANVAS_WIDTH, maxCanvasHeight / BASE_CANVAS_HEIGHT);
-  const scale = rawScale >= 1 ? Math.floor(rawScale) : rawScale;
+  const scale = rawScale >= 1 ? Math.floor(rawScale) : Math.max(rawScale, 0.1);
 
   canvas.style.width = `${BASE_CANVAS_WIDTH * scale}px`;
   canvas.style.height = `${BASE_CANVAS_HEIGHT * scale}px`;
@@ -264,6 +274,12 @@ function tick(now) {
   handleDialogue();
   camera.update(dt);
   camera.follow(player);
+
+  if (!Number.isFinite(camera.x) || !Number.isFinite(camera.y)) {
+    console.warn('[startup] Camera produced invalid coordinates, resetting to origin', { x: camera.x, y: camera.y });
+    camera.x = 0;
+    camera.y = 0;
+  }
 
   renderer.beginFrame();
   renderWorld(
