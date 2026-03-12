@@ -17,25 +17,25 @@ function getEntitySprite(entity) {
 function colorForEntity(entity) {
   if (entity.type === 'npc') return palette[entity.role] ?? palette.npc;
   if (entity.type === 'house') {
-    if (entity.variant?.includes('blue')) return '#8fd4ff';
-    if (entity.variant?.includes('brown')) return '#d4a374';
-    return '#ff8888';
+    if (entity.variant?.includes('blue')) return '#7abce3';
+    if (entity.variant?.includes('brown')) return '#be8e62';
+    return '#d06f6f';
   }
   if (entity.type === 'destructible') {
-    if (entity.kind === 'vase') return '#d8c6ff';
-    if (entity.kind === 'crate') return '#d29e69';
-    return '#b2804b';
+    if (entity.kind === 'vase') return '#baa6e0';
+    if (entity.kind === 'crate') return '#bc8a56';
+    return '#9f7344';
   }
   if (entity.type === 'nature') {
-    if (entity.spriteKey?.includes('flower-red')) return '#ff6f8a';
-    if (entity.spriteKey?.includes('flower-yellow')) return '#ffd45f';
-    if (entity.spriteKey?.includes('flower-blue')) return '#79b8ff';
-    if (entity.spriteKey?.includes('tree-dark')) return '#59a66f';
-    if (entity.spriteKey?.includes('tree-bright')) return '#7fdd7c';
-    if (entity.spriteKey?.includes('stone')) return '#afbbcc';
-    return '#79cf86';
+    if (entity.spriteKey?.includes('flower-red')) return '#d66f82';
+    if (entity.spriteKey?.includes('flower-yellow')) return '#d7b45a';
+    if (entity.spriteKey?.includes('flower-blue')) return '#6a9fd4';
+    if (entity.spriteKey?.includes('tree-dark')) return '#4a8458';
+    if (entity.spriteKey?.includes('tree-bright')) return '#5da568';
+    if (entity.spriteKey?.includes('stone')) return '#8d97a8';
+    return '#5f9f68';
   }
-  if (entity.type === 'fence') return '#d2b28f';
+  if (entity.type === 'fence') return '#b4916f';
   return palette.npc;
 }
 
@@ -100,8 +100,8 @@ function drawAbilityEffect(renderer, camera, effect) {
       const sx = Math.round(x) - camera.x;
       const sy = Math.round(y) - camera.y;
 
-      renderer.drawEntityGlyph('*', effect.glowColor ?? '#87bfff', '#0b1016', sx, sy);
-      renderer.drawEntityGlyph('⚡', effect.color ?? '#e5f3ff', '#0b1016', sx, sy);
+      renderer.drawEntityGlyph('*', effect.glowColor ?? '#9ad5ff', '#0b1016', sx, sy);
+      renderer.drawEntityGlyph('⚡', effect.color ?? '#f3fbff', '#0b1016', sx, sy);
     }
 
     return;
@@ -113,7 +113,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const t = i / steps;
       const x = effect.fromX + (effect.toX - effect.fromX) * t;
       const y = effect.fromY + (effect.toY - effect.fromY) * t;
-      renderer.drawEntityGlyph('~', effect.color ?? '#b8dbff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+      renderer.drawEntityGlyph('~', effect.color ?? '#cfe7ff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
     }
     return;
   }
@@ -125,7 +125,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const angle = (Math.PI * 2 * i) / points;
       const x = effect.x + Math.cos(angle) * effect.radius;
       const y = effect.y + Math.sin(angle) * effect.radius;
-      renderer.drawEntityGlyph('·', effect.color ?? '#9adfff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+      renderer.drawEntityGlyph('·', effect.color ?? '#d8f1ff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
     }
     return;
   }
@@ -136,7 +136,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const angle = (Math.PI * 2 * i) / 10;
       const x = effect.x + Math.cos(angle) * (effect.radius ?? 2);
       const y = effect.y + Math.sin(angle) * (effect.radius ?? 2);
-      renderer.drawEntityGlyph(glyphs[i % glyphs.length], effect.color ?? '#b7ecff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+      renderer.drawEntityGlyph(glyphs[i % glyphs.length], effect.color ?? '#def5ff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
     }
     return;
   }
@@ -147,7 +147,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const angle = (Math.PI * 2 * i) / points;
       const x = effect.x + Math.cos(angle) * effect.radius;
       const y = effect.y + Math.sin(angle) * effect.radius;
-      renderer.drawEntityGlyph('*', effect.color ?? '#ff8a3d', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+      renderer.drawEntityGlyph('*', effect.color ?? '#ffb36e', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
     }
   }
 }

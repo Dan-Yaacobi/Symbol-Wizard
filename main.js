@@ -19,8 +19,8 @@ import { AbilityBar } from './ui/AbilityBar.js';
 import { SkillTreeWindow } from './ui/SkillTreeWindow.js';
 import { resolveObjectCollision, updateDestructibleAnimations, updateTownNpcs } from './systems/WorldObjectSystem.js';
 
-const VIEW_W = 160;
-const VIEW_H = 90;
+const VIEW_W = 104;
+const VIEW_H = 58;
 const WORLD_W = 220;
 const WORLD_H = 140;
 
