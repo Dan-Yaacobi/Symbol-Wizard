@@ -63,7 +63,14 @@ function castFireBurst({ player, system, abilityLevel }) {
   for (const enemy of system.enemies) {
     if (!enemy.alive) continue;
     const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-    if (dist <= radius) system.damageEnemy(enemy, damage);
+    if (dist <= radius) {
+      system.damageEnemy(enemy, damage, {
+        sourceX: player.x,
+        sourceY: player.y,
+        strongHit: true,
+        particleColor: '#ffc8a2',
+      });
+    }
   }
 }
 

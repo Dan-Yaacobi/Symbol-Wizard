@@ -28,6 +28,11 @@ export class Enemy extends Entity {
       frozen: false,
       freezeTint: null,
       freezeGlow: null,
+      hitFlashTimer: 0,
+      hitFlashDuration: 0,
+      hitKnockbackX: 0,
+      hitKnockbackY: 0,
+      hitKnockbackTimer: 0,
       frameDurations: {
         idle: 0.32,
         walk: 0.14,

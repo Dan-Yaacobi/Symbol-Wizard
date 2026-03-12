@@ -41,10 +41,30 @@ export class AbilitySystem {
     }
 
     this.effects = this.effects
-      .map((effect) => ({ ...effect, ttl: effect.ttl - dt }))
+      .map((effect) => this.updateEffect(effect, dt))
       .filter((effect) => effect.ttl > 0);
 
     this.updateFreeze(dt);
+  }
+
+  updateEffect(effect, dt) {
+    if (!effect || typeof effect !== 'object') return { ttl: 0 };
+
+    if (effect.type === 'hit-particles') {
+      const particles = (effect.particles ?? [])
+        .map((particle) => ({
+          ...particle,
+          x: particle.x + particle.vx * dt,
+          y: particle.y + particle.vy * dt,
+          life: particle.life - dt,
+        }))
+        .filter((particle) => particle.life > 0);
+
+      const ttl = particles.reduce((maxLife, particle) => Math.max(maxLife, particle.life), 0);
+      return { ...effect, particles, ttl };
+    }
+
+    return { ...effect, ttl: effect.ttl - dt };
   }
 
   updateFreeze(dt) {
@@ -282,17 +302,73 @@ export class AbilitySystem {
     return best;
   }
 
-  damageEnemy(enemy, amount) {
+  damageEnemy(enemy, amount, hitContext = {}) {
     if (!enemy || !enemy.alive) return false;
     const scaled = amount * this.getDamageMultiplier(enemy);
     const damage = Math.max(0, scaled);
     enemy.hp -= damage;
     this.reportDamage?.(enemy, damage, false);
+    this.registerHitFeedback(enemy, hitContext);
     if (enemy.hp <= 0) {
       enemy.alive = false;
       this.onEnemySlain?.(enemy);
     }
     return true;
+  }
+
+  registerHitFeedback(enemy, hitContext = {}) {
+    if (!enemy || !enemy.alive) return;
+
+    const flashDuration = 0.1;
+    enemy.hitFlashDuration = flashDuration;
+    enemy.hitFlashTimer = flashDuration;
+
+    const sourceX = Number.isFinite(hitContext.sourceX) ? hitContext.sourceX : this.player?.x ?? enemy.x;
+    const sourceY = Number.isFinite(hitContext.sourceY) ? hitContext.sourceY : this.player?.y ?? enemy.y;
+
+    const dx = enemy.x - sourceX;
+    const dy = enemy.y - sourceY;
+    const length = Math.hypot(dx, dy) || 1;
+
+    const knockbackDuration = 0.08;
+    const knockbackDistance = Number.isFinite(hitContext.knockbackDistance) ? hitContext.knockbackDistance : 3;
+    const knockbackSpeed = knockbackDistance / knockbackDuration;
+
+    enemy.hitKnockbackX = (dx / length) * knockbackSpeed;
+    enemy.hitKnockbackY = (dy / length) * knockbackSpeed;
+    enemy.hitKnockbackTimer = knockbackDuration;
+
+    this.spawnHitParticles(enemy.x, enemy.y, hitContext.particleColor ?? '#d9dce3');
+
+    if (hitContext.strongHit) {
+      this.camera?.startShake?.(0.1, 0.45);
+    }
+  }
+
+  spawnHitParticles(x, y, color = '#d9dce3') {
+    const count = 4 + Math.floor(Math.random() * 5);
+    const particles = [];
+
+    for (let i = 0; i < count; i += 1) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 18 + Math.random() * 26;
+      const life = 0.2 + Math.random() * 0.2;
+      particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        life,
+        maxLife: life,
+      });
+    }
+
+    this.spawnEffect({
+      type: 'hit-particles',
+      color,
+      particles,
+      ttl: Math.max(...particles.map((particle) => particle.life)),
+    });
   }
 
   isWalkable(x, y) {

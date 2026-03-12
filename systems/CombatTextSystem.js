@@ -1,7 +1,7 @@
 const MAX_ACTIVE_TEXTS = 20;
-const MIN_LIFETIME = 0.8;
-const MAX_LIFETIME = 1.2;
-const DEFAULT_UPWARD_SPEED = 10;
+const MIN_LIFETIME = 0.9;
+const MAX_LIFETIME = 1.3;
+const DEFAULT_UPWARD_SPEED = 13;
 const VERTICAL_OFFSET = 3.8;
 const DEBUG_COMBAT_TEXT = false;
 // Toggle to true while diagnosing combat-text lifecycle issues without spamming normal gameplay logs.
@@ -15,17 +15,17 @@ const COLOR_MAP = {
 };
 
 const TEXT_STYLES = {
-  damage: { color: COLOR_MAP.red, fontScale: 2.25, fontWeight: '700' },
+  damage: { color: COLOR_MAP.red, fontScale: 2.45, fontWeight: '800' },
   critical: {
     color: COLOR_MAP.magenta,
-    fontScale: 2.85,
+    fontScale: 3.05,
     fontWeight: '800',
     popAmplitude: 0.18,
     popDuration: 0.14,
   },
-  gold: { color: COLOR_MAP.gold, fontScale: 2.2, fontWeight: '700' },
-  heal: { color: COLOR_MAP.green, fontScale: 2.2, fontWeight: '700' },
-  info: { color: COLOR_MAP.white, fontScale: 2.1, fontWeight: '600' },
+  gold: { color: COLOR_MAP.gold, fontScale: 2.35, fontWeight: '700' },
+  heal: { color: COLOR_MAP.green, fontScale: 2.35, fontWeight: '700' },
+  info: { color: COLOR_MAP.white, fontScale: 2.2, fontWeight: '700' },
 };
 
 function isFiniteNumber(value) {
@@ -122,7 +122,7 @@ export class CombatTextSystem {
       }
 
       const drawStyle = this.#getAnimatedStyle(entry);
-      renderer.drawEffectText(entry.text, drawStyle.color, screenX, screenY, entry.opacity, 'rgba(0,0,0,0)', drawStyle);
+      renderer.drawEffectText(entry.text, drawStyle.color, screenX, screenY, entry.opacity, '#06090d', drawStyle);
     }
   }
 
