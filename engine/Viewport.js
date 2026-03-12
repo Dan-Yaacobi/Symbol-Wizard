@@ -3,22 +3,23 @@ export class Viewport {
     this.canvas = canvas;
   }
 
+  get canvasWidth() {
+    return this.canvas.width;
+  }
+
+  get canvasHeight() {
+    return this.canvas.height;
+  }
+
   screenToCanvas(screenX, screenY) {
     const rect = this.canvas.getBoundingClientRect();
-    const computed = getComputedStyle(this.canvas);
-    const borderLeft = Number.parseFloat(computed.borderLeftWidth) || 0;
-    const borderRight = Number.parseFloat(computed.borderRightWidth) || 0;
-    const borderTop = Number.parseFloat(computed.borderTopWidth) || 0;
-    const borderBottom = Number.parseFloat(computed.borderBottomWidth) || 0;
 
-    const renderWidth = Math.max(1, rect.width - borderLeft - borderRight);
-    const renderHeight = Math.max(1, rect.height - borderTop - borderBottom);
-    const scaleX = this.canvas.width / renderWidth;
-    const scaleY = this.canvas.height / renderHeight;
+    const scaleX = this.canvas.width / rect.width;
+    const scaleY = this.canvas.height / rect.height;
 
     return {
-      x: (screenX - rect.left - borderLeft) * scaleX,
-      y: (screenY - rect.top - borderTop) * scaleY,
+      x: (screenX - rect.left) * scaleX,
+      y: (screenY - rect.top) * scaleY,
     };
   }
 
