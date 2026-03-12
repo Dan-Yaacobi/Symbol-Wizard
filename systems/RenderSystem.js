@@ -269,7 +269,18 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     drawSprite(renderer, camera, object, colorForEntity(object));
   }
 
-  for (const npc of npcs) drawSprite(renderer, camera, npc, colorForEntity(npc));
+  for (const npc of npcs) {
+    const npcColor = npc.dialogueEngaged ? '#f5df9a' : colorForEntity(npc);
+    drawSprite(renderer, camera, npc, npcColor);
+
+    if (npc.dialogueEngaged) {
+      const pulse = npc.dialoguePulse > 0 ? '◉' : '◌';
+      const sx = Math.round(npc.x) - camera.x;
+      const sy = Math.round(npc.y) - 5 - camera.y;
+      renderer.drawEntityGlyph('✦', '#ffe6a8', '#0b1016', sx, sy);
+      renderer.drawEntityGlyph(pulse, '#f7c66e', '#0b1016', sx, sy + 1);
+    }
+  }
 
   for (const enemy of enemies) {
     if (!enemy.alive) continue;

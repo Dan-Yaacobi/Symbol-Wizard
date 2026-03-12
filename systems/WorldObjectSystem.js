@@ -2,6 +2,12 @@ import { collides } from './CollisionSystem.js';
 
 export function updateTownNpcs(npcs, map, dt) {
   for (const npc of npcs) {
+    if (npc.dialogueEngaged) {
+      npc.vx = 0;
+      npc.vy = 0;
+      continue;
+    }
+
     npc.wanderTimer -= dt;
     if (npc.wanderRadius <= 0) {
       npc.vx = 0;

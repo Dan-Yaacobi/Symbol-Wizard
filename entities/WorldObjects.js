@@ -114,6 +114,8 @@ export class TownNPC extends WorldObject {
       vy: 0,
       animationState: 'idle',
       frameDurations: { idle: 0.45, walk: 0.2 },
+      dialogueEngaged: false,
+      dialoguePulse: 0,
     });
   }
 }
