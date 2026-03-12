@@ -34,7 +34,7 @@ function castMagicBolt({ player, target, system, abilityLevel }) {
   console.log('Magic bolt fired toward:', dirX, dirY);
 
   const projectile = system.createProjectile(player.x, player.y, dirX, dirY, {
-    color: '#7cc2ff',
+    color: '#b7deff',
     speed: 65 + abilityLevel * 6,
     damage: 3 + abilityLevel,
     ttl: 0.9,
@@ -56,7 +56,7 @@ function castFireBurst({ player, system, abilityLevel }) {
     x: player.x,
     y: player.y,
     radius,
-    color: '#ff8a3d',
+    color: '#ffbf7f',
     ttl: 0.22,
   });
 

@@ -1,11 +1,11 @@
 import { palette } from '../entities/SpriteLibrary.js';
 
 export const tiles = {
-  grass: { char: '"', fg: '#4eca5d', bg: '#173823', walkable: true },
-  grassDark: { char: ',', fg: '#3fbd55', bg: '#16311f', walkable: true },
-  dirt: { char: '.', fg: '#c79a5d', bg: '#4a2f1e', walkable: true },
-  dirtEdge: { char: ',', fg: '#af8450', bg: '#3f2819', walkable: true },
-  pathPebble: { char: ':', fg: '#b18758', bg: '#4a2f1e', walkable: true },
+  grass: { char: ' ', fg: '#255233', bg: '#123522', walkable: true },
+  grassDark: { char: ' ', fg: '#1f472c', bg: '#0f2e1d', walkable: true },
+  dirt: { char: '.', fg: '#d8b786', bg: '#5c4029', walkable: true },
+  dirtEdge: { char: ',', fg: '#c29b69', bg: '#4f3522', walkable: true },
+  pathPebble: { char: '.', fg: '#e2c99e', bg: '#63452d', walkable: true },
   water: { char: '~', fg: '#65b8ff', bg: '#17304f', walkable: false },
   fence: { char: '|', fg: '#cfa77a', bg: '#173823', walkable: false },
   wall: { char: '#', fg: palette.wallFg, bg: palette.wallBg, walkable: false },

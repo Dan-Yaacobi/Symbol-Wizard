@@ -33,7 +33,7 @@ function carvePath(map, start, end, halfWidth = 2) {
 function paintGrass(map) {
   for (let y = 0; y < map.length; y += 1) {
     for (let x = 0; x < map[0].length; x += 1) {
-      map[y][x] = cloneTile(Math.random() < 0.25 ? tiles.grassDark : tiles.grass);
+      map[y][x] = cloneTile(Math.random() < 0.12 ? tiles.grassDark : tiles.grass);
     }
   }
 }
@@ -54,6 +54,17 @@ function stampHouseBlocking(map, house) {
   }
 }
 
+function hasNearbyDecoration(occupiedDecorations, x, y, radius = 2) {
+  for (let oy = -radius; oy <= radius; oy += 1) {
+    for (let ox = -radius; ox <= radius; ox += 1) {
+      if (ox === 0 && oy === 0) continue;
+      if (!occupiedDecorations.has(`${x + ox},${y + oy}`)) continue;
+      return true;
+    }
+  }
+  return false;
+}
+
 function placeNature(width, height, occupied) {
   const nature = [];
   const candidates = [
@@ -67,11 +78,11 @@ function placeNature(width, height, occupied) {
     { key: 'grass-patch', block: false, radius: 0.6 },
   ];
 
-  for (let i = 0; i < 240; i += 1) {
+  for (let i = 0; i < 140; i += 1) {
     const x = 8 + Math.floor(Math.random() * (width - 16));
     const y = 8 + Math.floor(Math.random() * (height - 16));
     const hash = `${x},${y}`;
-    if (occupied.has(hash) || Math.random() < 0.45) continue;
+    if (occupied.has(hash) || hasNearbyDecoration(occupied, x, y, 2) || Math.random() < 0.58) continue;
 
     const pick = candidates[Math.floor(Math.random() * candidates.length)];
     const object = new NatureObject({
@@ -83,6 +94,8 @@ function placeNature(width, height, occupied) {
     });
 
     nature.push(object);
+    occupied.add(hash);
+
     if (pick.block) {
       for (let oy = -1; oy <= 1; oy += 1) {
         for (let ox = -1; ox <= 1; ox += 1) occupied.add(`${x + ox},${y + oy}`);
