@@ -75,3 +75,12 @@ export function updateDestructibleAnimations(worldObjects, dt) {
     object.breakTimer = Math.max(0, object.breakTimer - dt);
   }
 }
+
+export function cleanupDestroyedObjects(worldObjects) {
+  for (let i = worldObjects.length - 1; i >= 0; i -= 1) {
+    const object = worldObjects[i];
+    if (object.type !== 'destructible' || !object.destroyed) continue;
+    if (object.breakTimer > 0) continue;
+    worldObjects.splice(i, 1);
+  }
+}

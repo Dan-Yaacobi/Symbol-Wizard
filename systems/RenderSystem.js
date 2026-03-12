@@ -81,6 +81,7 @@ function drawProjectile(renderer, camera, projectile) {
 
 function drawAbilityEffect(renderer, camera, effect) {
   if (!effect) return;
+  const lifeRatio = effect.maxTtl > 0 ? Math.max(0, effect.ttl / effect.maxTtl) : 1;
 
   if (effect.type === 'lightning') {
     const dx = effect.toX - effect.fromX;
@@ -141,13 +142,26 @@ function drawAbilityEffect(renderer, camera, effect) {
     return;
   }
 
-  if (effect.type === 'burst') {
+  if (effect.type === 'burst' || effect.type === 'destruct-burst') {
     const points = Math.max(8, Math.round(effect.radius * 8));
     for (let i = 0; i < points; i += 1) {
       const angle = (Math.PI * 2 * i) / points;
       const x = effect.x + Math.cos(angle) * effect.radius;
       const y = effect.y + Math.sin(angle) * effect.radius;
-      renderer.drawEntityGlyph('*', effect.color ?? '#ffb36e', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+      const glyph = lifeRatio > 0.45 ? '*' : '·';
+      renderer.drawEntityGlyph(glyph, effect.color ?? '#ffb36e', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+    }
+    return;
+  }
+
+  if (effect.type === 'debris') {
+    const pieces = effect.pieces ?? [];
+    const glyph = lifeRatio > 0.5 ? '*' : '.';
+    for (const piece of pieces) {
+      const travel = (1 - lifeRatio) * (piece.speed ?? 2.2);
+      const x = effect.x + Math.cos(piece.angle) * travel;
+      const y = effect.y + Math.sin(piece.angle) * travel;
+      renderer.drawEntityGlyph(glyph, effect.color ?? '#d5b79a', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
     }
   }
 }
@@ -198,6 +212,10 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   for (const g of goldPiles) {
     const gx = Math.round(g.x) - camera.x;
     const gy = Math.round(g.y) - camera.y;
+    if (g.type === 'minor-item') {
+      renderer.drawEntityGlyph('✦', '#90f0d1', '#0b1016', gx, gy);
+      continue;
+    }
     renderer.drawEntityGlyph('$', palette.gold, '#0b1016', gx, gy);
   }
 
