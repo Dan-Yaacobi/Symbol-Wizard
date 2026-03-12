@@ -67,15 +67,29 @@ defaultAbilitySlots.forEach((abilityId, slotIndex) => {
   abilitySystem.assignAbilityToSlot(slotIndex, abilityId);
 });
 
-const uiRoot = document.getElementById('uiPanels');
+const uiRoot = document.getElementById('uiPanels') ?? (() => {
+  const fallback = document.createElement('section');
+  fallback.id = 'uiPanels';
+  fallback.className = 'ui-panels';
+  document.body.appendChild(fallback);
+  console.warn('BOOT: #uiPanels missing in startup scene. Created fallback root to prevent startup crash.');
+  return fallback;
+})();
 const abilityBar = new AbilityBar({ root: uiRoot, abilitySystem });
 const skillTree = new SkillTreeWindow({ root: uiRoot, abilitySystem, player });
 
 const BASE_CANVAS_WIDTH = 1280;
 const BASE_CANVAS_HEIGHT = 720;
 const BOOT_DEBUG_PREFIX = 'BOOT:';
+const DIAG_PREFIX = 'DIAG:';
 let startupCompleteLogged = false;
 let cameraCheckpointLogged = false;
+let firstProcessLogged = false;
+let firstPhysicsLogged = false;
+
+const query = new URLSearchParams(window.location.search);
+const diagMode = query.get('diag') === '1';
+const diagMinimalMode = query.get('diag_minimal') === '1';
 
 function logBoot(message, details = undefined) {
   if (details === undefined) {
@@ -85,12 +99,64 @@ function logBoot(message, details = undefined) {
   console.info(`${BOOT_DEBUG_PREFIX} ${message}`, details);
 }
 
+function logDiag(message, details = undefined) {
+  if (!diagMode) return;
+  if (details === undefined) {
+    console.info(`${DIAG_PREFIX} ${message}`);
+    return;
+  }
+  console.info(`${DIAG_PREFIX} ${message}`, details);
+}
+
 logBoot('main scene entered');
+logDiag('app entered main scene');
+logDiag('running startup path', { href: window.location.href, pathname: window.location.pathname });
 logBoot('world node found', { width: map?.[0]?.length ?? 0, height: map?.length ?? 0 });
 logBoot('camera node found', { zoom: 1, current: true, position: { x: camera.x, y: camera.y } });
 logBoot('player spawned', { x: player.x, y: player.y });
 logBoot('map generated');
 logBoot('HUD initialized');
+
+setTimeout(() => {
+  logDiag('app still alive after 1 second');
+}, 1000);
+
+if (diagMode) {
+  const diagBanner = document.createElement('div');
+  diagBanner.textContent = 'RENDER TEST';
+  diagBanner.style.position = 'fixed';
+  diagBanner.style.left = '16px';
+  diagBanner.style.top = '16px';
+  diagBanner.style.zIndex = '99999';
+  diagBanner.style.padding = '8px 12px';
+  diagBanner.style.background = '#ff00ff';
+  diagBanner.style.color = '#000';
+  diagBanner.style.font = 'bold 20px monospace';
+  diagBanner.style.border = '2px solid #fff';
+  diagBanner.style.pointerEvents = 'none';
+  document.body.appendChild(diagBanner);
+  logDiag('render test overlay injected');
+
+  const viewportArea = window.innerWidth * window.innerHeight;
+  const coveringNodes = Array.from(document.querySelectorAll('body *')).filter((el) => {
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    if (Number(style.opacity) <= 0) return false;
+    const rect = el.getBoundingClientRect();
+    const area = Math.max(0, rect.width) * Math.max(0, rect.height);
+    if (area <= 0) return false;
+    const coversMostViewport = viewportArea > 0 && area / viewportArea > 0.8;
+    const isDark = style.backgroundColor.includes('rgb(0, 0, 0)') || style.backgroundColor.includes('rgba(0, 0, 0');
+    return coversMostViewport && isDark;
+  }).map((el) => ({
+    tag: el.tagName,
+    id: el.id,
+    className: el.className,
+    zIndex: getComputedStyle(el).zIndex,
+    backgroundColor: getComputedStyle(el).backgroundColor,
+  }));
+  logDiag('fullscreen dark overlay candidates', coveringNodes);
+}
 
 function resizeLayout() {
   const shell = document.querySelector('.game-shell');
@@ -255,16 +321,51 @@ function handleDialogue() {
 }
 
 let last = performance.now();
+
+if (diagMinimalMode) {
+  for (let y = 0; y < map.length; y += 1) {
+    for (let x = 0; x < map[0].length; x += 1) {
+      map[y][x] = { char: ' ', fg: '#2a5f3a', bg: '#173823', walkable: true };
+    }
+  }
+  worldObjects.length = 0;
+  npcs.length = 0;
+  enemies.length = 0;
+  projectiles = [];
+  goldPiles = [];
+  player.x = Math.floor(WORLD_W / 2);
+  player.y = Math.floor(WORLD_H / 2);
+  camera.x = Math.floor(player.x - VIEW_W / 2);
+  camera.y = Math.floor(player.y - VIEW_H / 2);
+  logDiag('minimal startup mode enabled: generation, spawns, and camera follow disabled');
+}
+
 function tick(now) {
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
 
-  updateTownNpcs(npcs, map, dt);
-  for (const npc of npcs) {
-    updateEntityAnimation(npc, dt, Math.hypot(npc.vx, npc.vy) > 0.1);
+  if (!firstProcessLogged) {
+    firstProcessLogged = true;
+    logDiag('first _process tick');
   }
 
-  if (!dialogueOpen) {
+  if (!firstPhysicsLogged) {
+    firstPhysicsLogged = true;
+    logDiag('first _physics_process tick');
+  }
+
+  if (!startupCompleteLogged) {
+    logDiag('game root _ready');
+  }
+
+  if (!diagMinimalMode) {
+    updateTownNpcs(npcs, map, dt);
+    for (const npc of npcs) {
+      updateEntityAnimation(npc, dt, Math.hypot(npc.vx, npc.vy) > 0.1);
+    }
+  }
+
+  if (!dialogueOpen && !diagMinimalMode) {
     handlePlayer(dt);
     updateEnemies(enemies, player, dt);
 
@@ -298,15 +399,19 @@ function tick(now) {
     player.vy = 0;
   }
 
-  updateDestructibleAnimations(worldObjects, dt);
-  cleanupDestroyedObjects(worldObjects);
+  if (!diagMinimalMode) {
+    updateDestructibleAnimations(worldObjects, dt);
+    cleanupDestroyedObjects(worldObjects);
+  }
   combatTextSystem.update(dt);
 
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1);
 
-  handleDialogue();
-  camera.update(dt);
-  camera.follow(player);
+  if (!diagMinimalMode) {
+    handleDialogue();
+    camera.update(dt);
+    camera.follow(player);
+  }
 
   if (!Number.isFinite(camera.x) || !Number.isFinite(camera.y)) {
     console.warn(`${BOOT_DEBUG_PREFIX} camera produced invalid coordinates, resetting to origin`, { x: camera.x, y: camera.y });
