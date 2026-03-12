@@ -279,14 +279,16 @@ function handlePlayer(dt) {
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
 
-  const target = input.getMouseWorldPosition();
-  for (let i = 0; i < 4; i += 1) {
-    const hotkey = String(i + 1);
-    const down = input.isDown(hotkey);
-    if (down && !slotPressLatch[i]) {
-      abilitySystem.castSlot(i, { player, target });
+  if (!dialogueManager.isOpen) {
+    const target = input.getMouseWorldPosition();
+    for (let i = 0; i < 4; i += 1) {
+      const hotkey = String(i + 1);
+      const down = input.isDown(hotkey);
+      if (down && !slotPressLatch[i]) {
+        abilitySystem.castSlot(i, { player, target });
+      }
+      slotPressLatch[i] = down;
     }
-    slotPressLatch[i] = down;
   }
 }
 
@@ -371,6 +373,7 @@ function tick(now) {
   } else {
     player.vx = 0;
     player.vy = 0;
+    slotPressLatch.fill(false);
   }
 
   if (!diagMinimalMode) {
