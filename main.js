@@ -126,7 +126,7 @@ function handlePlayer(dt) {
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
 
-  const target = { x: input.mouse.worldX, y: input.mouse.worldY };
+  const target = input.getMouseWorldPosition();
   for (let i = 0; i < 4; i += 1) {
     const hotkey = String(i + 1);
     const down = input.isDown(hotkey);

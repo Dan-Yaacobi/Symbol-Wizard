@@ -71,6 +71,13 @@ export class Input {
     this.mouse.worldY = worldPos.y;
   }
 
+  getMouseWorldPosition() {
+    const worldPos = canvasToWorld(this.mouse.canvasX, this.mouse.canvasY, this.camera, this.cellW, this.cellH);
+    this.mouse.worldX = worldPos.x;
+    this.mouse.worldY = worldPos.y;
+    return { x: worldPos.x, y: worldPos.y };
+  }
+
   isDown(key) {
     return Boolean(this.keys[key.toLowerCase()]);
   }
