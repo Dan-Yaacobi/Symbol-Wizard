@@ -33,6 +33,8 @@ const WORLD_H = 140;
 
 const canvas = document.getElementById('gameCanvas');
 const renderer = new Renderer(canvas, VIEW_W, VIEW_H, 8, 8);
+canvas.style.width = canvas.width + "px";
+canvas.style.height = canvas.height + "px";
 const camera = new Camera(VIEW_W, VIEW_H, WORLD_W, WORLD_H);
 const viewport = new Viewport(canvas);
 const input = new Input(canvas, viewport, camera, renderer.cellW, renderer.cellH);
