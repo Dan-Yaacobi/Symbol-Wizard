@@ -59,13 +59,80 @@ function drawSprite(renderer, camera, entity, color, forceSprite = null) {
   }
 }
 
+function resolveProjectileDirection(projectile) {
+  const dx = projectile.dx ?? 0;
+  const dy = projectile.dy ?? 0;
+
+  const horizontal = Math.abs(dx) > 0.25 ? (dx > 0 ? 'east' : 'west') : '';
+  const vertical = Math.abs(dy) > 0.25 ? (dy > 0 ? 'south' : 'north') : '';
+
+  if (horizontal && vertical) return `${vertical}${horizontal}`;
+  return horizontal || vertical || 'east';
+}
+
+function getProjectileFrame(projectile) {
+  const directionalFrames = projectile.directionalSpriteFrames;
+  if (directionalFrames && typeof directionalFrames === 'object') {
+    const key = resolveProjectileDirection(projectile);
+    const frames = directionalFrames[key];
+    if (Array.isArray(frames) && frames.length > 0) return frames;
+  }
+
+  return projectile.spriteFrames;
+}
+
 function drawProjectile(renderer, camera, projectile) {
-  const frames = projectile.spriteFrames;
+  const frames = getProjectileFrame(projectile);
   if (!frames || frames.length === 0) return;
 
   const sprite = frames[projectile.frameIndex % frames.length];
-  const baseX = Math.round(projectile.x) - 2;
+  const spriteWidth = sprite[0]?.length ?? 5;
+  const baseX = Math.round(projectile.x) - Math.floor(spriteWidth / 2);
   const baseY = Math.round(projectile.y) - 1;
+
+  const occupied = new Set();
+  for (let sy = 0; sy < sprite.length; sy += 1) {
+    const row = sprite[sy];
+    for (let sx = 0; sx < row.length; sx += 1) {
+      if (row[sx] === ' ') continue;
+      occupied.add(`${sx},${sy}`);
+    }
+  }
+
+  const glowColor = projectile.glowColor ?? '#d9f7ff';
+  for (let sy = 0; sy < sprite.length; sy += 1) {
+    const row = sprite[sy];
+    for (let sx = 0; sx < row.length; sx += 1) {
+      if (row[sx] === ' ') continue;
+
+      const glowOffsets = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ];
+
+      for (const [ox, oy] of glowOffsets) {
+        if (occupied.has(`${sx + ox},${sy + oy}`)) continue;
+        const glowX = baseX + sx + ox - camera.x;
+        const glowY = baseY + sy + oy - camera.y;
+        renderer.drawEntityGlyph('·', glowColor, '#0b1016', glowX, glowY);
+      }
+    }
+  }
+
+  for (const particle of projectile.trailParticles ?? []) {
+    const alpha = (particle.ttl ?? 0) / (particle.maxTtl ?? 1);
+    if (alpha <= 0) continue;
+    const glyph = alpha > 0.66 ? '•' : (alpha > 0.33 ? '·' : '.');
+    renderer.drawEntityGlyph(
+      glyph,
+      particle.color ?? projectile.trailColor ?? '#9fdfff',
+      '#0b1016',
+      Math.round(particle.x) - camera.x,
+      Math.round(particle.y) - camera.y,
+    );
+  }
 
   for (let sy = 0; sy < sprite.length; sy += 1) {
     const row = sprite[sy];

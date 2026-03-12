@@ -1,5 +1,46 @@
 import { collides } from './CollisionSystem.js';
 
+function spawnProjectileTrail(projectile) {
+  const particleCount = 2 + Math.floor(Math.random() * 3);
+  const minLife = projectile.trailParticleLifetime?.min ?? 0.15;
+  const maxLife = projectile.trailParticleLifetime?.max ?? 0.25;
+
+  projectile.trailParticles ??= [];
+  for (let i = 0; i < particleCount; i += 1) {
+    const ttl = minLife + Math.random() * (maxLife - minLife);
+    projectile.trailParticles.push({
+      x: projectile.x - projectile.dx * (0.18 + Math.random() * 0.3) + (Math.random() - 0.5) * 0.35,
+      y: projectile.y - projectile.dy * (0.18 + Math.random() * 0.3) + (Math.random() - 0.5) * 0.35,
+      vx: -projectile.dx * (2.5 + Math.random() * 2),
+      vy: -projectile.dy * (2.5 + Math.random() * 2),
+      ttl,
+      maxTtl: ttl,
+      color: projectile.trailColor,
+    });
+  }
+
+  if (projectile.trailParticles.length > 20) {
+    projectile.trailParticles.splice(0, projectile.trailParticles.length - 20);
+  }
+}
+
+function updateProjectileTrail(projectile, dt) {
+  projectile.trailParticles ??= [];
+  projectile.trailSpawnTimer = (projectile.trailSpawnTimer ?? 0) - dt;
+
+  const interval = projectile.trailSpawnInterval ?? 0.045;
+  while (projectile.trailSpawnTimer <= 0) {
+    spawnProjectileTrail(projectile);
+    projectile.trailSpawnTimer += interval;
+  }
+
+  projectile.trailParticles = projectile.trailParticles.filter((particle) => {
+    particle.ttl -= dt;
+    particle.x += (particle.vx ?? 0) * dt;
+    particle.y += (particle.vy ?? 0) * dt;
+    return particle.ttl > 0;
+  });
+}
 export function updateProjectiles(
   projectiles,
   map,
@@ -14,6 +55,7 @@ export function updateProjectiles(
   const slain = [];
 
   for (const p of projectiles) {
+    updateProjectileTrail(p, dt);
     p.ttl -= dt;
     p.x += p.dx * p.speed * dt;
     p.y += p.dy * p.speed * dt;
