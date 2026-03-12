@@ -62,8 +62,22 @@ export class DestructibleObject extends WorldObject {
 
 export class BreakableProp extends DestructibleObject {
   constructor(kind, x, y) {
+    const durabilityByKind = {
+      barrel: 1,
+      crate: 2,
+      vase: 1,
+    };
+
+    const dropConfigByKind = {
+      barrel: { dropChance: 0.12, dropMin: 1, dropMax: 3 },
+      crate: { dropChance: 0.18, dropMin: 1, dropMax: 4 },
+      vase: { dropChance: 0.1, dropMin: 1, dropMax: 2 },
+    };
+
     const isBarrel = kind === 'barrel';
-    const isCrate = kind === 'crate';
+    const hp = durabilityByKind[kind] ?? 1;
+    const dropConfig = dropConfigByKind[kind] ?? dropConfigByKind.barrel;
+
     super({
       type: 'destructible',
       kind,
@@ -71,15 +85,11 @@ export class BreakableProp extends DestructibleObject {
       y,
       radius: isBarrel ? 1.4 : 1.2,
       spriteKey: kind,
-      hp: isBarrel ? 5 : 4,
-      maxHp: isBarrel ? 5 : 4,
+      hp,
+      maxHp: hp,
       breakFrames: [`${kind}-break-1`, `${kind}-break-2`],
+      ...dropConfig,
     });
-    if (!isBarrel && !isCrate) {
-      this.dropChance = 0.55;
-      this.dropMin = 2;
-      this.dropMax = 8;
-    }
   }
 }
 

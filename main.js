@@ -6,7 +6,7 @@ import { generateMainTown } from './world/MapGenerator.js';
 import { resolveMapCollision } from './systems/CollisionSystem.js';
 import { updateEnemies } from './systems/AISystem.js';
 import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/CombatSystem.js';
-import { spawnGold, collectGold } from './systems/LootSystem.js';
+import { spawnGold, collectGold, spawnDestructibleDrop } from './systems/LootSystem.js';
 import { CombatTextSystem } from './systems/CombatTextSystem.js';
 import { renderWorld } from './systems/RenderSystem.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
@@ -17,7 +17,12 @@ import { abilityDefinitions, defaultAbilitySlots } from './data/abilities.js';
 import { AbilitySystem } from './systems/AbilitySystem.js';
 import { AbilityBar } from './ui/AbilityBar.js';
 import { SkillTreeWindow } from './ui/SkillTreeWindow.js';
-import { resolveObjectCollision, updateDestructibleAnimations, updateTownNpcs } from './systems/WorldObjectSystem.js';
+import {
+  cleanupDestroyedObjects,
+  resolveObjectCollision,
+  updateDestructibleAnimations,
+  updateTownNpcs,
+} from './systems/WorldObjectSystem.js';
 
 const VIEW_W = 104;
 const VIEW_H = 58;
@@ -92,6 +97,37 @@ let activeNpc = null;
 let dialogueNode = 'start';
 let interactLatch = false;
 let slotPressLatch = [false, false, false, false];
+
+function triggerDestructionSound(kind) {
+  const soundSystem = globalThis?.soundSystem;
+  if (!soundSystem || typeof soundSystem.play !== 'function') return;
+  soundSystem.play('destructible-break', { kind });
+}
+
+function spawnDestructionEffects(object) {
+  const debrisPieces = Array.from({ length: 8 + Math.floor(Math.random() * 5) }, () => ({
+    angle: Math.random() * Math.PI * 2,
+    speed: 1.6 + Math.random() * 2.4,
+  }));
+
+  abilitySystem.spawnEffect({
+    type: 'debris',
+    x: object.x,
+    y: object.y,
+    ttl: 0.22,
+    color: object.kind === 'vase' ? '#c6b2e6' : '#cfab7f',
+    pieces: debrisPieces,
+  });
+
+  abilitySystem.spawnEffect({
+    type: 'destruct-burst',
+    x: object.x,
+    y: object.y,
+    radius: 1.5,
+    ttl: 0.16,
+    color: '#ffd2aa',
+  });
+}
 
 function isWalkable(x, y) {
   const tx = Math.round(x);
@@ -192,7 +228,25 @@ function tick(now) {
     updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem);
 
     updateProjectileAnimation(projectiles, dt);
-    const combat = updateProjectiles(projectiles, map, enemies, dt, combatTextSystem, abilitySystem, worldObjects);
+    const combat = updateProjectiles(
+      projectiles,
+      map,
+      enemies,
+      dt,
+      combatTextSystem,
+      abilitySystem,
+      worldObjects,
+      (object) => {
+        spawnDestructionEffects(object);
+        triggerDestructionSound(object.kind);
+
+        if (Math.random() <= object.dropChance) {
+          const drop = spawnDestructibleDrop(object);
+          if (drop.type === 'gold' && drop.amount <= 0) return;
+          goldPiles.push(drop);
+        }
+      },
+    );
     projectiles = combat.projectiles;
     for (const dead of combat.slain) goldPiles.push(spawnGold(dead));
     goldPiles = collectGold(player, goldPiles, combatTextSystem);
@@ -202,6 +256,7 @@ function tick(now) {
   }
 
   updateDestructibleAnimations(worldObjects, dt);
+  cleanupDestroyedObjects(worldObjects);
   combatTextSystem.update(dt);
 
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1);

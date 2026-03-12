@@ -106,6 +106,33 @@ function placeNature(width, height, occupied) {
   return nature;
 }
 
+function findOpenSpot(map, occupied, preferredX, preferredY, minDistance = 3) {
+  const maxRadius = 8;
+
+  for (let radius = 0; radius <= maxRadius; radius += 1) {
+    for (let oy = -radius; oy <= radius; oy += 1) {
+      for (let ox = -radius; ox <= radius; ox += 1) {
+        const x = Math.round(preferredX + ox);
+        const y = Math.round(preferredY + oy);
+        if (!map[y]?.[x]?.walkable) continue;
+
+        let tooClose = false;
+        for (let dy = -minDistance; dy <= minDistance && !tooClose; dy += 1) {
+          for (let dx = -minDistance; dx <= minDistance; dx += 1) {
+            if (!occupied.has(`${x + dx},${y + dy}`)) continue;
+            tooClose = true;
+            break;
+          }
+        }
+
+        if (!tooClose) return { x, y };
+      }
+    }
+  }
+
+  return { x: preferredX, y: preferredY };
+}
+
 export function generateMainTown(width, height) {
   const map = Array.from({ length: height }, () => Array.from({ length: width }, () => cloneTile(tiles.grass)));
   paintGrass(map);
@@ -145,14 +172,20 @@ export function generateMainTown(width, height) {
     new TownNPC({ x: center.x - 20, y: center.y + 5, name: 'Captain Ro', role: 'guard', dialogue: 'Roads are clear. Forest to the north, danger to the east.', wanderRadius: 2 }),
   ];
 
-  const destructibles = [
-    new BreakableProp('barrel', center.x - 23, center.y - 12),
-    new BreakableProp('crate', center.x - 22, center.y - 10),
-    new BreakableProp('vase', center.x + 16, center.y - 12),
-    new BreakableProp('barrel', center.x + 26, center.y + 13),
-    new BreakableProp('crate', center.x - 13, center.y + 20),
-    new BreakableProp('vase', center.x + 4, center.y + 2),
+  const destructibleSeeds = [
+    { kind: 'barrel', x: center.x - 23, y: center.y - 12 },
+    { kind: 'crate', x: center.x - 22, y: center.y - 10 },
+    { kind: 'vase', x: center.x + 16, y: center.y - 12 },
+    { kind: 'barrel', x: center.x + 26, y: center.y + 13 },
+    { kind: 'crate', x: center.x - 13, y: center.y + 20 },
+    { kind: 'vase', x: center.x + 4, y: center.y + 2 },
   ];
+  const destructibles = [];
+  for (const seed of destructibleSeeds) {
+    const spot = findOpenSpot(map, occupied, seed.x, seed.y, 2);
+    destructibles.push(new BreakableProp(seed.kind, spot.x, spot.y));
+    occupied.add(`${spot.x},${spot.y}`);
+  }
 
   const fences = [
     new StaticObject({ type: 'fence', x: center.x - 28, y: center.y - 10, radius: 1, spriteKey: 'fence', blocksMovement: true }),
@@ -162,7 +195,7 @@ export function generateMainTown(width, height) {
     new StaticObject({ type: 'fence', x: center.x + 13, y: center.y + 13, radius: 1, spriteKey: 'fence', blocksMovement: true }),
   ];
 
-  for (const object of [...destructibles, ...fences]) {
+  for (const object of fences) {
     occupied.add(`${Math.round(object.x)},${Math.round(object.y)}`);
     if (object.blocksMovement) {
       const tx = Math.round(object.x);

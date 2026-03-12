@@ -279,7 +279,8 @@ export class AbilitySystem {
 
   spawnEffect(effect) {
     if (!effect || typeof effect !== 'object') return;
-    this.effects.push({ ttl: 0.2, ...effect });
+    const ttl = effect.ttl ?? 0.2;
+    this.effects.push({ ttl, maxTtl: ttl, ...effect });
   }
 
   getActiveEffects() {
