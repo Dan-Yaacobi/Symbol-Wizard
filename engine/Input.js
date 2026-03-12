@@ -60,13 +60,10 @@ export class Input {
     const maxCanvasCellY = Math.max(0, Math.ceil(this.viewport.canvasHeight / this.cellH) - 1);
     const canvasCellX = clamp(Math.floor(canvasPos.x / this.cellW), 0, maxCanvasCellX);
     const canvasCellY = clamp(Math.floor(canvasPos.y / this.cellH), 0, maxCanvasCellY);
-    const worldPos = this.viewport.canvasToWorld(
-    canvasPos.x,
-    canvasPos.y,
-    this.camera,
-    this.cellW,
-    this.cellH
-    );
+    const worldPos = {
+      x: canvasCellX + this.camera.x,
+      y: canvasCellY + this.camera.y
+    };
 
     this.mouse.screenX = e.clientX;
     this.mouse.screenY = e.clientY;
