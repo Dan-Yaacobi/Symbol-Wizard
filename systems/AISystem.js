@@ -2,6 +2,20 @@ export function updateEnemies(enemies, player, dt) {
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
 
+    if (enemy.hitFlashTimer > 0) {
+      enemy.hitFlashTimer = Math.max(0, enemy.hitFlashTimer - dt);
+    }
+
+    if (enemy.hitKnockbackTimer > 0) {
+      enemy.x += enemy.hitKnockbackX * dt;
+      enemy.y += enemy.hitKnockbackY * dt;
+      enemy.hitKnockbackTimer = Math.max(0, enemy.hitKnockbackTimer - dt);
+      if (enemy.hitKnockbackTimer === 0) {
+        enemy.hitKnockbackX = 0;
+        enemy.hitKnockbackY = 0;
+      }
+    }
+
     if (enemy.frozen) {
       enemy.vx = 0;
       enemy.vy = 0;

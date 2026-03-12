@@ -42,6 +42,12 @@ export function updateProjectiles(
         const damage = baseDamage * multiplier;
         enemy.hp -= damage;
         combatTextSystem?.spawnDamageText(enemy, damage, isCritical);
+        abilitySystem?.registerHitFeedback?.(enemy, {
+          sourceX: p.x,
+          sourceY: p.y,
+          particleColor: p.hitParticleColor,
+          strongHit: isCritical || damage >= 8,
+        });
         deadProjectiles.add(p);
         if (enemy.hp <= 0) {
           enemy.alive = false;
