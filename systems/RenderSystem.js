@@ -183,7 +183,17 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
     const baseColor = enemy.kind === 'slime' ? palette.slime : palette.skeleton;
-    drawSprite(renderer, camera, enemy, enemy.frozen ? (enemy.freezeTint ?? '#9edbff') : baseColor);
+    const telegraphFlashOn = enemy.isWindingUp && Math.floor((enemy.attackElapsed ?? 0) / 0.08) % 2 === 0;
+    const enemyColor = enemy.frozen
+      ? (enemy.freezeTint ?? '#9edbff')
+      : (telegraphFlashOn ? '#ff5b5b' : baseColor);
+    drawSprite(renderer, camera, enemy, enemyColor);
+
+    if (enemy.isWindingUp && !enemy.frozen) {
+      const sx = Math.round(enemy.x) - camera.x;
+      const sy = Math.round(enemy.y) - 4 - camera.y;
+      renderer.drawEntityGlyph('!', telegraphFlashOn ? '#ff9b9b' : '#ff5b5b', '#0b1016', sx, sy);
+    }
 
     if (enemy.frozen) {
       const sx = Math.round(enemy.x) - camera.x;
