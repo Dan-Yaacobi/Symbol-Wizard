@@ -12,11 +12,28 @@ const projectileSprite = [
 ];
 
 function castMagicBolt({ player, target, system, abilityLevel }) {
-  const dx = target.x - player.x;
-  const dy = target.y - player.y;
-  const len = Math.hypot(dx, dy) || 1;
+  const worldX = target?.x;
+  const worldY = target?.y;
+  const dx = worldX - player.x;
+  const dy = worldY - player.y;
+  const len = Math.hypot(dx, dy);
 
-  const projectile = system.createProjectile(player.x + 1.8, player.y, dx / len, dy / len, {
+  if (!Number.isFinite(len) || len === 0) {
+    console.warn('[Ability:Magic Bolt] Not fired: invalid or zero-length aim vector.', {
+      playerX: player.x,
+      playerY: player.y,
+      worldX,
+      worldY,
+    });
+    return;
+  }
+
+  const dirX = dx / len;
+  const dirY = dy / len;
+
+  console.log('Magic bolt fired toward:', dirX, dirY);
+
+  const projectile = system.createProjectile(player.x, player.y, dirX, dirY, {
     color: '#7cc2ff',
     speed: 65 + abilityLevel * 6,
     damage: 3 + abilityLevel,
