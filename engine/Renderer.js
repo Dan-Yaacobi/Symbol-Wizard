@@ -144,9 +144,9 @@ export class Renderer {
 
   composite() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.drawImage(this.background.canvas, 0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.drawImage(this.entities.canvas, 0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.drawImage(this.effects.canvas, 0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.drawImage(this.ui.canvas, 0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.drawImage(this.background.canvas, 0, 0);
+    this.ctx.drawImage(this.entities.canvas, 0, 0);
+    this.ctx.drawImage(this.effects.canvas, 0, 0);
+    this.ctx.drawImage(this.ui.canvas, 0, 0);
   }
 }
