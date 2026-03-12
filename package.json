@@ -1,0 +1,15 @@
+{
+  "name": "symbol-wizard",
+  "version": "1.0.0",
+  "description": "Browser-based symbol RPG prototype with modular architecture and a design-first documentation set.",
+  "type": "module",
+  "scripts": {
+    "lint:imports": "eslint . --ext .js",
+    "audit:modules": "node scripts/module-audit.mjs"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1",
+    "eslint-plugin-import": "^2.32.0",
+    "@eslint/js": "^9.39.1"
+  }
+}
