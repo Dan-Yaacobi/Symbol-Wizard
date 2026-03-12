@@ -211,6 +211,17 @@ export class AbilitySystem {
 
     const level = this.upgrades.get(ability.id) ?? 1;
 
+    if (context?.mouse && context.mouse.diagAbilityLoggedEventId !== context.mouse.diagEventId) {
+      console.info('[CursorPipeline][AbilityTargeting]', {
+        eventId: context.mouse.diagEventId,
+        abilityId: ability.id,
+        slotIndex,
+        target: context.target ? { x: context.target.x, y: context.target.y } : null,
+        mouseWorld: { x: context.mouse.worldX, y: context.mouse.worldY },
+      });
+      context.mouse.diagAbilityLoggedEventId = context.mouse.diagEventId;
+    }
+
     try {
       ability.cast({ ...context, system: this, abilityLevel: level, ability });
     } catch (error) {

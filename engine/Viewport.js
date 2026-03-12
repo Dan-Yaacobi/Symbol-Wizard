@@ -3,15 +3,25 @@ export class Viewport {
     this.canvas = canvas;
   }
 
+  get canvasWidth() {
+    return this.canvas.width;
+  }
+
+  get canvasHeight() {
+    return this.canvas.height;
+  }
+
   screenToCanvas(screenX, screenY) {
     const rect = this.canvas.getBoundingClientRect();
 
-    const scaleX = this.canvas.width / rect.width;
-    const scaleY = this.canvas.height / rect.height;
+    const renderWidth = this.canvas.clientWidth || rect.width || 1;
+    const renderHeight = this.canvas.clientHeight || rect.height || 1;
+    const scaleX = this.canvas.width / renderWidth;
+    const scaleY = this.canvas.height / renderHeight;
 
     return {
-      x: (screenX - rect.left) * scaleX,
-      y: (screenY - rect.top) * scaleY,
+      x: (screenX - rect.left - this.canvas.clientLeft) * scaleX,
+      y: (screenY - rect.top - this.canvas.clientTop) * scaleY,
     };
   }
 
