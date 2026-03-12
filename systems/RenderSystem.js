@@ -142,7 +142,17 @@ function drawAbilityEffect(renderer, camera, effect) {
     return;
   }
 
-  if (effect.type === 'burst' || effect.type === 'destruct-burst') {
+
+  if (effect.type === 'hit-particles') {
+    for (const particle of effect.particles ?? []) {
+      const lifeRatio = particle.life / Math.max(0.0001, particle.maxLife ?? particle.life ?? 1);
+      const glyph = lifeRatio > 0.5 ? '*' : '·';
+      renderer.drawEntityGlyph(glyph, effect.color ?? '#d9dce3', '#0b1016', Math.round(particle.x) - camera.x, Math.round(particle.y) - camera.y);
+    }
+    return;
+  }
+
+  if (effect.type === 'burst') {
     const points = Math.max(8, Math.round(effect.radius * 8));
     for (let i = 0; i < points; i += 1) {
       const angle = (Math.PI * 2 * i) / points;
@@ -197,7 +207,13 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
     const baseColor = enemy.kind === 'slime' ? palette.slime : palette.skeleton;
-    drawSprite(renderer, camera, enemy, enemy.frozen ? (enemy.freezeTint ?? '#9edbff') : baseColor);
+    let renderColor = enemy.frozen ? (enemy.freezeTint ?? '#9edbff') : baseColor;
+
+    if (enemy.hitFlashTimer > 0) {
+      renderColor = '#f4f7ff';
+    }
+
+    drawSprite(renderer, camera, enemy, renderColor);
 
     if (enemy.frozen) {
       const sx = Math.round(enemy.x) - camera.x;

@@ -42,6 +42,12 @@ export function updateProjectiles(
         const damage = baseDamage * multiplier;
         enemy.hp -= damage;
         combatTextSystem?.spawnDamageText(enemy, damage, isCritical);
+        abilitySystem?.registerHitFeedback?.(enemy, {
+          sourceX: p.x,
+          sourceY: p.y,
+          particleColor: p.hitParticleColor,
+          strongHit: isCritical || damage >= 8,
+        });
         deadProjectiles.add(p);
         if (enemy.hp <= 0) {
           enemy.alive = false;
@@ -62,8 +68,8 @@ export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSys
     if (!enemy.alive) continue;
     if (!enemy.isAttacking || enemy.attackDamageApplied) continue;
 
-    const windup = enemy.attackWindup ?? 0.16;
-    if ((enemy.attackElapsed ?? 0) < windup) continue;
+    const hitTime = enemy.attackHitTime ?? 0.08;
+    if ((enemy.attackElapsed ?? 0) < hitTime) continue;
 
     const distance = Math.hypot(player.x - enemy.x, player.y - enemy.y);
     const attackRange = enemy.attackRange ?? 3;

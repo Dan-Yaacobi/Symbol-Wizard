@@ -262,6 +262,7 @@ function tick(now) {
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1);
 
   handleDialogue();
+  camera.update(dt);
   camera.follow(player);
 
   renderer.beginFrame();
