@@ -424,7 +424,6 @@ function tick(now) {
   drawHUD(renderer, player, abilitySystem);
   renderer.composite();
 
-  abilityBar.render();
   input.endFrame();
 
   if (!startupCompleteLogged) {
