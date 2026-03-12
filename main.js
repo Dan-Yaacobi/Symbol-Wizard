@@ -13,6 +13,7 @@ import { updateEntityAnimation, updateProjectileAnimation } from './systems/Anim
 import { ChatBox } from './ui/ChatBox.js';
 import { drawHUD } from './ui/HUD.js';
 import { dialogueTree } from './systems/DialogueSystem.js';
+import { DialogueManager } from './systems/DialogueManager.js';
 import { abilityDefinitions, defaultAbilitySlots } from './data/abilities.js';
 import { AbilitySystem } from './systems/AbilitySystem.js';
 import { AbilityBar } from './ui/AbilityBar.js';
@@ -90,6 +91,8 @@ let firstPhysicsLogged = false;
 const query = new URLSearchParams(window.location.search);
 const diagMode = query.get('diag') === '1';
 const diagMinimalMode = query.get('diag_minimal') === '1';
+const dialogueDebugMode = query.get('dialogue_debug') === '1';
+DialogueManager.DEBUG = dialogueDebugMode;
 
 function logBoot(message, details = undefined) {
   if (details === undefined) {
@@ -201,10 +204,13 @@ function resizeLayout() {
 window.addEventListener('resize', resizeLayout);
 resizeLayout();
 
-let dialogueOpen = false;
-let activeNpc = null;
-let dialogueNode = 'start';
-let interactLatch = false;
+const dialogueManager = new DialogueManager({
+  chatBox: chat,
+  npcs,
+  player,
+  input,
+  baseDialogueTree: dialogueTree,
+});
 let slotPressLatch = [false, false, false, false];
 
 function triggerDestructionSound(kind) {
@@ -282,44 +288,6 @@ function handlePlayer(dt) {
   }
 }
 
-function handleDialogue() {
-  let nearest = null;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  for (const npc of npcs) {
-    const d = Math.hypot(player.x - npc.x, player.y - npc.y);
-    if (d < nearestDistance) {
-      nearest = npc;
-      nearestDistance = d;
-    }
-  }
-
-  const nearNpc = nearest && nearestDistance <= nearest.interactRadius;
-  const pressedInteract = input.isDown('e');
-
-  if (pressedInteract && !interactLatch && nearNpc) {
-    dialogueOpen = !dialogueOpen;
-    activeNpc = nearest;
-    dialogueNode = 'start';
-  }
-  interactLatch = pressedInteract;
-
-  if (!dialogueOpen || !activeNpc) {
-    const exitText = `${town.exits.north.label} | ${town.exits.east.label} | ${town.exits.west.label}`;
-    chat.setMessage('Town Crier', nearNpc ? `Press E to talk to ${nearest.name}. ${exitText}` : `Welcome to Sunmeadow Town. ${exitText}`);
-    return;
-  }
-
-  const node = dialogueTree[dialogueNode];
-  chat.setMessage(node.speaker.replace('Gate Wizard', activeNpc.name), node.line.replace('dungeon', 'town').replace('threshold', 'crossroads'), node.options);
-
-  for (let i = 1; i <= 9; i += 1) {
-    if (input.isDown(String(i))) {
-      const opt = node.options[i - 1];
-      if (opt) dialogueNode = opt.next;
-    }
-  }
-}
-
 let last = performance.now();
 
 if (diagMinimalMode) {
@@ -365,7 +333,7 @@ function tick(now) {
     }
   }
 
-  if (!dialogueOpen && !diagMinimalMode) {
+  if (!dialogueManager.isOpen && !diagMinimalMode) {
     handlePlayer(dt);
     updateEnemies(enemies, player, dt);
 
@@ -408,7 +376,7 @@ function tick(now) {
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1);
 
   if (!diagMinimalMode) {
-    handleDialogue();
+    dialogueManager.update(dt);
     camera.update(dt);
     camera.follow(player);
   }
