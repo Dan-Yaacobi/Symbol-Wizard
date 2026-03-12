@@ -1,6 +1,7 @@
 import { Renderer } from './engine/Renderer.js';
 import { Camera } from './engine/Camera.js';
 import { Input } from './engine/Input.js';
+import { Viewport } from './engine/Viewport.js';
 import { Player } from './entities/Player.js';
 import { generateMainTown } from './world/MapGenerator.js';
 import { resolveMapCollision } from './systems/CollisionSystem.js';
@@ -33,7 +34,8 @@ const WORLD_H = 140;
 const canvas = document.getElementById('gameCanvas');
 const renderer = new Renderer(canvas, VIEW_W, VIEW_H, 8, 8);
 const camera = new Camera(VIEW_W, VIEW_H, WORLD_W, WORLD_H);
-const input = new Input(canvas, VIEW_W, VIEW_H, camera, renderer.cellW, renderer.cellH);
+const viewport = new Viewport(canvas);
+const input = new Input(canvas, viewport, camera, renderer.cellW, renderer.cellH);
 const chat = new ChatBox();
 
 const town = generateMainTown(WORLD_W, WORLD_H);
@@ -80,8 +82,6 @@ const uiRoot = document.getElementById('uiPanels') ?? (() => {
 const abilityBar = new AbilityBar({ root: uiRoot, abilitySystem });
 const skillTree = new SkillTreeWindow({ root: uiRoot, abilitySystem, player });
 
-const BASE_CANVAS_WIDTH = 1280;
-const BASE_CANVAS_HEIGHT = 720;
 const BOOT_DEBUG_PREFIX = 'BOOT:';
 const DIAG_PREFIX = 'DIAG:';
 let startupCompleteLogged = false;
@@ -186,12 +186,13 @@ function resizeLayout() {
     return;
   }
 
-  const rawScale = Math.min(maxCanvasWidth / BASE_CANVAS_WIDTH, maxCanvasHeight / BASE_CANVAS_HEIGHT);
+  const rawScale = Math.min(maxCanvasWidth / canvas.width, maxCanvasHeight / canvas.height);
   const safeRawScale = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 1;
   const scale = safeRawScale >= 1 ? Math.floor(safeRawScale) : Math.max(safeRawScale, 0.1);
 
-  canvas.style.width = `${BASE_CANVAS_WIDTH * scale}px`;
-  canvas.style.height = `${BASE_CANVAS_HEIGHT * scale}px`;
+  canvas.style.width = `${canvas.width * scale}px`;
+  canvas.style.height = `${canvas.height * scale}px`;
+  viewport.update();
 
   logBoot('viewport ready', {
     viewport: { width: window.innerWidth, height: window.innerHeight },
