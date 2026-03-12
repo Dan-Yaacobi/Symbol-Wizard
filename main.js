@@ -6,7 +6,7 @@ import { generateMainTown } from './world/MapGenerator.js';
 import { resolveMapCollision } from './systems/CollisionSystem.js';
 import { updateEnemies } from './systems/AISystem.js';
 import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/CombatSystem.js';
-import { spawnGold, collectGold, spawnDestructibleDrop } from './systems/LootSystem.js';
+import * as LootSystem from './systems/LootSystem.js';
 import { CombatTextSystem } from './systems/CombatTextSystem.js';
 import { renderWorld } from './systems/RenderSystem.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
@@ -60,7 +60,8 @@ const abilitySystem = new AbilitySystem({
   },
   reportDamage: (enemy, damage, isCritical) => combatTextSystem.spawnDamageText(enemy, damage, isCritical),
   onEnemySlain: (enemy) => {
-    goldPiles.push(spawnGold(enemy));
+    const drop = spawnGold(enemy);
+    if (drop) goldPiles.push(drop);
   },
 });
 
@@ -87,6 +88,22 @@ let startupCompleteLogged = false;
 let cameraCheckpointLogged = false;
 let firstProcessLogged = false;
 let firstPhysicsLogged = false;
+
+function resolveBootDependency(name, value, { fallback = null } = {}) {
+  if (typeof value === 'function') return value;
+  console.error(`${BOOT_DEBUG_PREFIX} missing dependency: ${name}. Check systems/LootSystem.js exports.`);
+  return fallback;
+}
+
+const spawnGold = resolveBootDependency('spawnGold', LootSystem.spawnGold, {
+  fallback: () => null,
+});
+const collectGold = resolveBootDependency('collectGold', LootSystem.collectGold, {
+  fallback: (player, piles) => piles,
+});
+const spawnDestructibleDrop = resolveBootDependency('spawnDestructibleDrop', LootSystem.spawnDestructibleDrop, {
+  fallback: () => null,
+});
 
 const query = new URLSearchParams(window.location.search);
 const diagMode = query.get('diag') === '1';
@@ -354,13 +371,17 @@ function tick(now) {
 
         if (Math.random() <= object.dropChance) {
           const drop = spawnDestructibleDrop(object);
+          if (!drop) return;
           if (drop.type === 'gold' && drop.amount <= 0) return;
           goldPiles.push(drop);
         }
       },
     );
     projectiles = combat.projectiles;
-    for (const dead of combat.slain) goldPiles.push(spawnGold(dead));
+    for (const dead of combat.slain) {
+      const drop = spawnGold(dead);
+      if (drop) goldPiles.push(drop);
+    }
     goldPiles = collectGold(player, goldPiles, combatTextSystem);
   } else {
     player.vx = 0;
