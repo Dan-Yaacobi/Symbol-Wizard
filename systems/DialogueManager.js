@@ -88,24 +88,7 @@ export class DialogueManager {
     this.responseLatch = false;
     this.transitionLocked = false;
 
-    this.bindChatResponseHandler();
-  }
-
-  bindChatResponseHandler() {
-    const handler = (responseIndex) => this.handleResponse(responseIndex);
-
-    if (typeof this.chatBox?.bindResponseHandler === 'function') {
-      this.chatBox.bindResponseHandler(handler);
-      return;
-    }
-
-    if (this.chatBox && 'responseHandler' in this.chatBox) {
-      this.chatBox.responseHandler = handler;
-      console.warn('[DialogueManager] chatBox.bindResponseHandler() is unavailable; using responseHandler fallback.');
-      return;
-    }
-
-    throw new TypeError('[DialogueManager] chatBox is missing response binding support.');
+    this.chatBox.bindResponseHandler((responseIndex) => this.handleResponse(responseIndex));
   }
 
   log(...args) {
