@@ -3,14 +3,6 @@ export class Viewport {
     this.canvas = canvas;
   }
 
-  get canvasWidth() {
-    return this.canvas.width;
-  }
-
-  get canvasHeight() {
-    return this.canvas.height;
-  }
-
   screenToCanvas(screenX, screenY) {
     const rect = this.canvas.getBoundingClientRect();
     const computed = getComputedStyle(this.canvas);
