@@ -192,7 +192,6 @@ function resizeLayout() {
 
   canvas.style.width = `${canvas.width * scale}px`;
   canvas.style.height = `${canvas.height * scale}px`;
-  viewport.update();
 
   logBoot('viewport ready', {
     viewport: { width: window.innerWidth, height: window.innerHeight },
