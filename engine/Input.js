@@ -1,10 +1,9 @@
-import { clamp, getCanvasPosition, canvasToWorld } from '../input/CoordinateSystem.js';
+import { clamp } from '../input/CoordinateSystem.js';
 
 export class Input {
-  constructor(canvas, cols, rows, camera, cellW = 8, cellH = 8) {
+  constructor(canvas, viewport, camera, cellW = 8, cellH = 8) {
     this.canvas = canvas;
-    this.cols = cols;
-    this.rows = rows;
+    this.viewport = viewport;
     this.camera = camera;
     this.cellW = cellW;
     this.cellH = cellH;
@@ -56,10 +55,12 @@ export class Input {
   }
 
   #updatePointer(e) {
-    const canvasPos = getCanvasPosition(e, this.canvas);
-    const canvasCellX = clamp(Math.floor(canvasPos.x / this.cellW), 0, this.cols - 1);
-    const canvasCellY = clamp(Math.floor(canvasPos.y / this.cellH), 0, this.rows - 1);
-    const worldPos = canvasToWorld(canvasPos.x, canvasPos.y, this.camera, this.cellW, this.cellH);
+    const canvasPos = this.viewport.screenToCanvas(e.clientX, e.clientY);
+    const maxCanvasCellX = Math.max(0, Math.ceil(this.viewport.canvasWidth / this.cellW) - 1);
+    const maxCanvasCellY = Math.max(0, Math.ceil(this.viewport.canvasHeight / this.cellH) - 1);
+    const canvasCellX = clamp(Math.floor(canvasPos.x / this.cellW), 0, maxCanvasCellX);
+    const canvasCellY = clamp(Math.floor(canvasPos.y / this.cellH), 0, maxCanvasCellY);
+    const worldPos = this.viewport.screenToWorld(e.clientX, e.clientY, this.camera, this.cellW, this.cellH);
 
     this.mouse.screenX = e.clientX;
     this.mouse.screenY = e.clientY;
@@ -72,7 +73,7 @@ export class Input {
   }
 
   getMouseWorldPosition() {
-    const worldPos = canvasToWorld(this.mouse.canvasX, this.mouse.canvasY, this.camera, this.cellW, this.cellH);
+    const worldPos = this.viewport.canvasToWorld(this.mouse.canvasX, this.mouse.canvasY, this.camera, this.cellW, this.cellH);
     this.mouse.worldX = worldPos.x;
     this.mouse.worldY = worldPos.y;
     return { x: worldPos.x, y: worldPos.y };
