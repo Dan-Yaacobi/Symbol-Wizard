@@ -60,7 +60,7 @@ const abilitySystem = new AbilitySystem({
   },
   reportDamage: (enemy, damage, isCritical) => combatTextSystem.spawnDamageText(enemy, damage, isCritical),
   onEnemySlain: (enemy) => {
-    const drop = spawnGold(enemy);
+    const drop = LootSystem.spawnGold(enemy);
     if (drop) goldPiles.push(drop);
   },
 });
@@ -88,22 +88,6 @@ let startupCompleteLogged = false;
 let cameraCheckpointLogged = false;
 let firstProcessLogged = false;
 let firstPhysicsLogged = false;
-
-function resolveBootDependency(name, value, { fallback = null } = {}) {
-  if (typeof value === 'function') return value;
-  console.error(`${BOOT_DEBUG_PREFIX} missing dependency: ${name}. Check systems/LootSystem.js exports.`);
-  return fallback;
-}
-
-const spawnGold = resolveBootDependency('spawnGold', LootSystem.spawnGold, {
-  fallback: () => null,
-});
-const collectGold = resolveBootDependency('collectGold', LootSystem.collectGold, {
-  fallback: (player, piles) => piles,
-});
-const spawnDestructibleDrop = resolveBootDependency('spawnDestructibleDrop', LootSystem.spawnDestructibleDrop, {
-  fallback: () => null,
-});
 
 const query = new URLSearchParams(window.location.search);
 const diagMode = query.get('diag') === '1';
@@ -370,7 +354,7 @@ function tick(now) {
         triggerDestructionSound(object.kind);
 
         if (Math.random() <= object.dropChance) {
-          const drop = spawnDestructibleDrop(object);
+          const drop = LootSystem.spawnDestructibleDrop(object);
           if (!drop) return;
           if (drop.type === 'gold' && drop.amount <= 0) return;
           goldPiles.push(drop);
@@ -379,10 +363,10 @@ function tick(now) {
     );
     projectiles = combat.projectiles;
     for (const dead of combat.slain) {
-      const drop = spawnGold(dead);
+      const drop = LootSystem.spawnGold(dead);
       if (drop) goldPiles.push(drop);
     }
-    goldPiles = collectGold(player, goldPiles, combatTextSystem);
+    goldPiles = LootSystem.collectGold(player, goldPiles, combatTextSystem);
   } else {
     player.vx = 0;
     player.vy = 0;

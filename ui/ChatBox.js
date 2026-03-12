@@ -8,24 +8,11 @@ export class ChatBox {
     this.lastSpeaker = '';
     this.lastLine = '';
     this.currentOptionCount = 0;
-    this.onResponseSelect = null;
-
-    this.handleOptionClick = this.handleOptionClick.bind(this);
-    this.optionsEl.addEventListener('click', this.handleOptionClick);
+    this.responseHandler = null;
   }
 
   bindResponseHandler(handler) {
-    this.onResponseSelect = handler;
-  }
-
-  handleOptionClick(event) {
-    const button = event.target.closest('button[data-response-index]');
-    if (!button || button.disabled || this.rootEl.dataset.dialogueOpen !== 'true') return;
-
-    const responseIndex = Number(button.dataset.responseIndex);
-    if (!Number.isInteger(responseIndex) || !this.onResponseSelect) return;
-
-    this.onResponseSelect(responseIndex);
+    this.responseHandler = handler;
   }
 
   setDialogueOpen(isOpen) {
@@ -71,6 +58,10 @@ export class ChatBox {
       button.dataset.responseIndex = String(i);
       button.disabled = disableOptions;
       button.innerHTML = `<span class="chat-option-hotkey">${i + 1}.</span> <span>${opt.text}</span>`;
+      button.onclick = () => {
+        if (button.disabled || this.rootEl.dataset.dialogueOpen !== 'true') return;
+        this.responseHandler?.(i);
+      };
       li.appendChild(button);
       this.optionsEl.appendChild(li);
     });

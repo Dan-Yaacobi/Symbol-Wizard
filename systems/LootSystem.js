@@ -11,12 +11,16 @@ export function spawnGold(enemy) {
 export function spawnDestructibleDrop(object) {
   const roll = Math.random();
   if (roll < 0.65) {
+    const min = Number.isFinite(object?.dropMin) ? object.dropMin : 1;
+    const max = Number.isFinite(object?.dropMax) ? object.dropMax : 4;
+    const amount = min + Math.floor(Math.random() * (Math.max(min, max) - min + 1));
+
     return {
       type: 'gold',
       x: object.x,
       y: object.y,
       radius: 1.2,
-      amount: object.rollGoldDrop(),
+      amount,
     };
   }
 
