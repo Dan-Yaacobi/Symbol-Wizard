@@ -73,10 +73,24 @@ const skillTree = new SkillTreeWindow({ root: uiRoot, abilitySystem, player });
 
 const BASE_CANVAS_WIDTH = 1280;
 const BASE_CANVAS_HEIGHT = 720;
+const BOOT_DEBUG_PREFIX = 'BOOT:';
+let startupCompleteLogged = false;
+let cameraCheckpointLogged = false;
 
-console.info('[startup] Game scene loaded');
-console.info('[startup] World generated', { width: map?.[0]?.length ?? 0, height: map?.length ?? 0 });
-console.info('[startup] Player spawned', { x: player.x, y: player.y });
+function logBoot(message, details = undefined) {
+  if (details === undefined) {
+    console.info(`${BOOT_DEBUG_PREFIX} ${message}`);
+    return;
+  }
+  console.info(`${BOOT_DEBUG_PREFIX} ${message}`, details);
+}
+
+logBoot('main scene entered');
+logBoot('world node found', { width: map?.[0]?.length ?? 0, height: map?.length ?? 0 });
+logBoot('camera node found', { zoom: 1, current: true, position: { x: camera.x, y: camera.y } });
+logBoot('player spawned', { x: player.x, y: player.y });
+logBoot('map generated');
+logBoot('HUD initialized');
 
 function resizeLayout() {
   const shell = document.querySelector('.game-shell');
@@ -84,19 +98,38 @@ function resizeLayout() {
   const panels = document.getElementById('uiPanels');
   if (!shell || !stage || !panels) return;
 
-  const maxCanvasWidth = stage.clientWidth;
-  const maxCanvasHeight = Math.max(120, stage.clientHeight);
+  const stageRect = stage.getBoundingClientRect();
+  const maxCanvasWidth = Math.max(1, Math.floor(stageRect.width));
+  const maxCanvasHeight = Math.max(120, Math.floor(stageRect.height));
+
+  const worldVisible = shell.offsetParent !== null && getComputedStyle(shell).visibility !== 'hidden';
+  const rootTransform = getComputedStyle(shell).transform;
 
   if (maxCanvasWidth <= 0 || maxCanvasHeight <= 0) {
+    logBoot('viewport sizing pending', {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      stage: { width: stageRect.width, height: stageRect.height },
+      rootScale: rootTransform,
+      mainWorldVisible: worldVisible,
+    });
     requestAnimationFrame(resizeLayout);
     return;
   }
 
   const rawScale = Math.min(maxCanvasWidth / BASE_CANVAS_WIDTH, maxCanvasHeight / BASE_CANVAS_HEIGHT);
-  const scale = rawScale >= 1 ? Math.floor(rawScale) : Math.max(rawScale, 0.1);
+  const safeRawScale = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 1;
+  const scale = safeRawScale >= 1 ? Math.floor(safeRawScale) : Math.max(safeRawScale, 0.1);
 
   canvas.style.width = `${BASE_CANVAS_WIDTH * scale}px`;
   canvas.style.height = `${BASE_CANVAS_HEIGHT * scale}px`;
+
+  logBoot('viewport ready', {
+    viewport: { width: window.innerWidth, height: window.innerHeight },
+    stage: { width: maxCanvasWidth, height: maxCanvasHeight },
+    canvas: { width: canvas.width, height: canvas.height, cssWidth: canvas.style.width, cssHeight: canvas.style.height },
+    rootScale: rootTransform,
+    mainWorldVisible: worldVisible,
+  });
 }
 
 window.addEventListener('resize', resizeLayout);
@@ -276,9 +309,19 @@ function tick(now) {
   camera.follow(player);
 
   if (!Number.isFinite(camera.x) || !Number.isFinite(camera.y)) {
-    console.warn('[startup] Camera produced invalid coordinates, resetting to origin', { x: camera.x, y: camera.y });
+    console.warn(`${BOOT_DEBUG_PREFIX} camera produced invalid coordinates, resetting to origin`, { x: camera.x, y: camera.y });
     camera.x = 0;
     camera.y = 0;
+  }
+
+  if (!cameraCheckpointLogged) {
+    cameraCheckpointLogged = true;
+    logBoot('camera checkpoint', {
+      zoom: 1,
+      current: true,
+      position: { x: camera.x, y: camera.y },
+      playerPosition: { x: player.x, y: player.y },
+    });
   }
 
   renderer.beginFrame();
@@ -301,6 +344,12 @@ function tick(now) {
 
   abilityBar.render();
   input.endFrame();
+
+  if (!startupCompleteLogged) {
+    startupCompleteLogged = true;
+    logBoot('startup complete');
+  }
+
   requestAnimationFrame(tick);
 }
 
