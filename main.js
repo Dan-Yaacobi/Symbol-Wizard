@@ -3,7 +3,8 @@ import { Camera } from './engine/Camera.js';
 import { Input } from './engine/Input.js';
 import { Viewport } from './engine/Viewport.js';
 import { Player } from './entities/Player.js';
-import { generateMainTown } from './world/MapGenerator.js';
+import { BiomeGenerator } from './world/BiomeGenerator.js';
+import { RoomTransitionSystem } from './world/RoomTransitionSystem.js';
 import { resolveMapCollision } from './systems/CollisionSystem.js';
 import { updateEnemies } from './systems/AISystem.js';
 import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/CombatSystem.js';
@@ -28,24 +29,33 @@ import {
 
 const VIEW_W = 104;
 const VIEW_H = 58;
-const WORLD_W = 220;
-const WORLD_H = 140;
+const ROOM_W = 64;
+const ROOM_H = 40;
 
 const canvas = document.getElementById('gameCanvas');
 const renderer = new Renderer(canvas, VIEW_W, VIEW_H, 8, 8);
 canvas.style.width = canvas.width + "px";
 canvas.style.height = canvas.height + "px";
-const camera = new Camera(VIEW_W, VIEW_H, WORLD_W, WORLD_H);
+const camera = new Camera(VIEW_W, VIEW_H, ROOM_W, ROOM_H);
 const viewport = new Viewport(canvas);
 const input = new Input(canvas, viewport, camera, renderer.cellW, renderer.cellH);
 const chat = new ChatBox();
 
-const town = generateMainTown(WORLD_W, WORLD_H);
-const map = town.map;
-const player = new Player(town.playerSpawn.x, town.playerSpawn.y);
+const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H });
+const { biome, startRoom } = biomeGenerator.enterBiome('starting-biome');
+let activeRoom = startRoom;
+let map = activeRoom.tiles;
+const player = new Player(Math.floor(ROOM_W / 2), Math.floor(ROOM_H / 2));
 const enemies = [];
-const npcs = town.npcs;
-const worldObjects = town.worldObjects;
+const npcs = [];
+const worldObjects = [];
+const roomTransitionSystem = new RoomTransitionSystem({ biomeGenerator, fadeDurationMs: 150 });
+
+if (activeRoom.entrances['initial-spawn']) {
+  const startEntrance = activeRoom.entrances['initial-spawn'];
+  player.x = startEntrance.x;
+  player.y = startEntrance.y;
+}
 let projectiles = [];
 let goldPiles = [];
 const combatTextSystem = new CombatTextSystem();
@@ -117,7 +127,7 @@ function logDiag(message, details = undefined) {
 logBoot('main scene entered');
 logDiag('app entered main scene');
 logDiag('running startup path', { href: window.location.href, pathname: window.location.pathname });
-logBoot('world node found', { width: map?.[0]?.length ?? 0, height: map?.length ?? 0 });
+logBoot('world node found', { width: map?.[0]?.length ?? 0, height: map?.length ?? 0, biomeId: biome.biomeId, roomId: activeRoom.id });
 logBoot('camera node found', { zoom: 1, current: true, position: { x: camera.x, y: camera.y } });
 logBoot('player spawned', { x: player.x, y: player.y });
 logBoot('map generated');
@@ -306,8 +316,8 @@ if (diagMinimalMode) {
   enemies.length = 0;
   projectiles = [];
   goldPiles = [];
-  player.x = Math.floor(WORLD_W / 2);
-  player.y = Math.floor(WORLD_H / 2);
+  player.x = Math.floor(ROOM_W / 2);
+  player.y = Math.floor(ROOM_H / 2);
   camera.x = Math.floor(player.x - VIEW_W / 2);
   camera.y = Math.floor(player.y - VIEW_H / 2);
   logDiag('minimal startup mode enabled: generation, spawns, and camera follow disabled');
@@ -383,6 +393,17 @@ function tick(now) {
   }
   combatTextSystem.update(dt);
 
+  const transitionResult = roomTransitionSystem.update(dt, { activeRoom, player });
+  if (transitionResult?.room) {
+    activeRoom = transitionResult.room;
+    map = activeRoom.tiles;
+    abilitySystem.map = map;
+    camera.worldW = map[0]?.length ?? ROOM_W;
+    camera.worldH = map.length ?? ROOM_H;
+    renderer.lastCameraX = Number.NaN;
+    renderer.lastCameraY = Number.NaN;
+  }
+
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1);
 
   if (!diagMinimalMode) {
@@ -423,6 +444,13 @@ function tick(now) {
     input.mouse,
   );
   drawHUD(renderer, player, abilitySystem);
+  if (roomTransitionSystem.fadeAlpha > 0) {
+    renderer.ui.ctx.save();
+    renderer.ui.ctx.globalAlpha = roomTransitionSystem.fadeAlpha;
+    renderer.ui.ctx.fillStyle = '#000000';
+    renderer.ui.ctx.fillRect(0, 0, renderer.ui.canvas.width, renderer.ui.canvas.height);
+    renderer.ui.ctx.restore();
+  }
   renderer.composite();
 
   input.endFrame();
