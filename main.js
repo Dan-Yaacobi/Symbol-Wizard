@@ -29,8 +29,8 @@ import {
 
 const VIEW_W = 104;
 const VIEW_H = 58;
-const ROOM_W = 64;
-const ROOM_H = 40;
+const ROOM_W = 240;
+const ROOM_H = 160;
 
 const canvas = document.getElementById('gameCanvas');
 const renderer = new Renderer(canvas, VIEW_W, VIEW_H, 8, 8);
