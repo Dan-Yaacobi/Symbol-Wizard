@@ -157,8 +157,8 @@ function ensureStartMainPathExit(rooms, mainPathIds, roomWidth, roomHeight) {
 
 export function generateRoomGraph({
   seed,
-  roomWidth = 120,
-  roomHeight = 80,
+  roomWidth = 240,
+  roomHeight = 160,
   mainPathMinRooms = 4,
   mainPathMaxRooms = 6,
   sideBranchChance = 0.4,

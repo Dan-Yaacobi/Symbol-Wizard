@@ -14,7 +14,7 @@ function resolveBiomeType(biomeId) {
 }
 
 export class BiomeGenerator {
-  constructor({ roomWidth = 120, roomHeight = 80 } = {}) {
+  constructor({ roomWidth = 240, roomHeight = 160 } = {}) {
     this.roomWidth = roomWidth;
     this.roomHeight = roomHeight;
     this.biomes = new Map();

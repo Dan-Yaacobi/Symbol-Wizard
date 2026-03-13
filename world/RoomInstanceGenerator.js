@@ -101,18 +101,28 @@ function carveFloor(tileMap, x, y) {
   return true;
 }
 
-function carvePathToAnchor(tileMap, start, anchor) {
+function carveFloorBrush(tileMap, x, y, radius = 2) {
+  for (let oy = -radius; oy <= radius; oy += 1) {
+    for (let ox = -radius; ox <= radius; ox += 1) {
+      carveFloor(tileMap, x + ox, y + oy);
+    }
+  }
+}
+
+function carvePathToAnchor(tileMap, start, anchor, halfWidth = 2) {
   let x = start.x;
   let y = start.y;
 
+  carveFloorBrush(tileMap, x, y, halfWidth);
+
   while (x !== anchor.x) {
     x += x < anchor.x ? 1 : -1;
-    carveFloor(tileMap, x, y);
+    carveFloorBrush(tileMap, x, y, halfWidth);
   }
 
   while (y !== anchor.y) {
     y += y < anchor.y ? 1 : -1;
-    carveFloor(tileMap, x, y);
+    carveFloorBrush(tileMap, x, y, halfWidth);
   }
 }
 
@@ -169,8 +179,8 @@ function buildExitZone(anchor, roomWidth, roomHeight, radius = 2) {
 
 export function generateRoomInstance({
   roomNode,
-  roomWidth = 120,
-  roomHeight = 80,
+  roomWidth = 240,
+  roomHeight = 160,
 } = {}) {
   const rng = createRng(roomNode.seed >>> 0);
   const boundaryTile = chooseBiomeWallTile(roomNode);
@@ -187,12 +197,12 @@ export function generateRoomInstance({
   const exitZones = [];
 
   for (const exit of Object.values(roomNode.exits)) {
-    carvePathToAnchor(tilesGrid, center, exit);
+    carvePathToAnchor(tilesGrid, center, exit, 2);
     carveExitOpening(tilesGrid, exit);
   }
 
   for (const entrance of Object.values(roomNode.entrances)) {
-    carvePathToAnchor(tilesGrid, center, entrance);
+    carvePathToAnchor(tilesGrid, center, entrance, 2);
     carveExitOpening(tilesGrid, entrance);
   }
 
