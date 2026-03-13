@@ -55,12 +55,16 @@ export class RoomTransitionSystem {
   }
 
   detectExit(activeRoom, player) {
-    if (!activeRoom?.tiles) return null;
+    if (!activeRoom?.exitZones?.length) return null;
+
     const tx = Math.round(player.x);
     const ty = Math.round(player.y);
-    const tile = activeRoom.tiles[ty]?.[tx];
-    if (!tile || tile.type !== 'exit') return null;
-    return tile.id;
+
+    const hitZone = activeRoom.exitZones.find((zone) =>
+      zone.tiles.some((tile) => tile.x === tx && tile.y === ty),
+    );
+
+    return hitZone?.exitId ?? null;
   }
 
   switchRoom(context, exitId) {
