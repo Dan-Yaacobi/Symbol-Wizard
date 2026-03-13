@@ -565,9 +565,15 @@ function markAnchorTile(tileMap, anchor, tileType, id) {
     bg: '#1f2430',
     walkable: true,
     type: tileType,
-    id,
     direction: anchor.direction,
   };
+
+  if (tileType === 'exit') {
+    tile.exitId = id;
+  } else {
+    tile.entranceId = id;
+  }
+
   tileMap[anchor.y][anchor.x] = tile;
 }
 
@@ -582,6 +588,71 @@ function buildExitZone(anchor, roomWidth, roomHeight, radius = 2) {
   }
 
   return tiles;
+}
+
+function anchorDirection(anchor, roomWidth, roomHeight) {
+  if (anchor?.direction) return anchor.direction;
+  if (!anchor) return 'east';
+  if (anchor.y <= 2) return 'north';
+  if (anchor.y >= roomHeight - 3) return 'south';
+  if (anchor.x <= 2) return 'west';
+  if (anchor.x >= roomWidth - 3) return 'east';
+  return 'east';
+}
+
+function slotAnchorPosition(direction, slotIndex, slotCount, roomWidth, roomHeight) {
+  const minAxis = 4;
+  const maxX = roomWidth - 5;
+  const maxY = roomHeight - 5;
+  const axisMax = direction === 'north' || direction === 'south' ? maxX : maxY;
+  const clampedMax = Math.max(minAxis, axisMax);
+  const span = clampedMax - minAxis;
+  const axis = slotCount <= 1
+    ? Math.round((minAxis + clampedMax) / 2)
+    : Math.round(minAxis + (span * ((slotIndex + 1) / (slotCount + 1))));
+
+  if (direction === 'north') return { x: axis, y: 2, direction };
+  if (direction === 'south') return { x: axis, y: roomHeight - 3, direction };
+  if (direction === 'west') return { x: 2, y: axis, direction };
+  return { x: roomWidth - 3, y: axis, direction };
+}
+
+function resolveRoomAnchors(exits, entrances, roomWidth, roomHeight) {
+  const descriptors = [];
+
+  for (const [id, anchor] of Object.entries(exits)) {
+    descriptors.push({ type: 'exit', id, direction: anchorDirection(anchor, roomWidth, roomHeight) });
+  }
+
+  for (const [id, anchor] of Object.entries(entrances)) {
+    descriptors.push({ type: 'entrance', id, direction: anchorDirection(anchor, roomWidth, roomHeight) });
+  }
+
+  const byDirection = new Map();
+  for (const descriptor of descriptors) {
+    if (!byDirection.has(descriptor.direction)) byDirection.set(descriptor.direction, []);
+    byDirection.get(descriptor.direction).push(descriptor);
+  }
+
+  const resolvedExits = {};
+  const resolvedEntrances = {};
+
+  for (const entries of byDirection.values()) {
+    entries.sort((left, right) => `${left.type}:${left.id}`.localeCompare(`${right.type}:${right.id}`));
+    entries.forEach((entry, index) => {
+      const resolved = slotAnchorPosition(entry.direction, index, entries.length, roomWidth, roomHeight);
+      if (entry.type === 'exit') {
+        resolvedExits[entry.id] = resolved;
+      } else {
+        resolvedEntrances[entry.id] = resolved;
+      }
+    });
+  }
+
+  return {
+    exits: resolvedExits,
+    entrances: resolvedEntrances,
+  };
 }
 
 export function generateRoomInstance({
@@ -599,6 +670,9 @@ export function generateRoomInstance({
 
   const polygon = generatePolygonVertices(roomWidth, roomHeight, rng);
   const terrainCenter = centroidFromPolygon(polygon);
+  const resolvedAnchors = resolveRoomAnchors(roomNode.exits, roomNode.entrances, roomWidth, roomHeight);
+  const resolvedExits = resolvedAnchors.exits;
+  const resolvedEntrances = resolvedAnchors.entrances;
   paintBaseTerrain(tilesGrid, rng);
   const roadMask = new Set();
 
@@ -606,12 +680,12 @@ export function generateRoomInstance({
   roadMask.add(`${terrainCenter.x},${terrainCenter.y}`);
   const exitZones = [];
 
-  for (const exit of Object.values(roomNode.exits)) {
+  for (const exit of Object.values(resolvedExits)) {
     carveRoadToAnchor(tilesGrid, terrainCenter, exit, rng, { roadMask });
     carveExitOpening(tilesGrid, exit);
   }
 
-  for (const entrance of Object.values(roomNode.entrances)) {
+  for (const entrance of Object.values(resolvedEntrances)) {
     carveRoadToAnchor(tilesGrid, terrainCenter, entrance, rng, { roadMask });
     carveExitOpening(tilesGrid, entrance);
   }
@@ -672,7 +746,7 @@ export function generateRoomInstance({
 
   // 2) Road generation already carved earlier. Now build object layers.
   const landmarkBufferMask = buildProtectedZoneMask(
-    [...Object.values(roomNode.exits), ...Object.values(roomNode.entrances)],
+    [...Object.values(resolvedExits), ...Object.values(resolvedEntrances)],
     roomWidth,
     roomHeight,
     7,
@@ -691,11 +765,11 @@ export function generateRoomInstance({
 
   applySoftBoundaries(tilesGrid, boundaryTiles, rng, center);
 
-  for (const [entranceId, entrance] of Object.entries(roomNode.entrances)) {
+  for (const [entranceId, entrance] of Object.entries(resolvedEntrances)) {
     markAnchorTile(tilesGrid, entrance, 'entrance', entranceId);
   }
 
-  for (const [exitId, exit] of Object.entries(roomNode.exits)) {
+  for (const [exitId, exit] of Object.entries(resolvedExits)) {
     markAnchorTile(tilesGrid, exit, 'exit', exitId);
     exitZones.push({
       exitId,
@@ -708,8 +782,8 @@ export function generateRoomInstance({
     id: roomNode.id,
     tiles: tilesGrid,
     entities: [],
-    entrances: structuredClone(roomNode.entrances),
-    exits: structuredClone(roomNode.exits),
+    entrances: structuredClone(resolvedEntrances),
+    exits: structuredClone(resolvedExits),
     exitZones,
     state: {
       visited: roomNode.state?.visited ?? false,
