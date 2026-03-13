@@ -1,10 +1,10 @@
 import { tiles } from './TilePalette.js';
 
 const biomeWallTypes = {
-  forest: 'denseTree',
-  mountain: 'rockCliff',
-  river: 'deepWater',
-  cave: 'stoneWall',
+  forest: ['denseTree', 'denseTreeSpire', 'denseTreeBloom'],
+  mountain: ['rockCliff'],
+  river: ['deepWater'],
+  cave: ['stoneWall'],
 };
 
 function createRng(seed) {
@@ -25,14 +25,29 @@ function randomInt(rng, min, max) {
   return Math.floor(rng() * (max - min + 1)) + min;
 }
 
-function chooseBiomeWallTile(roomNode) {
+function chooseBiomeWallTiles(roomNode) {
   const biomeType = roomNode.biomeType ?? 'forest';
-  const tileKey = biomeWallTypes[biomeType] ?? biomeWallTypes.forest;
-  return tiles[tileKey] ?? tiles.wall;
+  const tileKeys = biomeWallTypes[biomeType] ?? biomeWallTypes.forest;
+  const resolvedTiles = tileKeys
+    .map((tileKey) => tiles[tileKey])
+    .filter(Boolean);
+
+  return resolvedTiles.length > 0 ? resolvedTiles : [tiles.wall];
 }
 
-function tileMapWithBiomeBoundary(width, height, wallTile) {
-  return Array.from({ length: height }, () => Array.from({ length: width }, () => cloneTile(wallTile)));
+function pickBoundaryTileVariant(boundaryTiles, x, y, rng) {
+  if (boundaryTiles.length === 1) return boundaryTiles[0];
+
+  const band = (Math.floor(x / 2) + Math.floor(y / 2)) % boundaryTiles.length;
+  const jitter = rng() < 0.18 ? 1 : 0;
+  return boundaryTiles[(band + jitter) % boundaryTiles.length];
+}
+
+function tileMapWithBiomeBoundary(width, height, boundaryTiles, rng) {
+  return Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => {
+    const tile = pickBoundaryTileVariant(boundaryTiles, x, y, rng);
+    return cloneTile(tile);
+  }));
 }
 
 function generatePolygonVertices(width, height, rng) {
@@ -212,8 +227,8 @@ export function generateRoomInstance({
   roomHeight = 160,
 } = {}) {
   const rng = createRng(roomNode.seed >>> 0);
-  const boundaryTile = chooseBiomeWallTile(roomNode);
-  const tilesGrid = tileMapWithBiomeBoundary(roomWidth, roomHeight, boundaryTile);
+  const boundaryTiles = chooseBiomeWallTiles(roomNode);
+  const tilesGrid = tileMapWithBiomeBoundary(roomWidth, roomHeight, boundaryTiles, rng);
   const center = {
     x: Math.floor(roomWidth / 2),
     y: Math.floor(roomHeight / 2),
