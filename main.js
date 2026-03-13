@@ -10,7 +10,6 @@ import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/Comb
 import * as LootSystem from './systems/LootSystem.js';
 import { CombatTextSystem } from './systems/CombatTextSystem.js';
 import { renderWorld } from './systems/RenderSystem.js';
-import { getSpriteCollisionOffsets, getSpriteFrame } from './entities/SpriteLibrary.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
 import { ChatBox } from './ui/ChatBox.js';
 import { drawHUD } from './ui/HUD.js';
@@ -261,15 +260,32 @@ function spawnDestructionEffects(object) {
   });
 }
 
-function getPlayerCollisionMask() {
-  const sprite = getSpriteFrame(
-    player.spriteKey,
-    player.animationState ?? 'idle',
-    player.currentFrame ?? player.frameIndex ?? 0,
-  );
+const playerCollisionBox = {
+  width: 3,
+  height: 3,
+};
 
-  const offsets = getSpriteCollisionOffsets(sprite);
-  return offsets.length > 0 ? offsets : [{ x: 0, y: 0 }];
+function getPlayerCollisionTilesAt(x, y) {
+  const centerX = Math.round(x);
+  const centerY = Math.round(y);
+  const minX = centerX - Math.floor(playerCollisionBox.width / 2);
+  const minY = centerY - Math.floor(playerCollisionBox.height / 2);
+
+  const tiles = [];
+  for (let dy = 0; dy < playerCollisionBox.height; dy += 1) {
+    for (let dx = 0; dx < playerCollisionBox.width; dx += 1) {
+      tiles.push({
+        x: minX + dx,
+        y: minY + dy,
+      });
+    }
+  }
+
+  return {
+    centerX,
+    centerY,
+    tiles,
+  };
 }
 
 function getMapDimensions() {
@@ -297,17 +313,17 @@ function logPlayerBoundsState(reason, details) {
 }
 
 function isWalkable(x, y) {
-  const originX = Math.round(x);
-  const originY = Math.round(y);
+  const collisionProbe = getPlayerCollisionTilesAt(x, y);
   const { width, height } = getMapDimensions();
 
-  for (const offset of getPlayerCollisionMask()) {
-    const tx = originX + offset.x;
-    const ty = originY + offset.y;
+  for (const tilePos of collisionProbe.tiles) {
+    const tx = tilePos.x;
+    const ty = tilePos.y;
     if (!isWithinMapBounds(tx, ty)) {
       logPlayerBoundsState('movement blocked by map boundary', {
-        attemptedOrigin: { x: originX, y: originY },
+        attemptedOrigin: { x: collisionProbe.centerX, y: collisionProbe.centerY },
         attemptedCollisionTile: { x: tx, y: ty },
+        playerCollisionBox,
         mapSize: { width, height },
       });
       return false;
@@ -316,8 +332,9 @@ function isWalkable(x, y) {
     const tile = getTileSafe(tx, ty);
     if (!tile) {
       logPlayerBoundsState('movement blocked by missing tile', {
-        attemptedOrigin: { x: originX, y: originY },
+        attemptedOrigin: { x: collisionProbe.centerX, y: collisionProbe.centerY },
         attemptedCollisionTile: { x: tx, y: ty },
+        playerCollisionBox,
       });
       return false;
     }
@@ -325,9 +342,14 @@ function isWalkable(x, y) {
     if (forcedBlockingTiles.has(tile.type) || forcedBlockingTiles.has(tile.char)) return false;
   }
 
-  if (originX <= 0 || originY <= 0 || originX >= width - 1 || originY >= height - 1) {
+  if (
+    collisionProbe.centerX <= 0
+    || collisionProbe.centerY <= 0
+    || collisionProbe.centerX >= width - 1
+    || collisionProbe.centerY >= height - 1
+  ) {
     logPlayerBoundsState('player reached map edge', {
-      attemptedOrigin: { x: originX, y: originY },
+      attemptedOrigin: { x: collisionProbe.centerX, y: collisionProbe.centerY },
       mapSize: { width, height },
     });
   }
