@@ -276,34 +276,225 @@ function paintTerrainRegion(tileMap, rng, {
   }
 }
 
-function scatterTerrainObstacles(tileMap, rng, {
-  attempts,
-  avoidMask,
-  centerBias,
-  spreadX,
-  spreadY,
-}) {
+function tileAt(tileMap, x, y) {
+  return tileMap[y]?.[x] ?? null;
+}
+
+function isInside(tileMap, x, y) {
+  return y >= 0 && y < tileMap.length && x >= 0 && x < tileMap[0].length;
+}
+
+function isWalkableTile(tileMap, x, y) {
+  return Boolean(tileAt(tileMap, x, y)?.walkable);
+}
+
+function collectRoadPoints(roadMask) {
+  const points = [];
+  for (const key of roadMask) {
+    const [xString, yString] = key.split(',');
+    points.push({ x: Number(xString), y: Number(yString) });
+  }
+  return points;
+}
+
+function buildProtectedZoneMask(points, width, height, radius) {
+  const mask = new Set();
+  for (const point of points) {
+    for (let oy = -radius; oy <= radius; oy += 1) {
+      for (let ox = -radius; ox <= radius; ox += 1) {
+        if (ox * ox + oy * oy > radius * radius) continue;
+        const x = point.x + ox;
+        const y = point.y + oy;
+        if (x < 0 || y < 0 || x >= width || y >= height) continue;
+        mask.add(`${x},${y}`);
+      }
+    }
+  }
+  return mask;
+}
+
+function canPlaceCells(tileMap, center, cells, blockedMask, { requireWalkable = false } = {}) {
+  for (const cell of cells) {
+    const x = center.x + cell.x;
+    const y = center.y + cell.y;
+    if (!isInside(tileMap, x, y)) return false;
+    if (blockedMask.has(`${x},${y}`)) return false;
+    if (requireWalkable && !isWalkableTile(tileMap, x, y)) return false;
+  }
+  return true;
+}
+
+function markMaskFromCells(mask, center, cells, padding = 0) {
+  for (const cell of cells) {
+    const cx = center.x + cell.x;
+    const cy = center.y + cell.y;
+    for (let oy = -padding; oy <= padding; oy += 1) {
+      for (let ox = -padding; ox <= padding; ox += 1) {
+        mask.add(`${cx + ox},${cy + oy}`);
+      }
+    }
+  }
+}
+
+function stampCells(tileMap, center, cells, tileBuilder) {
+  for (const cell of cells) {
+    const x = center.x + cell.x;
+    const y = center.y + cell.y;
+    if (!isInside(tileMap, x, y)) continue;
+    tileMap[y][x] = tileBuilder(cell, x, y);
+  }
+}
+
+function ringCells(radius) {
+  const cells = [];
+  for (let y = -radius; y <= radius; y += 1) {
+    for (let x = -radius; x <= radius; x += 1) {
+      const dist = Math.hypot(x, y);
+      if (dist >= radius - 0.75 && dist <= radius + 0.35) cells.push({ x, y });
+    }
+  }
+  return cells;
+}
+
+function diskCells(radius) {
+  const cells = [];
+  for (let y = -radius; y <= radius; y += 1) {
+    for (let x = -radius; x <= radius; x += 1) {
+      if (x * x + y * y <= radius * radius) cells.push({ x, y });
+    }
+  }
+  return cells;
+}
+
+function tryPlaceLandmarks(tileMap, rng, roadMask, blockedMask) {
+  const roadPoints = collectRoadPoints(roadMask);
+  const landmarkCount = randomInt(rng, 1, 3);
+  const placements = [];
+
+  const landmarkBuilders = [
+    (center) => {
+      const clearing = diskCells(5);
+      const columnOffsets = [{ x: -2, y: -2 }, { x: 2, y: -2 }, { x: -2, y: 2 }, { x: 2, y: 2 }];
+      return {
+        center,
+        footprint: clearing,
+        stamp: () => {
+          stampCells(tileMap, center, clearing, () => tileFrom(tiles.grass, { type: 'landmark-clearing' }));
+          stampCells(tileMap, center, [{ x: 0, y: 0 }], () => tileFrom(tiles.stoneWall, { char: '☥', fg: '#d4d0c8', type: 'landmark', landmark: 'ruined-shrine', walkable: false }));
+          stampCells(tileMap, center, columnOffsets, () => tileFrom(tiles.stoneWall, { char: '║', fg: '#a0a0a0', type: 'landmark', landmark: 'ruined-shrine', walkable: false }));
+          stampCells(tileMap, center, ringCells(3).filter(() => rng() < 0.35), () => tileFrom(tiles.rockCliff, { char: '·', fg: '#7f848c', bg: '#1d2229', type: 'landmark-rubble', walkable: true }));
+        },
+      };
+    },
+    (center) => {
+      const campDisk = diskCells(4);
+      const tents = [{ x: -2, y: -1 }, { x: 2, y: -1 }];
+      const wagon = [{ x: 0, y: 2 }, { x: 1, y: 2 }, { x: -1, y: 2 }];
+      return {
+        center,
+        footprint: campDisk,
+        stamp: () => {
+          stampCells(tileMap, center, campDisk, () => tileFrom(tiles.dirt, { type: 'landmark-clearing' }));
+          stampCells(tileMap, center, tents, () => tileFrom(tiles.wood, { char: '⛺', fg: '#c39b68', type: 'landmark', landmark: 'bandit-camp', walkable: false }));
+          stampCells(tileMap, center, wagon, () => tileFrom(tiles.wood, { char: '▤', fg: '#b28757', type: 'landmark', landmark: 'abandoned-wagon', walkable: false }));
+          stampCells(tileMap, center, [{ x: 0, y: 0 }], () => tileFrom(tiles.pathPebble, { char: '*', fg: '#ffb26d', type: 'landmark-firepit', walkable: true }));
+        },
+      };
+    },
+    (center) => {
+      const towerBase = diskCells(3);
+      const rubble = ringCells(5).filter(() => rng() < 0.28);
+      return {
+        center,
+        footprint: [...towerBase, ...rubble],
+        stamp: () => {
+          stampCells(tileMap, center, towerBase, () => tileFrom(tiles.stoneWall, { char: '▓', fg: '#9da3ad', type: 'landmark', landmark: 'broken-tower', walkable: false }));
+          stampCells(tileMap, center, [{ x: 0, y: 0 }], () => tileFrom(tiles.stoneWall, { char: 'Ø', fg: '#d9dde3', type: 'landmark-core', walkable: false }));
+          stampCells(tileMap, center, rubble, () => tileFrom(tiles.rockCliff, { char: ':', fg: '#7b8088', bg: '#1d2128', type: 'landmark-rubble', walkable: true }));
+        },
+      };
+    },
+  ];
+
+  for (let i = 0; i < landmarkCount; i += 1) {
+    let placed = false;
+    for (let attempt = 0; attempt < 45 && !placed; attempt += 1) {
+      const road = roadPoints[randomInt(rng, 0, Math.max(0, roadPoints.length - 1))] ?? { x: Math.floor(tileMap[0].length / 2), y: Math.floor(tileMap.length / 2) };
+      const angle = rng() * Math.PI * 2;
+      const distance = randomInt(rng, 6, 12);
+      const center = {
+        x: Math.round(road.x + Math.cos(angle) * distance),
+        y: Math.round(road.y + Math.sin(angle) * distance),
+      };
+      const builder = landmarkBuilders[randomInt(rng, 0, landmarkBuilders.length - 1)](center);
+      if (!canPlaceCells(tileMap, center, builder.footprint, blockedMask, { requireWalkable: true })) continue;
+
+      builder.stamp();
+      markMaskFromCells(blockedMask, center, builder.footprint, 3);
+      placements.push(builder.center);
+      placed = true;
+    }
+  }
+
+  return placements;
+}
+
+function placeTerrainObjectClusters(tileMap, rng, blockedMask, roadMask) {
+  const roadPoints = collectRoadPoints(roadMask);
+  const clusterCount = randomInt(rng, 8, 14);
+
+  for (let i = 0; i < clusterCount; i += 1) {
+    for (let attempt = 0; attempt < 24; attempt += 1) {
+      const road = roadPoints[randomInt(rng, 0, Math.max(0, roadPoints.length - 1))] ?? { x: Math.floor(tileMap[0].length / 2), y: Math.floor(tileMap.length / 2) };
+      const angle = rng() * Math.PI * 2;
+      const distance = randomInt(rng, 10, 24);
+      const center = { x: Math.round(road.x + Math.cos(angle) * distance), y: Math.round(road.y + Math.sin(angle) * distance) };
+      const radiusX = randomInt(rng, 2, 4);
+      const radiusY = randomInt(rng, 2, 4);
+      const footprint = [];
+      for (let y = -radiusY; y <= radiusY; y += 1) {
+        for (let x = -radiusX; x <= radiusX; x += 1) {
+          const shapeNoise = (rng() - 0.5) * 0.35;
+          if (((x * x) / (radiusX * radiusX) + (y * y) / (radiusY * radiusY)) + shapeNoise > 1) continue;
+          footprint.push({ x, y });
+        }
+      }
+
+      if (!canPlaceCells(tileMap, center, footprint, blockedMask, { requireWalkable: true })) continue;
+
+      const terrainPick = rng();
+      const terrainTile = terrainPick < 0.5
+        ? tileFrom(tiles.denseTree, { type: 'terrain-object', walkable: false })
+        : terrainPick < 0.8
+          ? tileFrom(tiles.rockCliff, { char: '▲', fg: '#8d9199', bg: '#262b33', type: 'terrain-object', walkable: false })
+          : tileFrom(tiles.water, { type: 'terrain-object', walkable: false });
+
+      stampCells(tileMap, center, footprint, () => ({ ...terrainTile }));
+      markMaskFromCells(blockedMask, center, footprint, 1);
+      break;
+    }
+  }
+}
+
+function scatterDecoratives(tileMap, rng, blockedMask) {
   const width = tileMap[0].length;
   const height = tileMap.length;
+  const decorativeTiles = [
+    () => tileFrom(tiles.grassDark, { char: '"', type: 'decorative', walkable: true }),
+    () => tileFrom(tiles.pathPebble, { char: '*', fg: '#d86464', bg: '#3b2f20', type: 'decorative', walkable: true }),
+    () => tileFrom(tiles.pathPebble, { char: '*', fg: '#e1cb6a', bg: '#3b2f20', type: 'decorative', walkable: true }),
+    () => tileFrom(tiles.pathPebble, { char: '·', fg: '#a4adb8', bg: '#373838', type: 'decorative', walkable: true }),
+    () => tileFrom(tiles.dirt, { char: '᛫', fg: '#baa07b', type: 'decorative', walkable: true }),
+  ];
 
+  const attempts = Math.floor((width * height) / 85);
   for (let i = 0; i < attempts; i += 1) {
-    const x = Math.max(2, Math.min(width - 3, Math.round(centerBias.x + (rng() - 0.5) * spreadX)));
-    const y = Math.max(2, Math.min(height - 3, Math.round(centerBias.y + (rng() - 0.5) * spreadY)));
-    if (avoidMask.has(`${x},${y}`)) continue;
-
-    const roll = rng();
-    if (roll < 0.45) {
-      tileMap[y][x] = tileFrom(tiles.wood, { type: 'obstacle' });
-    } else if (roll < 0.8) {
-      tileMap[y][x] = tileFrom(tiles.fence, { type: 'obstacle' });
-    } else {
-      tileMap[y][x] = tileFrom(tiles.rockCliff, {
-        char: '^',
-        fg: '#8f8f8f',
-        bg: '#2d3139',
-        type: 'obstacle',
-      });
-    }
+    const x = randomInt(rng, 2, width - 3);
+    const y = randomInt(rng, 2, height - 3);
+    if (blockedMask.has(`${x},${y}`)) continue;
+    const tile = tileAt(tileMap, x, y);
+    if (!tile?.walkable || tile.type === 'road') continue;
+    tileMap[y][x] = decorativeTiles[randomInt(rng, 0, decorativeTiles.length - 1)]();
   }
 }
 
@@ -432,6 +623,7 @@ export function generateRoomInstance({
     spreadY: roomHeight * 0.9,
   };
 
+  // 1) Terrain generation
   paintTerrainRegion(tilesGrid, rng, {
     regionCount: randomInt(rng, 8, 12),
     radiusMin: 5,
@@ -478,11 +670,24 @@ export function generateRoomInstance({
 
   carveRoadClearings(tilesGrid, roadMask, rng);
 
-  scatterTerrainObstacles(tilesGrid, rng, {
-    attempts: randomInt(rng, 50, 90),
-    avoidMask: roadClearanceMask,
-    ...broadTerrainSpread,
-  });
+  // 2) Road generation already carved earlier. Now build object layers.
+  const landmarkBufferMask = buildProtectedZoneMask(
+    [...Object.values(roomNode.exits), ...Object.values(roomNode.entrances)],
+    roomWidth,
+    roomHeight,
+    7,
+  );
+  const landmarkPlacementMask = new Set(landmarkBufferMask);
+
+  // 3) Landmark placement
+  tryPlaceLandmarks(tilesGrid, rng, roadMask, landmarkPlacementMask);
+
+  // 4) Terrain object clusters
+  const terrainClusterMask = new Set([...roadClearanceMask, ...landmarkPlacementMask]);
+  placeTerrainObjectClusters(tilesGrid, rng, terrainClusterMask, roadMask);
+
+  // 5) Decorative scattering (non-blocking)
+  scatterDecoratives(tilesGrid, rng, terrainClusterMask);
 
   applySoftBoundaries(tilesGrid, boundaryTiles, rng, center);
 
