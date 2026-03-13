@@ -2,34 +2,47 @@ import { Entity } from './Entity.js';
 
 export class WorldObject extends Entity {
   constructor(props = {}) {
+    const hasLegacyCollisionFlag = Object.prototype.hasOwnProperty.call(props, 'blocksMovement');
+    const collision = hasLegacyCollisionFlag ? props.blocksMovement : (props.collision ?? false);
+
     super({
-      type: 'world-object',
+      type: 'object',
       x: 0,
       y: 0,
       radius: 1,
       spriteKey: null,
-      blocksMovement: false,
+      category: 'decorative',
+      collision,
+      interaction: null,
+      logicalShape: { kind: 'single', tiles: [[0, 0]] },
+      blocksMovement: collision,
       ...props,
     });
+
+    this.collision = this.collision ?? this.blocksMovement ?? false;
+    this.blocksMovement = this.collision;
+    this.interaction = this.interaction ?? null;
+    this.logicalShape = this.logicalShape ?? { kind: 'single', tiles: [[0, 0]] };
   }
 }
 
 export class StaticObject extends WorldObject {
   constructor(props = {}) {
-    super({ type: 'static-object', blocksMovement: true, ...props });
+    super({ category: 'terrain', collision: true, interaction: null, ...props });
   }
 }
 
 export class House extends StaticObject {
   constructor(x, y, variant = 'red') {
-    super({ type: 'house', x, y, radius: 4.2, spriteKey: `house-${variant}`, variant });
+    super({ type: 'house', x, y, radius: 4.2, spriteKey: `house-${variant}`, variant, logicalShape: { kind: 'building', tiles: [[0, 0], [1, 0], [-1, 0], [2, 0], [-2, 0], [0, 1], [1, 1], [-1, 1], [0, -1], [1, -1], [-1, -1]] } });
   }
 }
 
 export class DestructibleObject extends WorldObject {
   constructor(props = {}) {
     super({
-      type: 'destructible-object',
+      category: 'interactable',
+      interaction: 'destroy',
       hp: 4,
       maxHp: 4,
       breakTimer: 0,
@@ -39,7 +52,7 @@ export class DestructibleObject extends WorldObject {
       dropChance: 0.45,
       dropMin: 1,
       dropMax: 6,
-      blocksMovement: true,
+      collision: true,
       ...props,
     });
   }
@@ -50,6 +63,7 @@ export class DestructibleObject extends WorldObject {
     if (this.hp > 0) return false;
     this.destroyed = true;
     this.breakTimer = this.breakDuration;
+    this.collision = false;
     this.blocksMovement = false;
     return true;
   }
@@ -79,7 +93,7 @@ export class BreakableProp extends DestructibleObject {
     const dropConfig = dropConfigByKind[kind] ?? dropConfigByKind.barrel;
 
     super({
-      type: 'destructible',
+      type: kind,
       kind,
       x,
       y,
@@ -122,6 +136,6 @@ export class TownNPC extends WorldObject {
 
 export class NatureObject extends WorldObject {
   constructor(props = {}) {
-    super({ type: 'nature', blocksMovement: false, ...props });
+    super({ category: 'decorative', collision: false, interaction: null, ...props });
   }
 }

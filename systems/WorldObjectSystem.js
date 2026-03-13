@@ -61,7 +61,7 @@ export function updateTownNpcs(npcs, map, dt) {
 
 export function resolveObjectCollision(entity, worldObjects) {
   for (const object of worldObjects) {
-    if (object.destroyed || !object.blocksMovement) continue;
+    if (object.destroyed || !object.collision) continue;
     if (!collides(entity, object)) continue;
 
     const dx = entity.x - object.x;
@@ -85,7 +85,7 @@ export function updateDestructibleAnimations(worldObjects, dt) {
 export function cleanupDestroyedObjects(worldObjects) {
   for (let i = worldObjects.length - 1; i >= 0; i -= 1) {
     const object = worldObjects[i];
-    if (object.type !== 'destructible' || !object.destroyed) continue;
+    if (object.interaction !== 'destroy' || !object.destroyed) continue;
     if (object.breakTimer > 0) continue;
     worldObjects.splice(i, 1);
   }

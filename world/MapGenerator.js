@@ -68,14 +68,87 @@ function hasNearbyDecoration(occupiedDecorations, x, y, radius = 2) {
 function placeNature(width, height, occupied) {
   const nature = [];
   const candidates = [
-    { key: 'tree-bright', block: true, radius: 2.2 },
-    { key: 'tree-dark', block: true, radius: 2.2 },
-    { key: 'bush', block: true, radius: 1.2 },
-    { key: 'flower-red', block: false, radius: 0.8 },
-    { key: 'flower-yellow', block: false, radius: 0.8 },
-    { key: 'flower-blue', block: false, radius: 0.8 },
-    { key: 'stone', block: false, radius: 1 },
-    { key: 'grass-patch', block: false, radius: 0.6 },
+    {
+      type: 'tree-cluster',
+      category: 'terrain',
+      collision: true,
+      interaction: null,
+      spriteKey: 'tree-bright',
+      radius: 2.6,
+      logicalShape: { kind: 'cluster', footprintRadius: 2, tiles: [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1]] },
+    },
+    {
+      type: 'tree-cluster',
+      category: 'terrain',
+      collision: true,
+      interaction: null,
+      spriteKey: 'tree-dark',
+      radius: 2.6,
+      logicalShape: { kind: 'cluster', footprintRadius: 2, tiles: [[0, 0], [1, 0], [0, 1], [-1, 0], [0, -1]] },
+    },
+    {
+      type: 'rock-formation',
+      category: 'terrain',
+      collision: true,
+      interaction: null,
+      spriteKey: 'stone',
+      radius: 2.2,
+      logicalShape: { kind: 'formation', footprintRadius: 2, tiles: [[0, 0], [1, 0], [-1, 0], [0, 1]] },
+    },
+    {
+      type: 'bush-patch',
+      category: 'decorative',
+      collision: false,
+      interaction: null,
+      spriteKey: 'bush',
+      radius: 1,
+      logicalShape: { kind: 'single', tiles: [[0, 0]] },
+    },
+    {
+      type: 'flower',
+      category: 'decorative',
+      collision: false,
+      interaction: null,
+      spriteKey: 'flower-red',
+      radius: 0.8,
+      logicalShape: { kind: 'single', tiles: [[0, 0]] },
+    },
+    {
+      type: 'flower',
+      category: 'decorative',
+      collision: false,
+      interaction: null,
+      spriteKey: 'flower-yellow',
+      radius: 0.8,
+      logicalShape: { kind: 'single', tiles: [[0, 0]] },
+    },
+    {
+      type: 'flower',
+      category: 'decorative',
+      collision: false,
+      interaction: null,
+      spriteKey: 'flower-blue',
+      radius: 0.8,
+      logicalShape: { kind: 'single', tiles: [[0, 0]] },
+    },
+    {
+      type: 'small-rock',
+      category: 'decorative',
+      collision: false,
+      interaction: null,
+      spriteKey: 'stone',
+      radius: 0.9,
+      logicalShape: { kind: 'single', tiles: [[0, 0]] },
+    },
+    {
+      type: 'grass-patch',
+      category: 'decorative',
+      collision: false,
+      interaction: null,
+      spriteKey: 'grass-patch',
+      radius: 0.6,
+      logicalShape: { kind: 'single', tiles: [[0, 0]] },
+    },
   ];
 
   for (let i = 0; i < 140; i += 1) {
@@ -88,17 +161,22 @@ function placeNature(width, height, occupied) {
     const object = new NatureObject({
       x,
       y,
+      type: pick.type,
+      category: pick.category,
+      collision: pick.collision,
+      interaction: pick.interaction,
       radius: pick.radius,
-      spriteKey: pick.key,
-      blocksMovement: pick.block,
+      spriteKey: pick.spriteKey,
+      logicalShape: pick.logicalShape,
     });
 
     nature.push(object);
     occupied.add(hash);
 
-    if (pick.block) {
-      for (let oy = -1; oy <= 1; oy += 1) {
-        for (let ox = -1; ox <= 1; ox += 1) occupied.add(`${x + ox},${y + oy}`);
+    const footprintRadius = object.logicalShape?.footprintRadius ?? (object.collision ? 1 : 0);
+    for (let oy = -footprintRadius; oy <= footprintRadius; oy += 1) {
+      for (let ox = -footprintRadius; ox <= footprintRadius; ox += 1) {
+        occupied.add(`${x + ox},${y + oy}`);
       }
     }
   }
@@ -188,16 +266,16 @@ export function generateMainTown(width, height) {
   }
 
   const fences = [
-    new StaticObject({ type: 'fence', x: center.x - 28, y: center.y - 10, radius: 1, spriteKey: 'fence', blocksMovement: true }),
-    new StaticObject({ type: 'fence', x: center.x - 27, y: center.y - 10, radius: 1, spriteKey: 'fence', blocksMovement: true }),
-    new StaticObject({ type: 'fence', x: center.x - 26, y: center.y - 10, radius: 1, spriteKey: 'fence', blocksMovement: true }),
-    new StaticObject({ type: 'fence', x: center.x + 12, y: center.y + 13, radius: 1, spriteKey: 'fence', blocksMovement: true }),
-    new StaticObject({ type: 'fence', x: center.x + 13, y: center.y + 13, radius: 1, spriteKey: 'fence', blocksMovement: true }),
+    new StaticObject({ type: 'fence', x: center.x - 28, y: center.y - 10, radius: 1, spriteKey: 'fence', category: 'terrain', collision: true, interaction: null, logicalShape: { kind: 'line', tiles: [[0, 0]] } }),
+    new StaticObject({ type: 'fence', x: center.x - 27, y: center.y - 10, radius: 1, spriteKey: 'fence', category: 'terrain', collision: true, interaction: null, logicalShape: { kind: 'line', tiles: [[0, 0]] } }),
+    new StaticObject({ type: 'fence', x: center.x - 26, y: center.y - 10, radius: 1, spriteKey: 'fence', category: 'terrain', collision: true, interaction: null, logicalShape: { kind: 'line', tiles: [[0, 0]] } }),
+    new StaticObject({ type: 'fence', x: center.x + 12, y: center.y + 13, radius: 1, spriteKey: 'fence', category: 'terrain', collision: true, interaction: null, logicalShape: { kind: 'line', tiles: [[0, 0]] } }),
+    new StaticObject({ type: 'fence', x: center.x + 13, y: center.y + 13, radius: 1, spriteKey: 'fence', category: 'terrain', collision: true, interaction: null, logicalShape: { kind: 'line', tiles: [[0, 0]] } }),
   ];
 
   for (const object of fences) {
     occupied.add(`${Math.round(object.x)},${Math.round(object.y)}`);
-    if (object.blocksMovement) {
+    if (object.collision) {
       const tx = Math.round(object.x);
       const ty = Math.round(object.y);
       if (map[ty]?.[tx]) map[ty][tx] = cloneTile(tiles.wall);
@@ -206,7 +284,7 @@ export function generateMainTown(width, height) {
 
   const nature = placeNature(width, height, occupied);
   for (const object of nature) {
-    if (!object.blocksMovement) continue;
+    if (!object.collision) continue;
     const tx = Math.round(object.x);
     const ty = Math.round(object.y);
     if (map[ty]?.[tx]?.walkable) map[ty][tx] = cloneTile(tiles.wall);
