@@ -5,6 +5,42 @@ function inwardOffset(direction, distance = 1) {
   return { x: -distance, y: 0 };
 }
 
+function isWalkableTile(room, x, y) {
+  const row = room?.tiles?.[y];
+  const tile = row?.[x];
+  return Boolean(tile?.walkable);
+}
+
+function isInExitZone(room, x, y) {
+  if (!room?.exitZones?.length) return false;
+  return room.exitZones.some((zone) => zone.tiles.some((tile) => tile.x === x && tile.y === y));
+}
+
+function findSpawnPosition(room, preferredX, preferredY, maxRadius = 6) {
+  const startX = Math.round(preferredX);
+  const startY = Math.round(preferredY);
+
+  if (isWalkableTile(room, startX, startY) && !isInExitZone(room, startX, startY)) {
+    return { x: startX, y: startY };
+  }
+
+  let fallback = null;
+
+  for (let radius = 1; radius <= maxRadius; radius += 1) {
+    for (let y = startY - radius; y <= startY + radius; y += 1) {
+      for (let x = startX - radius; x <= startX + radius; x += 1) {
+        if (Math.max(Math.abs(x - startX), Math.abs(y - startY)) !== radius) continue;
+        if (!isWalkableTile(room, x, y)) continue;
+
+        if (!fallback) fallback = { x, y };
+        if (!isInExitZone(room, x, y)) return { x, y };
+      }
+    }
+  }
+
+  return fallback ?? { x: startX, y: startY };
+}
+
 export class RoomTransitionSystem {
   constructor({ biomeGenerator, fadeDurationMs = 150 } = {}) {
     this.biomeGenerator = biomeGenerator;
@@ -81,9 +117,12 @@ export class RoomTransitionSystem {
     context.activeRoom.state.visited = true;
     targetRoom.state.visited = true;
 
-    const offset = inwardOffset(targetEntrance.direction, 2);
-    context.player.x = targetEntrance.x + offset.x;
-    context.player.y = targetEntrance.y + offset.y;
+    const offset = inwardOffset(targetEntrance.direction, 3);
+    const preferredSpawnX = targetEntrance.x + offset.x;
+    const preferredSpawnY = targetEntrance.y + offset.y;
+    const spawn = findSpawnPosition(targetRoom, preferredSpawnX, preferredSpawnY);
+    context.player.x = spawn.x;
+    context.player.y = spawn.y;
 
     this.exitTriggerLockTimer = 0.2;
 
