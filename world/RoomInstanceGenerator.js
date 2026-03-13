@@ -57,6 +57,22 @@ function tileMapWithBiomeBoundary(width, height, boundaryTiles, rng) {
   }));
 }
 
+function centroidFromPolygon(polygon) {
+  if (!polygon?.length) return { x: 0, y: 0 };
+
+  let sumX = 0;
+  let sumY = 0;
+  for (const vertex of polygon) {
+    sumX += vertex.x;
+    sumY += vertex.y;
+  }
+
+  return {
+    x: Math.round(sumX / polygon.length),
+    y: Math.round(sumY / polygon.length),
+  };
+}
+
 function generatePolygonVertices(width, height, rng) {
   const center = {
     x: Math.floor(width / 2),
@@ -112,6 +128,26 @@ function paintPolygonFloor(tileMap, polygon, rng) {
       if (!pointInPolygon(x + 0.5, y + 0.5, polygon)) continue;
       tileMap[y][x] = tileFrom(tiles.grass, { type: 'clearing' });
       if (rng() < 0.07) tileMap[y][x].char = ',';
+    }
+  }
+}
+
+function paintBaseTerrain(tileMap, rng) {
+  const width = tileMap[0].length;
+  const height = tileMap.length;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const soilBand = ((Math.floor(x / 7) + Math.floor(y / 6)) % 9) / 9;
+      const noise = rng();
+
+      if (soilBand + noise * 0.6 > 0.9) {
+        tileMap[y][x] = tileFrom(tiles.dirt, { type: 'ground' });
+      } else if (noise < 0.18) {
+        tileMap[y][x] = tileFrom(tiles.grassDark, { type: 'ground' });
+      } else {
+        tileMap[y][x] = tileFrom(tiles.grass, { type: 'ground' });
+      }
     }
   }
 }
@@ -200,11 +236,7 @@ function carveExitOpening(tileMap, anchor) {
   }
 }
 
-function isInsidePolygon(x, y, polygon) {
-  return pointInPolygon(x + 0.5, y + 0.5, polygon);
-}
-
-function paintTerrainRegion(tileMap, polygon, rng, {
+function paintTerrainRegion(tileMap, rng, {
   regionCount,
   radiusMin,
   radiusMax,
@@ -212,14 +244,16 @@ function paintTerrainRegion(tileMap, polygon, rng, {
   avoidMask,
   noiseThreshold,
   metadata,
+  centerBias,
+  spreadX,
+  spreadY,
 }) {
   const width = tileMap[0].length;
   const height = tileMap.length;
 
   for (let i = 0; i < regionCount; i += 1) {
-    const cx = randomInt(rng, 3, width - 4);
-    const cy = randomInt(rng, 3, height - 4);
-    if (!isInsidePolygon(cx, cy, polygon)) continue;
+    const cx = Math.max(3, Math.min(width - 4, Math.round(centerBias.x + (rng() - 0.5) * spreadX)));
+    const cy = Math.max(3, Math.min(height - 4, Math.round(centerBias.y + (rng() - 0.5) * spreadY)));
 
     const radiusX = randomInt(rng, radiusMin, radiusMax);
     const radiusY = randomInt(rng, radiusMin, radiusMax);
@@ -228,7 +262,6 @@ function paintTerrainRegion(tileMap, polygon, rng, {
       if (y < 1 || y >= height - 1) continue;
       for (let x = cx - radiusX; x <= cx + radiusX; x += 1) {
         if (x < 1 || x >= width - 1) continue;
-        if (!isInsidePolygon(x, y, polygon)) continue;
         if (avoidMask.has(`${x},${y}`)) continue;
 
         const nx = (x - cx) / Math.max(1, radiusX);
@@ -243,17 +276,19 @@ function paintTerrainRegion(tileMap, polygon, rng, {
   }
 }
 
-function scatterTerrainObstacles(tileMap, polygon, rng, {
+function scatterTerrainObstacles(tileMap, rng, {
   attempts,
   avoidMask,
+  centerBias,
+  spreadX,
+  spreadY,
 }) {
   const width = tileMap[0].length;
   const height = tileMap.length;
 
   for (let i = 0; i < attempts; i += 1) {
-    const x = randomInt(rng, 2, width - 3);
-    const y = randomInt(rng, 2, height - 3);
-    if (!isInsidePolygon(x, y, polygon)) continue;
+    const x = Math.max(2, Math.min(width - 3, Math.round(centerBias.x + (rng() - 0.5) * spreadX)));
+    const y = Math.max(2, Math.min(height - 3, Math.round(centerBias.y + (rng() - 0.5) * spreadY)));
     if (avoidMask.has(`${x},${y}`)) continue;
 
     const roll = rng();
@@ -269,6 +304,38 @@ function scatterTerrainObstacles(tileMap, polygon, rng, {
         type: 'obstacle',
       });
     }
+  }
+}
+
+function applySoftBoundaries(tileMap, boundaryTiles, rng, center) {
+  const width = tileMap[0].length;
+  const height = tileMap.length;
+  const maxRadius = Math.hypot(width * 0.5, height * 0.5);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const edgeDistance = Math.min(x, y, width - 1 - x, height - 1 - y);
+      const radialDistance = Math.hypot(x - center.x, y - center.y);
+      const radialRatio = radialDistance / maxRadius;
+      const borderPressure = 1 - Math.min(1, edgeDistance / 14);
+      const edgeNoise = rng() * 0.25;
+
+      if (borderPressure + radialRatio * 0.75 + edgeNoise < 1.02) continue;
+
+      const boundaryTile = pickBoundaryTileVariant(boundaryTiles, x, y, rng);
+      tileMap[y][x] = tileFrom(boundaryTile, { type: 'boundary' });
+    }
+  }
+}
+
+function carveRoadClearings(tileMap, roadMask, rng) {
+  for (const key of roadMask) {
+    if (rng() > 0.045) continue;
+    const [xString, yString] = key.split(',');
+    const x = Number(xString);
+    const y = Number(yString);
+    const radius = randomInt(rng, 3, 6);
+    carveFloorCircle(tileMap, x, y, radius, tiles.grass, { type: 'clearing' });
   }
 }
 
@@ -340,69 +407,84 @@ export function generateRoomInstance({
   };
 
   const polygon = generatePolygonVertices(roomWidth, roomHeight, rng);
-  paintPolygonFloor(tilesGrid, polygon, rng);
+  const terrainCenter = centroidFromPolygon(polygon);
+  paintBaseTerrain(tilesGrid, rng);
   const roadMask = new Set();
 
-  carveFloor(tilesGrid, center.x, center.y, tiles.pathPebble, { type: 'road' });
-  roadMask.add(`${center.x},${center.y}`);
+  carveFloor(tilesGrid, terrainCenter.x, terrainCenter.y, tiles.pathPebble, { type: 'road' });
+  roadMask.add(`${terrainCenter.x},${terrainCenter.y}`);
   const exitZones = [];
 
   for (const exit of Object.values(roomNode.exits)) {
-    carveRoadToAnchor(tilesGrid, center, exit, rng, { roadMask });
+    carveRoadToAnchor(tilesGrid, terrainCenter, exit, rng, { roadMask });
     carveExitOpening(tilesGrid, exit);
   }
 
   for (const entrance of Object.values(roomNode.entrances)) {
-    carveRoadToAnchor(tilesGrid, center, entrance, rng, { roadMask });
+    carveRoadToAnchor(tilesGrid, terrainCenter, entrance, rng, { roadMask });
     carveExitOpening(tilesGrid, entrance);
   }
 
   const roadClearanceMask = createRoadClearanceMask(roadMask, roomWidth, roomHeight, 4);
+  const broadTerrainSpread = {
+    centerBias: terrainCenter,
+    spreadX: roomWidth * 0.9,
+    spreadY: roomHeight * 0.9,
+  };
 
-  paintTerrainRegion(tilesGrid, polygon, rng, {
-    regionCount: randomInt(rng, 5, 8),
+  paintTerrainRegion(tilesGrid, rng, {
+    regionCount: randomInt(rng, 8, 12),
     radiusMin: 5,
-    radiusMax: 13,
+    radiusMax: 14,
     tile: tiles.grass,
     avoidMask: roadMask,
     noiseThreshold: 1.1,
     metadata: { type: 'clearing' },
+    ...broadTerrainSpread,
   });
 
-  paintTerrainRegion(tilesGrid, polygon, rng, {
-    regionCount: randomInt(rng, 7, 12),
+  paintTerrainRegion(tilesGrid, rng, {
+    regionCount: randomInt(rng, 10, 15),
     radiusMin: 4,
-    radiusMax: 10,
+    radiusMax: 11,
     tile: tiles.denseTree,
     avoidMask: roadClearanceMask,
     noiseThreshold: 1.0,
     metadata: { type: 'forest' },
+    ...broadTerrainSpread,
   });
 
-  paintTerrainRegion(tilesGrid, polygon, rng, {
-    regionCount: randomInt(rng, 4, 7),
+  paintTerrainRegion(tilesGrid, rng, {
+    regionCount: randomInt(rng, 5, 9),
     radiusMin: 3,
     radiusMax: 8,
     tile: tileFrom(tiles.rockCliff, { char: '∎', fg: '#8c8f96', bg: '#2a2e35' }),
     avoidMask: roadClearanceMask,
     noiseThreshold: 0.95,
     metadata: { type: 'rock-field' },
+    ...broadTerrainSpread,
   });
 
-  paintTerrainRegion(tilesGrid, polygon, rng, {
-    regionCount: randomInt(rng, 2, 4),
+  paintTerrainRegion(tilesGrid, rng, {
+    regionCount: randomInt(rng, 3, 5),
     radiusMin: 4,
     radiusMax: 9,
     tile: tiles.water,
     avoidMask: roadClearanceMask,
     noiseThreshold: 1.0,
     metadata: { type: 'water' },
+    ...broadTerrainSpread,
   });
 
-  scatterTerrainObstacles(tilesGrid, polygon, rng, {
+  carveRoadClearings(tilesGrid, roadMask, rng);
+
+  scatterTerrainObstacles(tilesGrid, rng, {
     attempts: randomInt(rng, 50, 90),
     avoidMask: roadClearanceMask,
+    ...broadTerrainSpread,
   });
+
+  applySoftBoundaries(tilesGrid, boundaryTiles, rng, center);
 
   for (const [entranceId, entrance] of Object.entries(roomNode.entrances)) {
     markAnchorTile(tilesGrid, entrance, 'entrance', entranceId);
