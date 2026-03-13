@@ -30,19 +30,19 @@ function pickDirection(rng, previousDirection = null) {
 function anchorForDirection(direction, roomWidth, roomHeight) {
   const centerX = Math.floor(roomWidth / 2);
   const centerY = Math.floor(roomHeight / 2);
-  if (direction === 'north') return { x: centerX, y: 0, direction };
-  if (direction === 'south') return { x: centerX, y: roomHeight - 1, direction };
-  if (direction === 'west') return { x: 0, y: centerY, direction };
-  return { x: roomWidth - 1, y: centerY, direction };
+  if (direction === 'north') return { x: centerX, y: 2, direction };
+  if (direction === 'south') return { x: centerX, y: roomHeight - 3, direction };
+  if (direction === 'west') return { x: 2, y: centerY, direction };
+  return { x: roomWidth - 3, y: centerY, direction };
 }
 
 function directionFromAnchor(anchor, roomWidth, roomHeight) {
   if (!anchor) return null;
-  if (anchor.y === 0) return 'north';
-  if (anchor.y === roomHeight - 1) return 'south';
-  if (anchor.x === 0) return 'west';
-  if (anchor.x === roomWidth - 1) return 'east';
   if (anchor.direction) return anchor.direction;
+  if (anchor.y <= 2) return 'north';
+  if (anchor.y >= roomHeight - 3) return 'south';
+  if (anchor.x <= 2) return 'west';
+  if (anchor.x >= roomWidth - 3) return 'east';
   return null;
 }
 
@@ -157,8 +157,8 @@ function ensureStartMainPathExit(rooms, mainPathIds, roomWidth, roomHeight) {
 
 export function generateRoomGraph({
   seed,
-  roomWidth = 64,
-  roomHeight = 40,
+  roomWidth = 120,
+  roomHeight = 80,
   mainPathMinRooms = 4,
   mainPathMaxRooms = 6,
   sideBranchChance = 0.4,
