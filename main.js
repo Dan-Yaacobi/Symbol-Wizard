@@ -5,7 +5,6 @@ import { Viewport } from './engine/Viewport.js';
 import { Player } from './entities/Player.js';
 import { BiomeGenerator } from './world/BiomeGenerator.js';
 import { RoomTransitionSystem } from './world/RoomTransitionSystem.js';
-import { resolveMapCollision } from './systems/CollisionSystem.js';
 import { updateEnemies } from './systems/AISystem.js';
 import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/CombatSystem.js';
 import * as LootSystem from './systems/LootSystem.js';
@@ -273,20 +272,88 @@ function getPlayerCollisionMask() {
   return offsets.length > 0 ? offsets : [{ x: 0, y: 0 }];
 }
 
+function getMapDimensions() {
+  return {
+    width: map?.[0]?.length ?? 0,
+    height: map?.length ?? 0,
+  };
+}
+
+function isWithinMapBounds(x, y) {
+  const { width, height } = getMapDimensions();
+  return x >= 0 && y >= 0 && x < width && y < height;
+}
+
+function getTileSafe(x, y) {
+  if (!isWithinMapBounds(x, y)) return null;
+  return map[y]?.[x] ?? null;
+}
+
+function logPlayerBoundsState(reason, details) {
+  logDiag(`[PlayerBounds] ${reason}`, {
+    playerPosition: { x: player.x, y: player.y },
+    ...details,
+  });
+}
+
 function isWalkable(x, y) {
   const originX = Math.round(x);
   const originY = Math.round(y);
+  const { width, height } = getMapDimensions();
 
   for (const offset of getPlayerCollisionMask()) {
     const tx = originX + offset.x;
     const ty = originY + offset.y;
-    const tile = map[ty]?.[tx];
-    if (!tile) return false;
+    if (!isWithinMapBounds(tx, ty)) {
+      logPlayerBoundsState('movement blocked by map boundary', {
+        attemptedOrigin: { x: originX, y: originY },
+        attemptedCollisionTile: { x: tx, y: ty },
+        mapSize: { width, height },
+      });
+      return false;
+    }
+
+    const tile = getTileSafe(tx, ty);
+    if (!tile) {
+      logPlayerBoundsState('movement blocked by missing tile', {
+        attemptedOrigin: { x: originX, y: originY },
+        attemptedCollisionTile: { x: tx, y: ty },
+      });
+      return false;
+    }
     if (!tile.walkable) return false;
     if (forcedBlockingTiles.has(tile.type) || forcedBlockingTiles.has(tile.char)) return false;
   }
 
+  if (originX <= 0 || originY <= 0 || originX >= width - 1 || originY >= height - 1) {
+    logPlayerBoundsState('player reached map edge', {
+      attemptedOrigin: { x: originX, y: originY },
+      mapSize: { width, height },
+    });
+  }
+
   return true;
+}
+
+function movePlayerAxis(dx, dy) {
+  const prevX = player.x;
+  const prevY = player.y;
+  const nextX = prevX + dx;
+  const nextY = prevY + dy;
+
+  if (!isWalkable(nextX, nextY)) {
+    player.vx = 0;
+    player.vy = 0;
+    logPlayerBoundsState('collision check failed; movement blocked', {
+      from: { x: prevX, y: prevY },
+      attempted: { x: nextX, y: nextY },
+      delta: { dx, dy },
+    });
+    return;
+  }
+
+  player.x = nextX;
+  player.y = nextY;
 }
 
 function handlePlayer(dt) {
@@ -305,13 +372,19 @@ function handlePlayer(dt) {
   player.vx = moveX * player.speed;
   player.vy = moveY * player.speed;
 
-  player.x += player.vx * dt;
-  if (!isWalkable(player.x, player.y)) resolveMapCollision(player, map, isWalkable);
+  movePlayerAxis(player.vx * dt, 0);
   resolveObjectCollision(player, worldObjects);
 
-  player.y += player.vy * dt;
-  if (!isWalkable(player.x, player.y)) resolveMapCollision(player, map, isWalkable);
+  movePlayerAxis(0, player.vy * dt);
   resolveObjectCollision(player, worldObjects);
+
+  const { width, height } = getMapDimensions();
+  if (player.x < 0 || player.y < 0 || player.x >= width || player.y >= height) {
+    logPlayerBoundsState('player coordinates exceeded map bounds after movement', {
+      mapSize: { width, height },
+      coordinates: { x: player.x, y: player.y },
+    });
+  }
 
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
