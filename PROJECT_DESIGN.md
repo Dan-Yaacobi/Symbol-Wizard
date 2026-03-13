@@ -1,260 +1,517 @@
-# Symbol Wizard RPG — Design Document
+# Symbol Wizard RPG — Project Design Document
 
-## 1. Vision and Design Goals
+## Purpose of This Document
 
-Symbol Wizard is a browser-based real-time top-down RPG inspired by action-RPG combat loops (e.g., Diablo) while using a strict symbol-only visual language. Every visual element is rendered as a grid cell containing `char`, `fg`, and `bg` values. The prototype validates readability, gameplay feel, and modular architecture.
+This document defines the **core architecture, gameplay systems, and design philosophy** of the Symbol Wizard RPG.
 
-### Core Goals
-1. **Readable Symbol Graphics**: Distinct silhouettes, semantic color usage, and low-noise environments.
-2. **Action Gameplay**: Responsive movement, directional aiming, projectile spell combat.
-3. **Systemic Scalability**: Modular code organization ready for quests, skills, procedural content, and narrative growth.
-4. **Diegetic Text UI**: Chat box for NPC interaction and branching dialogue.
+It acts as the **single source of truth** for development.
+All future systems should follow the structures and principles described here.
 
-## 2. Prototype Scope
+---
 
-### In Scope
-- One procedural dungeon map.
-- Player wizard entity.
-- Smooth WASD movement.
-- Mouse aim + left-click cast.
-- Magic Bolt projectile (`--->`, blue).
-- Two enemy types: Slime and Skeleton.
-- One NPC wizard near dungeon entrance.
-- Chat box with dialogue choices.
-- Basic collision + combat + gold drops.
+# PART 1 — GAME VISION
 
-### Out of Scope (future)
-- Hub world transitions.
-- Quest persistence.
-- Multi-spell loadouts.
-- Item/inventory systems.
-- Save/load profiles.
+## 1. Game Identity
 
-## 3. Symbol Graphics Engine Specification
+* **Game Type:** Procedural open-world wizard exploration game.
+* **Player Role:** The player is a wizard exploring a magical frontier.
+* **Core Fantasy:** Explore a magical world, discover arcane phenomena, harvest magical resources, and craft increasingly powerful spells.
+* **Primary Player Fantasy:**
+  Explore → Discover Magic → Craft Spells → Experiment → Become a powerful wizard.
 
-## Grid Model
-- Visible playfield: **160 × 100** cells.
-- Each cell:
-  - `char`: one printable character.
-  - `fg`: hex color string.
-  - `bg`: hex color string.
+---
 
-## Render Pipeline
-1. Clear frame buffer to default floor/background cells.
-2. Draw tile map layer.
-3. Draw entities by z-order and y-order.
-4. Draw projectiles/effects.
-5. Submit to canvas (character raster pass).
+# PART 2 — CORE DESIGN PILLARS
 
-## Readability Rules (Engine-Enforced)
-1. Entities use high-contrast palettes and 7×7 sprite silhouettes.
-2. Environment symbols use lower-density glyphs and muted colors.
-3. Semantic color palette is centralized in constants.
-4. Animation is subtle (2-frame bounce, palette pulse), never reducing silhouette clarity.
-5. Player always draws last among actors and includes bright accent color.
+## Pillar 1 — Procedural Magical Frontier
 
-## 4. Visual Language
+The world is procedurally generated but structured around **biome archetypes rather than pure randomness**.
 
-## Semantic Colors
-- Purple: player magic identity.
-- Blue: arcane bolt / ice-adjacent magic.
-- Green: poison/slime enemies.
-- Red: demonic/aggressive threat.
-- Yellow: lightning / highlights.
-- Gray: stone architecture.
-- Brown: wooden props.
+Exploration exists to discover:
 
-## Sprite Constraints
-- Standard actor footprint: 7×7.
-- Sparse silhouette edges, dense center mass.
-- No decorative clutter that blends with floor texture.
+* magical biomes
+* arcane landmarks
+* magical creatures
+* rare magical resources
+* anomalies
+* spellcraft knowledge
 
-## 5. Gameplay Systems
+Example biome archetypes:
 
-## Player Controller
-- Input: WASD for acceleration-driven movement.
-- Movement: velocity + damping for smoothness.
-- Aim: world-space direction from player to mouse cursor.
-- Cast: left click fires Magic Bolt with cooldown.
+* Volcanic Rift
+* Storm Plateau
+* Crystal Caverns
+* Fungal Mire
+* Ancient Mage Ruins
+* Mana Fracture Fields
 
-## Combat Model
-- Projectile hit checks against enemy circle colliders.
-- Hit applies fixed damage.
-- Enemy death spawns gold pickup entity.
-- Player can auto-collect nearby gold.
+Each biome defines:
 
-## Enemy Behavior
-- Slime: slow pursuit with wobble animation.
-- Skeleton: slightly faster pursuit with stop-and-go cadence.
-- Both: navigate walkable map with simple chase steering.
+* terrain rules
+* enemy archetypes
+* magical resources
+* environmental hazards
+* landmarks
+* boss creatures
 
-## NPC + Dialogue
-- NPC has interaction radius.
-- Player presses `E` near NPC to open chat UI.
-- Dialogue options selectable with keys `1-9`.
-- Chat box supports:
-  - NPC lines
-  - Player response options
-  - Quest hint text
+---
 
-## 6. World and Map Model
+## Pillar 2 — Knowledge-Based Spellcraft
 
-## Dungeon Layout
-- Tile-based map larger than viewport (prototype: 220×140).
-- Generated from room-carve + corridor + noise clutter.
-- Tile classes:
-  - Wall (blocked)
-  - Floor (walkable)
-  - Accent props (walkability configurable)
+Spellcraft is the **primary progression system**.
 
-## Camera
-- Camera follows player with soft clamp and world bounds.
-- Renders viewport window (160×100) into map coordinates.
+Players do not simply level up spells. Instead they:
 
-## 7. Scalable Architecture
+1. Discover magical resources
+2. Discover spell formulas through tomes
+3. Unlock elemental magic
+4. Craft spells using recipes
+5. Combine spell effects through synergy
+6. Experiment with spell builds
 
-Modules are grouped by responsibility:
-- `/engine`: rendering, timing, input, camera, cell buffers.
-- `/entities`: entity blueprints and sprite definitions.
-- `/world`: map generation, tile metadata.
-- `/systems`: AI, collision, combat, dialogue, loot.
-- `/ui`: chat box and HUD overlays.
+Spellcraft depth is the **core gameplay system**.
 
-This supports extending each feature vertically without coupling all logic into a monolith.
+---
 
-## 8. Data Models
+## Pillar 3 — Expressive Wizard Combat
 
-## Entity
-- `id`, `type`, `x`, `y`, `vx`, `vy`, `radius`, `hp`, `maxHp`, `spriteKey`, `alive`.
+Combat is **active spellcasting**.
 
-## Projectile
-- `x`, `y`, `dx`, `dy`, `speed`, `ttl`, `damage`, `owner`, `spriteFrames`.
+Spells define combat style.
 
-## Tile
-- `char`, `fg`, `bg`, `walkable`, `transparent`.
+Combat encounters exist in three categories:
 
-## Dialogue Node
-- `id`, `speaker`, `line`, `options[]` where option = `{text, nextId, effect?}`.
+* **Skirmish Combat**
+  Small encounters during exploration.
 
-## 9. Update Loop
+* **Swarm Events**
+  Occasional high pressure combat scenarios.
 
-At 60 FPS target:
-1. Poll input.
-2. Update player movement and intent.
-3. Update AI steering.
-4. Spawn/update projectiles.
-5. Resolve collisions.
-6. Apply combat and death events.
-7. Update loot + dialogue state.
-8. Update camera.
-9. Render frame and UI.
+* **Signature Encounters**
+  Bosses or magical entities tied to rare resources.
 
-## 10. Performance and Maintainability Notes
-- Fixed-size cell buffer reused each frame to avoid allocations.
-- Entity lists partitioned by type for fast iteration in prototype.
-- Deterministic map seed option for reproducible testing.
-- Clear system APIs (update/render boundaries) for future ECS migration.
+---
 
-## 11. Floating Combat Text System
+# PART 3 — CORE GAMEPLAY LOOP
 
-### Purpose
-The Floating Combat Text system provides immediate visual feedback for combat and reward events in the symbol-based wizard RPG. Text appears near the relevant entity so players can read combat outcomes at a glance without shifting attention away from gameplay.
+Core loop:
 
-Spawn floating text for:
-- Enemy takes damage (e.g., `-12`, `-7`)
-- Player takes damage (e.g., `-5`)
-- Critical hit (e.g., `*25*`)
-- Gold pickup (e.g., `+10$`)
-- Healing and neutral informational events as needed by combat logic
+Explore world
+→ discover magical biome
+→ encounter magical creatures
+→ obtain magical resources
+→ discover spell formulas
+→ craft new spells
+→ use spells in combat
+→ explore deeper regions
 
-### Symbol RPG Text Style
-Floating text should match the game's symbol aesthetic and remain concise.
+---
+
+# PART 4 — SPELLCRAFT SYSTEM
+
+## Resource System
+
+Spellcraft requires resources obtained from:
+
+* defeating magical creatures
+* harvesting magical environments
+* interacting with anomalies
+* defeating bosses
+
+Resources fall into two categories.
+
+### Magical Core Resources
 
 Examples:
-- Damage: `-12`, `-7`
-- Critical hit: `*25*`
-- Gold pickup: `+10$`
 
-Text is rendered in-canvas using the same symbol rendering rules, font treatment, and grid alignment conventions as the rest of the game.
+* magma core
+* storm shard
+* void pollen
+* ember heart
 
-### Color Rules
-Use semantic color mapping for readability and quick parsing:
-- **Red**: enemy or player damage
-- **Yellow**: critical hits
-- **Green**: healing
-- **Gold**: gold collected
-- **White**: neutral info
+### Supporting Ingredients
 
-### Spawn Location Rules
-Combat text should spawn near the entity that triggered the event:
-- Enemy takes damage → spawn above the enemy sprite
-- Player takes damage → spawn above the player sprite
-- Gold pickup → spawn above the player sprite
-- Other events → spawn above the event source entity
+Examples:
 
-Use world-space coordinates so text remains anchored correctly under camera movement.
+* obsidian
+* sulfur
+* crystal dust
+* ash residue
+* bone fragments
 
-### Animation Behavior
-Each combat text entry should:
-- Move upward slightly
-- Fade out over time
-- Disappear automatically when expired
+Spells require **one magical core and additional ingredients**.
 
-Recommended lifetime per entry:
-- `0.8–1.2s`
+---
 
-### CombatTextSystem (New System)
-Add a dedicated runtime system:
-- `CombatTextSystem`
+## Element System
 
-Responsibilities:
-- Spawn combat text entries from combat/loot events
-- Update text position and opacity over lifetime
-- Expire and remove completed entries
-- Render active entries above entities in world space
+Elements represent magical disciplines unlocked through exploration.
 
-`CombatTextSystem` should expose a simple spawn API usable by `CombatSystem`, `LootSystem`, and any future system that needs transient feedback.
+Examples:
 
-### Example Data Structure
-Maintain a transient runtime array:
-- `combatTexts[]`
+* Fire
+* Lightning
+* Magma
+* Frost
+* Poison
+* Wind
+* Void
+* Earth
 
-Example entry:
+Unlocking an element grants access to its spell recipes.
 
-```json
-{
-  "id": "ct_1",
-  "x": 320,
-  "y": 200,
-  "text": "-12",
-  "color": "red",
-  "createdAt": "timestamp"
-}
+---
+
+## Spell Recipe System
+
+Spells are crafted from recipes.
+
+A recipe requires:
+
+* required elements
+* required formula/tome
+* required ingredients
+* spell behavior data
+* interaction tags
+
+Example recipe structure:
+
+* Spell Name
+* Required Elements
+* Required Tome
+* Ingredients
+* Spell Tags
+* Applies Statuses
+* Creates Zones
+* Reacts To Tags
+
+---
+
+## Spell Synergy System
+
+Spells interact through **tags and statuses**, not hardcoded spell combinations.
+
+Spells may interact with:
+
+* enemy statuses
+* spell zones
+* other spells
+* environmental states
+
+Example tags:
+
+* burning
+* stunned
+* ignitable_projectile
+* charged
+* frozen
+* volatile
+
+Example interactions:
+
+* Projectile cast inside fire zone → projectile ignites
+* Enemy stunned by lightning → next impact spell explodes
+
+This allows scalable spell interactions without exponential complexity.
+
+---
+
+## Tome / Formula System
+
+Spell formulas are discovered through **tomes found in the world**.
+
+Tomes:
+
+* unlock crafting recipes
+* provide magical knowledge
+* reveal information progressively
+
+Tomes are a key **exploration reward**.
+
+---
+
+# PART 5 — COMBAT DESIGN
+
+## Elemental Affinity System
+
+Enemies and bosses may have:
+
+* weaknesses
+* resistances
+* occasional immunities
+
+Example:
+
+Forest Spider
+
+* Weak: Fire
+* Resist: Poison
+* Neutral: Lightning
+
+These modifiers should remain **moderate** to encourage experimentation without forcing constant loadout switching.
+
+---
+
+## Biome Magic Influence
+
+Biomes can modify elemental effectiveness.
+
+Example:
+
+Water biome
+
+* Fire damage reduced
+* Lightning damage increased
+
+This encourages players to experiment with spell builds depending on environment.
+
+---
+
+## Spell Loadout System
+
+Players can equip a limited number of spells simultaneously.
+
+Features:
+
+* quick loadouts
+* build swapping outside combat
+
+Spell slot count is currently **TBD**.
+
+---
+
+## Spellcraft Graph Structure
+
+The spell system is represented as a **structured content graph**.
+
+The graph defines:
+
+* elements
+* spell recipes
+* ingredient requirements
+* formula dependencies
+* spell tags
+* synergy relationships
+
+The graph represents the **space of craftable spells**.
+
+---
+
+# PART 6 — SYMBOL GRAPHICS ENGINE
+
+## Grid Model
+
+The entire world is rendered using **symbol graphics**.
+
+Visible playfield:
+
+160 × 100 cells
+
+Each cell stores:
+
+* `char` — printable character
+* `fg` — foreground color
+* `bg` — background color
+
+---
+
+## Render Pipeline
+
+1. Clear frame buffer
+2. Draw tile map
+3. Draw entities
+4. Draw projectiles and effects
+5. Draw floating combat text
+6. Submit frame to canvas
+
+---
+
+## Readability Rules
+
+1. Entities use **high contrast palettes**
+2. Environment uses **muted symbols**
+3. Semantic colors are centralized
+4. Animation is subtle
+5. Player is always visually prioritized
+
+---
+
+## Semantic Colors
+
+* Purple → player magic
+* Blue → arcane
+* Green → poison/slime
+* Red → hostile threat
+* Yellow → lightning
+* Gray → stone
+* Brown → wood
+
+---
+
+## Sprite Constraints
+
+Standard actor footprint:
+
+7 × 7 symbols
+
+Design rules:
+
+* dense center mass
+* sparse edges
+* clear silhouette
+
+---
+
+# PART 7 — ENGINE ARCHITECTURE
+
+Modules are grouped by responsibility.
+
+```
+/engine
+/entities
+/world
+/systems
+/ui
 ```
 
-Recommended optional fields for robust lifecycle/rendering:
-- `lifetimeMs`: total lifetime (e.g., `1000`)
-- `velocityY`: upward drift speed
-- `opacity`: cached render alpha
+### Engine
 
-### Rendering Approach
-Floating combat text must be rendered through the same symbol rendering pipeline used by the game.
+Rendering, timing, camera, input.
 
-Requirements:
-- Render inside the game canvas
-- Use the same font and symbol styling as other glyphs
-- Preserve grid alignment expectations where applicable
-- Avoid DOM overlays or HTML UI elements for FCT
+### Entities
 
-Render pass guidance:
-1. Game world and entities render normally.
-2. `CombatTextSystem` renders active text entries in world/camera space above entity sprites.
-3. UI/HUD renders after world-space combat text as needed.
+Actors, enemies, projectiles.
 
-### Performance Rule
-Combat text must remain lightweight and decoupled from core simulation:
-- No interaction with physics resolution
-- No mutation of entity movement/combat state
-- Bounded, short-lived entries with automatic cleanup
+### World
 
-This keeps the feature visually expressive without affecting combat, AI, or physics update performance.
+Map generation and tiles.
+
+### Systems
+
+Combat, AI, loot, dialogue.
+
+### UI
+
+HUD, chatbox.
+
+---
+
+# PART 8 — DATA MODELS
+
+### Entity
+
+Fields:
+
+* id
+* type
+* x
+* y
+* vx
+* vy
+* radius
+* hp
+* maxHp
+* spriteKey
+* alive
+
+### Projectile
+
+* x
+* y
+* dx
+* dy
+* speed
+* ttl
+* damage
+* owner
+* spriteFrames
+
+### Tile
+
+* char
+* fg
+* bg
+* walkable
+* transparent
+
+### Dialogue Node
+
+* id
+* speaker
+* line
+* options[]
+
+---
+
+# PART 9 — GAME LOOP
+
+Target: **60 FPS**
+
+Update order:
+
+1. Poll input
+2. Update player movement
+3. Update AI
+4. Spawn/update projectiles
+5. Resolve collisions
+6. Apply combat events
+7. Update loot
+8. Update camera
+9. Render frame
+
+---
+
+# PART 10 — FLOATING COMBAT TEXT
+
+Floating combat text provides immediate combat feedback.
+
+Examples:
+
+* `-12`
+* `*25*`
+* `+10$`
+
+Color rules:
+
+* Red → damage
+* Yellow → crit
+* Green → heal
+* Gold → currency
+* White → neutral
+
+Animation:
+
+* slight upward motion
+* fade out
+* lifetime ~1 second
+
+---
+
+# PART 11 — SCALABILITY REQUIREMENTS
+
+The system must support easy expansion.
+
+Adding the following should require minimal code changes:
+
+* new elements
+* new spells
+* new enemies
+* new items
+* new biomes
+* new encounters
+* new events
+
+Content should be **data driven**, not hardcoded.
+
+---
+
+# PART 12 — UNDEFINED SYSTEMS (TBD)
+
+Future design decisions:
+
+* spell slot count
+* camera perspective
+* movement scheme
+* mana economy
+* world size
+* map structure
