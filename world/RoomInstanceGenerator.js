@@ -32,7 +32,16 @@ function baseRoomTiles(width, height, rng) {
   return grid;
 }
 
+function carveAnchorTile(tileMap, anchor) {
+  const row = tileMap[anchor.y];
+  if (!row || !row[anchor.x]) return false;
+  row[anchor.x] = cloneTile(tiles.floor);
+  return true;
+}
+
 function markAnchorTile(tileMap, anchor, tileType, id) {
+  if (!carveAnchorTile(tileMap, anchor)) return;
+
   const tile = {
     ...tiles.floor,
     char: tileType === 'exit' ? '>' : '<',
