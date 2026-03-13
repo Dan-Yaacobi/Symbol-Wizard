@@ -30,22 +30,22 @@ body {
 .game-stage {
   min-height: 0;
   display: grid;
+  width: 100%;
   place-items: center;
 }
 
 .game-canvas-frame {
-  width: min(1800px, calc(100vw - 16px));
+  width: 100%;
   aspect-ratio: 16 / 9;
 }
 
 #gameCanvas {
   width: 100% !important;
-  height: 100% !important;
+  height: auto !important;
   display: block;
   border: 2px solid var(--panel-border);
   background: #000;
   image-rendering: pixelated;
-  image-rendering: crisp-edges;
 }
 
 .ui-panels {
