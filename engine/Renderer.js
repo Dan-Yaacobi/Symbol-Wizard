@@ -69,19 +69,23 @@ export class Renderer {
   }
 
   #drawGlyphToLayer(layerCtx, char, fg, bg, cellX, cellY) {
-    if (cellX < 0 || cellY < 0 || cellX >= this.cols || cellY >= this.rows) return;
+    const pixelX = cellX * this.cellW;
+    const pixelY = cellY * this.cellH;
+    this.#drawGlyphToLayerPx(layerCtx, char, fg, bg, pixelX, pixelY);
+  }
+
+  #drawGlyphToLayerPx(layerCtx, char, fg, bg, pixelX, pixelY) {
+    if (pixelX <= -this.cellW || pixelY <= -this.cellH) return;
+    if (pixelX >= this.cols * this.cellW || pixelY >= this.rows * this.cellH) return;
     const tile = this.#getGlyph(char, fg, bg);
-    layerCtx.drawImage(tile, cellX * this.cellW, cellY * this.cellH);
+    layerCtx.drawImage(tile, Math.round(pixelX), Math.round(pixelY));
   }
 
   renderBackground(map, camera) {
     const cameraTileX = Math.floor(camera.x);
     const cameraTileY = Math.floor(camera.y);
-
-    if (cameraTileX === this.lastCameraX && cameraTileY === this.lastCameraY) return;
-
-    this.lastCameraX = cameraTileX;
-    this.lastCameraY = cameraTileY;
+    const cameraOffsetX = (camera.x - cameraTileX) * this.cellW;
+    const cameraOffsetY = (camera.y - cameraTileY) * this.cellH;
 
     const ctx = this.background.ctx;
     ctx.clearRect(0, 0, this.background.canvas.width, this.background.canvas.height);
@@ -89,14 +93,16 @@ export class Renderer {
     const fallbackTile = { char: ' ', fg: '#243341', bg: '#0b1016' };
     const mapHeight = map?.length ?? 0;
 
-    for (let screenY = 0; screenY < this.rows; screenY += 1) {
+    for (let screenY = -1; screenY <= this.rows; screenY += 1) {
       const worldY = cameraTileY + screenY;
       const row = worldY >= 0 && worldY < mapHeight ? map[worldY] : null;
 
-      for (let screenX = 0; screenX < this.cols; screenX += 1) {
+      for (let screenX = -1; screenX <= this.cols; screenX += 1) {
         const worldX = cameraTileX + screenX;
         const tile = row?.[worldX] ?? fallbackTile;
-        this.#drawGlyphToLayer(ctx, tile.char, tile.fg, tile.bg, screenX, screenY);
+        const pixelX = screenX * this.cellW - cameraOffsetX;
+        const pixelY = screenY * this.cellH - cameraOffsetY;
+        this.#drawGlyphToLayerPx(ctx, tile.char, tile.fg, tile.bg, pixelX, pixelY);
       }
     }
   }
@@ -108,7 +114,7 @@ export class Renderer {
   }
 
   drawEntityGlyph(char, fg, bg, x, y) {
-    this.#drawGlyphToLayer(this.entities.ctx, char, fg, bg, x | 0, y | 0);
+    this.#drawGlyphToLayerPx(this.entities.ctx, char, fg, bg, x * this.cellW, y * this.cellH);
   }
 
   drawUiGlyph(char, fg, bg, x, y) {

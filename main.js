@@ -57,6 +57,7 @@ if (activeRoom.entrances['initial-spawn']) {
   player.x = startEntrance.x;
   player.y = startEntrance.y;
 }
+camera.follow(player);
 let projectiles = [];
 let goldPiles = [];
 const combatTextSystem = new CombatTextSystem();
@@ -345,6 +346,9 @@ if (diagMinimalMode) {
   player.y = Math.floor(ROOM_H / 2);
   camera.x = Math.floor(player.x - VIEW_W / 2);
   camera.y = Math.floor(player.y - VIEW_H / 2);
+  camera.baseX = camera.x;
+  camera.baseY = camera.y;
+  camera.hasFollowTarget = true;
   logDiag('minimal startup mode enabled: generation, spawns, and camera follow disabled');
 }
 
@@ -425,6 +429,7 @@ function tick(now) {
     abilitySystem.map = map;
     camera.worldW = map[0]?.length ?? ROOM_W;
     camera.worldH = map.length ?? ROOM_H;
+    camera.hasFollowTarget = false;
     renderer.lastCameraX = Number.NaN;
     renderer.lastCameraY = Number.NaN;
   }
