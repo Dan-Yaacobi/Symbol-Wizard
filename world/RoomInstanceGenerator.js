@@ -101,33 +101,62 @@ function carveFloor(tileMap, x, y) {
   return true;
 }
 
-function carveFloorBrush(tileMap, x, y, radius = 2) {
+function carveFloorCircle(tileMap, x, y, radius = 2) {
   for (let oy = -radius; oy <= radius; oy += 1) {
     for (let ox = -radius; ox <= radius; ox += 1) {
+      if (ox * ox + oy * oy > radius * radius) continue;
       carveFloor(tileMap, x + ox, y + oy);
     }
   }
 }
 
-function carvePathToAnchor(tileMap, start, anchor, halfWidth = 2) {
-  let x = start.x;
-  let y = start.y;
+function carveRoadToAnchor(tileMap, start, anchor, rng, {
+  minRadius = 2,
+  maxRadius = 3,
+  exitRadius = 4,
+} = {}) {
+  const position = { x: start.x, y: start.y };
+  const totalDistance = Math.max(1, Math.hypot(anchor.x - start.x, anchor.y - start.y));
+  const maxSteps = Math.ceil(totalDistance * 1.75);
+  const initialRadius = randomInt(rng, minRadius, maxRadius);
 
-  carveFloorBrush(tileMap, x, y, halfWidth);
+  carveFloorCircle(tileMap, Math.round(position.x), Math.round(position.y), initialRadius);
 
-  while (x !== anchor.x) {
-    x += x < anchor.x ? 1 : -1;
-    carveFloorBrush(tileMap, x, y, halfWidth);
+  for (let step = 0; step < maxSteps; step += 1) {
+    const dx = anchor.x - position.x;
+    const dy = anchor.y - position.y;
+    const distance = Math.hypot(dx, dy);
+    if (distance < 1.2) break;
+
+    const towardX = dx / distance;
+    const towardY = dy / distance;
+    const lateralScale = Math.min(0.35, distance / 60);
+    const lateralJitter = (rng() - 0.5) * lateralScale;
+
+    let stepX = towardX - towardY * lateralJitter;
+    let stepY = towardY + towardX * lateralJitter;
+    const stepMagnitude = Math.hypot(stepX, stepY) || 1;
+    const stepLength = 0.9 + rng() * 0.7;
+
+    stepX = (stepX / stepMagnitude) * stepLength;
+    stepY = (stepY / stepMagnitude) * stepLength;
+
+    position.x += stepX;
+    position.y += stepY;
+
+    const progress = 1 - Math.min(1, distance / totalDistance);
+    const widening = progress > 0.78 ? 1 : 0;
+    const radius = Math.min(exitRadius, randomInt(rng, minRadius, maxRadius) + widening);
+    carveFloorCircle(tileMap, Math.round(position.x), Math.round(position.y), radius);
   }
 
-  while (y !== anchor.y) {
-    y += y < anchor.y ? 1 : -1;
-    carveFloorBrush(tileMap, x, y, halfWidth);
-  }
+  carveFloorCircle(tileMap, anchor.x, anchor.y, exitRadius);
 }
 
 function carveExitOpening(tileMap, anchor) {
   const horizontalOpening = anchor.direction === 'north' || anchor.direction === 'south';
+
+  carveFloorCircle(tileMap, anchor.x, anchor.y, 3);
 
   for (let offset = -1; offset <= 1; offset += 1) {
     const x = horizontalOpening ? anchor.x + offset : anchor.x;
@@ -197,12 +226,12 @@ export function generateRoomInstance({
   const exitZones = [];
 
   for (const exit of Object.values(roomNode.exits)) {
-    carvePathToAnchor(tilesGrid, center, exit, 2);
+    carveRoadToAnchor(tilesGrid, center, exit, rng);
     carveExitOpening(tilesGrid, exit);
   }
 
   for (const entrance of Object.values(roomNode.entrances)) {
-    carvePathToAnchor(tilesGrid, center, entrance, 2);
+    carveRoadToAnchor(tilesGrid, center, entrance, rng);
     carveExitOpening(tilesGrid, entrance);
   }
 
