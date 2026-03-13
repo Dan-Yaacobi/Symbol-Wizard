@@ -11,6 +11,7 @@ import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/Comb
 import * as LootSystem from './systems/LootSystem.js';
 import { CombatTextSystem } from './systems/CombatTextSystem.js';
 import { renderWorld } from './systems/RenderSystem.js';
+import { getSpriteCollisionOffsets, getSpriteFrame } from './entities/SpriteLibrary.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
 import { ChatBox } from './ui/ChatBox.js';
 import { drawHUD } from './ui/HUD.js';
@@ -226,15 +227,6 @@ const dialogueManager = new DialogueManager({
 });
 let slotPressLatch = [false, false, false, false];
 
-
-const playerCollisionMask = [
-  { x: 0, y: 0 },
-  { x: 1, y: 0 },
-  { x: -1, y: 0 },
-  { x: 0, y: 1 },
-  { x: 0, y: -1 },
-];
-
 const forcedBlockingTiles = new Set(['denseTree', 'rockCliff', 'deepWater', 'stoneWall', '♣', '▲', '≈', '▓']);
 
 
@@ -269,11 +261,22 @@ function spawnDestructionEffects(object) {
   });
 }
 
+function getPlayerCollisionMask() {
+  const sprite = getSpriteFrame(
+    player.spriteKey,
+    player.animationState ?? 'idle',
+    player.currentFrame ?? player.frameIndex ?? 0,
+  );
+
+  const offsets = getSpriteCollisionOffsets(sprite);
+  return offsets.length > 0 ? offsets : [{ x: 0, y: 0 }];
+}
+
 function isWalkable(x, y) {
   const originX = Math.round(x);
   const originY = Math.round(y);
 
-  for (const offset of playerCollisionMask) {
+  for (const offset of getPlayerCollisionMask()) {
     const tx = originX + offset.x;
     const ty = originY + offset.y;
     const tile = map[ty]?.[tx];

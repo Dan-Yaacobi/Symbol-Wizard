@@ -1,17 +1,7 @@
-import { palette, sprites } from '../entities/SpriteLibrary.js';
+import { getSpriteFrame, palette } from '../entities/SpriteLibrary.js';
 
 function getEntitySprite(entity) {
-  const spriteEntry = sprites[entity.spriteKey];
-  if (Array.isArray(spriteEntry)) return { art: spriteEntry, offsetY: 0 };
-
-  const state = entity.animationState ?? 'idle';
-  const stateFrames = spriteEntry?.[state] ?? spriteEntry?.idle;
-  if (!stateFrames) return null;
-  const frameIndex = (entity.currentFrame ?? entity.frameIndex ?? 0) % stateFrames.length;
-
-  const frame = stateFrames[frameIndex];
-  if (Array.isArray(frame)) return { art: frame, offsetY: 0 };
-  return frame;
+  return getSpriteFrame(entity.spriteKey, entity.animationState ?? 'idle', entity.currentFrame ?? entity.frameIndex ?? 0);
 }
 
 function colorForEntity(entity) {

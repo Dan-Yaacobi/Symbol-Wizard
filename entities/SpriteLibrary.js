@@ -444,3 +444,39 @@ export const sprites = {
   'flower-blue': ['       ', '   o   ', '   |   ', '       ', '       ', '       ', '       '],
   'grass-patch': ['       ', '       ', '  """  ', '  """  ', '       ', '       ', '       '],
 };
+
+export function getSpriteFrame(spriteKey, animationState = 'idle', frameIndex = 0) {
+  const spriteEntry = sprites[spriteKey];
+  if (!spriteEntry) return null;
+  if (Array.isArray(spriteEntry)) return { art: spriteEntry, offsetY: 0 };
+
+  const stateFrames = spriteEntry[animationState] ?? spriteEntry.idle;
+  if (!stateFrames || stateFrames.length === 0) return null;
+
+  const safeFrameIndex = Math.abs(Math.floor(frameIndex)) % stateFrames.length;
+  const frame = stateFrames[safeFrameIndex];
+  if (Array.isArray(frame)) return { art: frame, offsetY: 0 };
+  return frame;
+}
+
+export function getSpriteCollisionOffsets(sprite) {
+  if (!sprite?.art?.length) return [];
+
+  const width = sprite.art[0]?.length ?? 0;
+  const halfWidth = Math.floor(width / 2);
+  const anchorY = -3 + (sprite.offsetY ?? 0);
+  const offsets = [];
+
+  for (let sy = 0; sy < sprite.art.length; sy += 1) {
+    const row = sprite.art[sy] ?? '';
+    for (let sx = 0; sx < row.length; sx += 1) {
+      if (row[sx] === ' ') continue;
+      offsets.push({
+        x: sx - halfWidth,
+        y: sy + anchorY,
+      });
+    }
+  }
+
+  return offsets;
+}
