@@ -12,7 +12,7 @@ export class Player extends Entity {
       mana: 40,
       maxMana: 40,
       manaRegen: 8,
-      speed: 12,
+      speed: 18,
       spriteKey: 'player',
       gold: 0,
       castCooldown: 0,
