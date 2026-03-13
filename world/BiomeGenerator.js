@@ -33,6 +33,7 @@ export class BiomeGenerator {
     }
 
     this.currentBiome = this.biomes.get(biomeId);
+    this.logStartRoomDebug(this.currentBiome);
     this.roomCache.clear();
 
     const startRoom = this.loadRoom(this.currentBiome.startRoomId);
@@ -40,6 +41,21 @@ export class BiomeGenerator {
       biome: this.currentBiome,
       startRoom,
     };
+  }
+
+
+  logStartRoomDebug(biome) {
+    const startRoomNode = biome?.rooms?.get(biome.startRoomId);
+    if (!startRoomNode) {
+      console.debug('[BiomeGenerator] start room missing', { startRoomId: biome?.startRoomId ?? null });
+      return;
+    }
+
+    console.debug('[BiomeGenerator] start room debug', {
+      startRoomId: biome.startRoomId,
+      startRoomExits: Object.entries(startRoomNode.exits).map(([exitId, anchor]) => ({ exitId, ...anchor })),
+      startRoomConnections: startRoomNode.connections.map((connection) => ({ ...connection })),
+    });
   }
 
   getRoomNode(roomId) {
