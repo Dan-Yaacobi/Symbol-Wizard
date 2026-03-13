@@ -75,22 +75,28 @@ export class Renderer {
   }
 
   renderBackground(map, camera) {
-    if (camera.x === this.lastCameraX && camera.y === this.lastCameraY) return;
+    const cameraTileX = Math.floor(camera.x);
+    const cameraTileY = Math.floor(camera.y);
 
-    this.lastCameraX = camera.x;
-    this.lastCameraY = camera.y;
+    if (cameraTileX === this.lastCameraX && cameraTileY === this.lastCameraY) return;
+
+    this.lastCameraX = cameraTileX;
+    this.lastCameraY = cameraTileY;
 
     const ctx = this.background.ctx;
     ctx.clearRect(0, 0, this.background.canvas.width, this.background.canvas.height);
 
-    for (let y = 0; y < this.rows; y += 1) {
-      const wy = y + camera.y;
-      const row = map[wy];
-      if (!row) continue;
-      for (let x = 0; x < this.cols; x += 1) {
-        const tile = row[x + camera.x];
-        if (!tile) continue;
-        this.#drawGlyphToLayer(ctx, tile.char, tile.fg, tile.bg, x, y);
+    const fallbackTile = { char: ' ', fg: '#243341', bg: '#0b1016' };
+    const mapHeight = map?.length ?? 0;
+
+    for (let screenY = 0; screenY < this.rows; screenY += 1) {
+      const worldY = cameraTileY + screenY;
+      const row = worldY >= 0 && worldY < mapHeight ? map[worldY] : null;
+
+      for (let screenX = 0; screenX < this.cols; screenX += 1) {
+        const worldX = cameraTileX + screenX;
+        const tile = row?.[worldX] ?? fallbackTile;
+        this.#drawGlyphToLayer(ctx, tile.char, tile.fg, tile.bg, screenX, screenY);
       }
     }
   }
