@@ -11,17 +11,42 @@ export class Camera {
     this.shakeIntensity = 0;
     this.shakeX = 0;
     this.shakeY = 0;
+    this.smoothingFactor = 0.14;
+    this.baseX = 0;
+    this.baseY = 0;
+    this.hasFollowTarget = false;
+  }
+
+  #clampToWorld(x, y) {
+    const maxX = Math.max(0, this.worldW - this.viewW);
+    const maxY = Math.max(0, this.worldH - this.viewH);
+    return {
+      x: Math.max(0, Math.min(x, maxX)),
+      y: Math.max(0, Math.min(y, maxY)),
+    };
   }
 
   follow(target) {
-    const snappedTargetX = Math.round(target.x);
-    const snappedTargetY = Math.round(target.y);
+    const targetX = target.x - this.viewW / 2;
+    const targetY = target.y - this.viewH / 2;
+    const clampedTarget = this.#clampToWorld(targetX, targetY);
 
-    const baseX = snappedTargetX - Math.floor(this.viewW / 2);
-    const baseY = snappedTargetY - Math.floor(this.viewH / 2);
+    if (!this.hasFollowTarget) {
+      this.baseX = clampedTarget.x;
+      this.baseY = clampedTarget.y;
+      this.hasFollowTarget = true;
+    } else {
+      this.baseX += (clampedTarget.x - this.baseX) * this.smoothingFactor;
+      this.baseY += (clampedTarget.y - this.baseY) * this.smoothingFactor;
+    }
 
-    this.x = Math.max(0, Math.min(baseX + this.shakeX, this.worldW - this.viewW));
-    this.y = Math.max(0, Math.min(baseY + this.shakeY, this.worldH - this.viewH));
+    const clampedBase = this.#clampToWorld(this.baseX, this.baseY);
+    this.baseX = clampedBase.x;
+    this.baseY = clampedBase.y;
+
+    const shaken = this.#clampToWorld(this.baseX + this.shakeX, this.baseY + this.shakeY);
+    this.x = shaken.x;
+    this.y = shaken.y;
   }
 
   startShake(duration = 0.1, intensity = 0.4) {
