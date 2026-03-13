@@ -21,6 +21,13 @@ function cloneTile(tile) {
   return { ...tile };
 }
 
+function tileFrom(baseTile, overrides = {}) {
+  return {
+    ...baseTile,
+    ...overrides,
+  };
+}
+
 function randomInt(rng, min, max) {
   return Math.floor(rng() * (max - min + 1)) + min;
 }
@@ -88,24 +95,28 @@ function paintPolygonFloor(tileMap, polygon, rng) {
   for (let y = 0; y < tileMap.length; y += 1) {
     for (let x = 0; x < tileMap[0].length; x += 1) {
       if (!pointInPolygon(x + 0.5, y + 0.5, polygon)) continue;
-      tileMap[y][x] = cloneTile(tiles.floor);
+      tileMap[y][x] = tileFrom(tiles.grass, { type: 'clearing' });
       if (rng() < 0.07) tileMap[y][x].char = ',';
     }
   }
 }
 
-function carveFloor(tileMap, x, y) {
+function carveFloor(tileMap, x, y, tile = tiles.floor, metadata = null) {
   const row = tileMap[y];
   if (!row || !row[x]) return false;
-  row[x] = cloneTile(tiles.floor);
+  row[x] = tileFrom(tile, metadata ?? {});
   return true;
 }
 
-function carveFloorCircle(tileMap, x, y, radius = 2) {
+function carveFloorCircle(tileMap, x, y, radius = 2, tile = tiles.floor, metadata = null, marker = null) {
   for (let oy = -radius; oy <= radius; oy += 1) {
     for (let ox = -radius; ox <= radius; ox += 1) {
       if (ox * ox + oy * oy > radius * radius) continue;
-      carveFloor(tileMap, x + ox, y + oy);
+      const targetX = x + ox;
+      const targetY = y + oy;
+      if (carveFloor(tileMap, targetX, targetY, tile, metadata) && marker) {
+        marker.add(`${targetX},${targetY}`);
+      }
     }
   }
 }
@@ -114,13 +125,14 @@ function carveRoadToAnchor(tileMap, start, anchor, rng, {
   minRadius = 2,
   maxRadius = 3,
   exitRadius = 4,
+  roadMask = null,
 } = {}) {
   const position = { x: start.x, y: start.y };
   const totalDistance = Math.max(1, Math.hypot(anchor.x - start.x, anchor.y - start.y));
   const maxSteps = Math.ceil(totalDistance * 1.75);
   const initialRadius = randomInt(rng, minRadius, maxRadius);
 
-  carveFloorCircle(tileMap, Math.round(position.x), Math.round(position.y), initialRadius);
+  carveFloorCircle(tileMap, Math.round(position.x), Math.round(position.y), initialRadius, tiles.pathPebble, { type: 'road' }, roadMask);
 
   for (let step = 0; step < maxSteps; step += 1) {
     const dx = anchor.x - position.x;
@@ -147,30 +159,123 @@ function carveRoadToAnchor(tileMap, start, anchor, rng, {
     const progress = 1 - Math.min(1, distance / totalDistance);
     const widening = progress > 0.78 ? 1 : 0;
     const radius = Math.min(exitRadius, randomInt(rng, minRadius, maxRadius) + widening);
-    carveFloorCircle(tileMap, Math.round(position.x), Math.round(position.y), radius);
+    carveFloorCircle(tileMap, Math.round(position.x), Math.round(position.y), radius, tiles.pathPebble, { type: 'road' }, roadMask);
   }
 
-  carveFloorCircle(tileMap, anchor.x, anchor.y, exitRadius);
+  carveFloorCircle(tileMap, anchor.x, anchor.y, exitRadius, tiles.pathPebble, { type: 'road' }, roadMask);
 }
 
 function carveExitOpening(tileMap, anchor) {
   const horizontalOpening = anchor.direction === 'north' || anchor.direction === 'south';
 
-  carveFloorCircle(tileMap, anchor.x, anchor.y, 3);
+  carveFloorCircle(tileMap, anchor.x, anchor.y, 3, tiles.pathPebble, { type: 'road' });
 
   for (let offset = -1; offset <= 1; offset += 1) {
     const x = horizontalOpening ? anchor.x + offset : anchor.x;
     const y = horizontalOpening ? anchor.y : anchor.y + offset;
-    carveFloor(tileMap, x, y);
+    carveFloor(tileMap, x, y, tiles.pathPebble, { type: 'road' });
 
     if (horizontalOpening) {
-      carveFloor(tileMap, x, anchor.y - 1);
-      carveFloor(tileMap, x, anchor.y + 1);
+      carveFloor(tileMap, x, anchor.y - 1, tiles.pathPebble, { type: 'road' });
+      carveFloor(tileMap, x, anchor.y + 1, tiles.pathPebble, { type: 'road' });
     } else {
-      carveFloor(tileMap, anchor.x - 1, y);
-      carveFloor(tileMap, anchor.x + 1, y);
+      carveFloor(tileMap, anchor.x - 1, y, tiles.pathPebble, { type: 'road' });
+      carveFloor(tileMap, anchor.x + 1, y, tiles.pathPebble, { type: 'road' });
     }
   }
+}
+
+function isInsidePolygon(x, y, polygon) {
+  return pointInPolygon(x + 0.5, y + 0.5, polygon);
+}
+
+function paintTerrainRegion(tileMap, polygon, rng, {
+  regionCount,
+  radiusMin,
+  radiusMax,
+  tile,
+  avoidMask,
+  noiseThreshold,
+  metadata,
+}) {
+  const width = tileMap[0].length;
+  const height = tileMap.length;
+
+  for (let i = 0; i < regionCount; i += 1) {
+    const cx = randomInt(rng, 3, width - 4);
+    const cy = randomInt(rng, 3, height - 4);
+    if (!isInsidePolygon(cx, cy, polygon)) continue;
+
+    const radiusX = randomInt(rng, radiusMin, radiusMax);
+    const radiusY = randomInt(rng, radiusMin, radiusMax);
+
+    for (let y = cy - radiusY; y <= cy + radiusY; y += 1) {
+      if (y < 1 || y >= height - 1) continue;
+      for (let x = cx - radiusX; x <= cx + radiusX; x += 1) {
+        if (x < 1 || x >= width - 1) continue;
+        if (!isInsidePolygon(x, y, polygon)) continue;
+        if (avoidMask.has(`${x},${y}`)) continue;
+
+        const nx = (x - cx) / Math.max(1, radiusX);
+        const ny = (y - cy) / Math.max(1, radiusY);
+        const ellipse = nx * nx + ny * ny;
+        const jitter = (rng() - 0.5) * 0.4;
+        if (ellipse + jitter > noiseThreshold) continue;
+
+        tileMap[y][x] = tileFrom(tile, metadata);
+      }
+    }
+  }
+}
+
+function scatterTerrainObstacles(tileMap, polygon, rng, {
+  attempts,
+  avoidMask,
+}) {
+  const width = tileMap[0].length;
+  const height = tileMap.length;
+
+  for (let i = 0; i < attempts; i += 1) {
+    const x = randomInt(rng, 2, width - 3);
+    const y = randomInt(rng, 2, height - 3);
+    if (!isInsidePolygon(x, y, polygon)) continue;
+    if (avoidMask.has(`${x},${y}`)) continue;
+
+    const roll = rng();
+    if (roll < 0.45) {
+      tileMap[y][x] = tileFrom(tiles.wood, { type: 'obstacle' });
+    } else if (roll < 0.8) {
+      tileMap[y][x] = tileFrom(tiles.fence, { type: 'obstacle' });
+    } else {
+      tileMap[y][x] = tileFrom(tiles.rockCliff, {
+        char: '^',
+        fg: '#8f8f8f',
+        bg: '#2d3139',
+        type: 'obstacle',
+      });
+    }
+  }
+}
+
+function createRoadClearanceMask(roadMask, width, height, bufferRadius = 3) {
+  const protectedMask = new Set(roadMask);
+  for (const key of roadMask) {
+    const [xString, yString] = key.split(',');
+    const cx = Number(xString);
+    const cy = Number(yString);
+
+    for (let oy = -bufferRadius; oy <= bufferRadius; oy += 1) {
+      for (let ox = -bufferRadius; ox <= bufferRadius; ox += 1) {
+        const x = cx + ox;
+        const y = cy + oy;
+        if (x < 0 || y < 0 || x >= width || y >= height) continue;
+        if (ox * ox + oy * oy > bufferRadius * bufferRadius) continue;
+        protectedMask.add(`${x},${y}`);
+      }
+    }
+  }
+
+  return protectedMask;
 }
 
 function carveAnchorTile(tileMap, anchor) {
@@ -221,19 +326,68 @@ export function generateRoomInstance({
 
   const polygon = generatePolygonVertices(roomWidth, roomHeight, rng);
   paintPolygonFloor(tilesGrid, polygon, rng);
+  const roadMask = new Set();
 
-  carveFloor(tilesGrid, center.x, center.y);
+  carveFloor(tilesGrid, center.x, center.y, tiles.pathPebble, { type: 'road' });
+  roadMask.add(`${center.x},${center.y}`);
   const exitZones = [];
 
   for (const exit of Object.values(roomNode.exits)) {
-    carveRoadToAnchor(tilesGrid, center, exit, rng);
+    carveRoadToAnchor(tilesGrid, center, exit, rng, { roadMask });
     carveExitOpening(tilesGrid, exit);
   }
 
   for (const entrance of Object.values(roomNode.entrances)) {
-    carveRoadToAnchor(tilesGrid, center, entrance, rng);
+    carveRoadToAnchor(tilesGrid, center, entrance, rng, { roadMask });
     carveExitOpening(tilesGrid, entrance);
   }
+
+  const roadClearanceMask = createRoadClearanceMask(roadMask, roomWidth, roomHeight, 4);
+
+  paintTerrainRegion(tilesGrid, polygon, rng, {
+    regionCount: randomInt(rng, 5, 8),
+    radiusMin: 5,
+    radiusMax: 13,
+    tile: tiles.grass,
+    avoidMask: roadMask,
+    noiseThreshold: 1.1,
+    metadata: { type: 'clearing' },
+  });
+
+  paintTerrainRegion(tilesGrid, polygon, rng, {
+    regionCount: randomInt(rng, 7, 12),
+    radiusMin: 4,
+    radiusMax: 10,
+    tile: tiles.denseTree,
+    avoidMask: roadClearanceMask,
+    noiseThreshold: 1.0,
+    metadata: { type: 'forest' },
+  });
+
+  paintTerrainRegion(tilesGrid, polygon, rng, {
+    regionCount: randomInt(rng, 4, 7),
+    radiusMin: 3,
+    radiusMax: 8,
+    tile: tileFrom(tiles.rockCliff, { char: '∎', fg: '#8c8f96', bg: '#2a2e35' }),
+    avoidMask: roadClearanceMask,
+    noiseThreshold: 0.95,
+    metadata: { type: 'rock-field' },
+  });
+
+  paintTerrainRegion(tilesGrid, polygon, rng, {
+    regionCount: randomInt(rng, 2, 4),
+    radiusMin: 4,
+    radiusMax: 9,
+    tile: tiles.water,
+    avoidMask: roadClearanceMask,
+    noiseThreshold: 1.0,
+    metadata: { type: 'water' },
+  });
+
+  scatterTerrainObstacles(tilesGrid, polygon, rng, {
+    attempts: randomInt(rng, 50, 90),
+    avoidMask: roadClearanceMask,
+  });
 
   for (const [entranceId, entrance] of Object.entries(roomNode.entrances)) {
     markAnchorTile(tilesGrid, entrance, 'entrance', entranceId);
