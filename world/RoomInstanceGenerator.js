@@ -1,5 +1,12 @@
 import { tiles } from './TilePalette.js';
 
+const biomeWallTypes = {
+  forest: 'denseTree',
+  mountain: 'rockCliff',
+  river: 'deepWater',
+  cave: 'stoneWall',
+};
+
 function createRng(seed) {
   let state = seed >>> 0;
   return () => {
@@ -14,16 +21,77 @@ function cloneTile(tile) {
   return { ...tile };
 }
 
-function baseRoomTiles(width, height, rng) {
-  const grid = Array.from({ length: height }, () => Array.from({ length: width }, () => cloneTile(tiles.floor)));
+function randomInt(rng, min, max) {
+  return Math.floor(rng() * (max - min + 1)) + min;
+}
 
-  for (let y = 0; y < height; y += 1) {
-    for (let x = 0; x < width; x += 1) {
-      if (rng() < 0.07) grid[y][x].char = ',';
-    }
+function chooseBiomeWallTile(roomNode) {
+  const biomeType = roomNode.biomeType ?? 'forest';
+  const tileKey = biomeWallTypes[biomeType] ?? biomeWallTypes.forest;
+  return tiles[tileKey] ?? tiles.wall;
+}
+
+function tileMapWithBiomeBoundary(width, height, wallTile) {
+  return Array.from({ length: height }, () => Array.from({ length: width }, () => cloneTile(wallTile)));
+}
+
+function generatePolygonVertices(width, height, rng) {
+  const center = {
+    x: Math.floor(width / 2),
+    y: Math.floor(height / 2),
+  };
+
+  const vertexCount = randomInt(rng, 10, 16);
+  const minRadiusX = width * 0.28;
+  const maxRadiusX = width * 0.44;
+  const minRadiusY = height * 0.28;
+  const maxRadiusY = height * 0.44;
+  const baseAngle = rng() * Math.PI * 2;
+
+  const vertices = [];
+  for (let i = 0; i < vertexCount; i += 1) {
+    const t = i / vertexCount;
+    const angleJitter = (rng() - 0.5) * (Math.PI / vertexCount);
+    const angle = baseAngle + t * Math.PI * 2 + angleJitter;
+
+    const radiusX = minRadiusX + (maxRadiusX - minRadiusX) * (0.2 + rng() * 0.8);
+    const radiusY = minRadiusY + (maxRadiusY - minRadiusY) * (0.2 + rng() * 0.8);
+
+    const x = Math.round(center.x + Math.cos(angle) * radiusX);
+    const y = Math.round(center.y + Math.sin(angle) * radiusY);
+
+    vertices.push({
+      x: Math.max(2, Math.min(width - 3, x)),
+      y: Math.max(2, Math.min(height - 3, y)),
+    });
   }
 
-  return grid;
+  return vertices;
+}
+
+function pointInPolygon(x, y, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+
+    const intersects = ((yi > y) !== (yj > y))
+      && (x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function paintPolygonFloor(tileMap, polygon, rng) {
+  for (let y = 0; y < tileMap.length; y += 1) {
+    for (let x = 0; x < tileMap[0].length; x += 1) {
+      if (!pointInPolygon(x + 0.5, y + 0.5, polygon)) continue;
+      tileMap[y][x] = cloneTile(tiles.floor);
+      if (rng() < 0.07) tileMap[y][x].char = ',';
+    }
+  }
 }
 
 function carveFloor(tileMap, x, y) {
@@ -92,15 +160,26 @@ export function generateRoomInstance({
   roomHeight = 80,
 } = {}) {
   const rng = createRng(roomNode.seed >>> 0);
-  const tilesGrid = baseRoomTiles(roomWidth, roomHeight, rng);
+  const boundaryTile = chooseBiomeWallTile(roomNode);
+  const tilesGrid = tileMapWithBiomeBoundary(roomWidth, roomHeight, boundaryTile);
   const center = {
     x: Math.floor(roomWidth / 2),
     y: Math.floor(roomHeight / 2),
   };
 
+  const polygon = generatePolygonVertices(roomWidth, roomHeight, rng);
+  paintPolygonFloor(tilesGrid, polygon, rng);
+
+  carveFloor(tilesGrid, center.x, center.y);
+
   for (const exit of Object.values(roomNode.exits)) {
     carvePathToAnchor(tilesGrid, center, exit);
     carveExitOpening(tilesGrid, exit);
+  }
+
+  for (const entrance of Object.values(roomNode.entrances)) {
+    carvePathToAnchor(tilesGrid, center, entrance);
+    carveExitOpening(tilesGrid, entrance);
   }
 
   for (const [entranceId, entrance] of Object.entries(roomNode.entrances)) {

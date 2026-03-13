@@ -5,6 +5,14 @@ function randomSeed() {
   return Math.floor(Math.random() * 0x7fffffff);
 }
 
+function resolveBiomeType(biomeId) {
+  const id = `${biomeId ?? ''}`.toLowerCase();
+  if (id.includes('mountain')) return 'mountain';
+  if (id.includes('river') || id.includes('water')) return 'river';
+  if (id.includes('cave') || id.includes('dungeon')) return 'cave';
+  return 'forest';
+}
+
 export class BiomeGenerator {
   constructor({ roomWidth = 120, roomHeight = 80 } = {}) {
     this.roomWidth = roomWidth;
@@ -24,10 +32,15 @@ export class BiomeGenerator {
 
       const biome = {
         biomeId,
+        biomeType: resolveBiomeType(biomeId),
         seed,
         rooms: graph.rooms,
         startRoomId: graph.startRoomId,
       };
+
+      for (const roomNode of biome.rooms.values()) {
+        roomNode.biomeType = biome.biomeType;
+      }
 
       this.biomes.set(biomeId, biome);
     }

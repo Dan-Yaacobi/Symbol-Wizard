@@ -9,6 +9,10 @@ export const tiles = {
   water: { char: '~', fg: '#65b8ff', bg: '#17304f', walkable: false },
   fence: { char: '|', fg: '#cfa77a', bg: '#173823', walkable: false },
   wall: { char: '#', fg: palette.wallFg, bg: palette.wallBg, walkable: false },
+  denseTree: { char: '♣', fg: '#2f6a39', bg: '#112817', walkable: false },
+  rockCliff: { char: '▲', fg: '#8b8f96', bg: '#2a2f37', walkable: false },
+  deepWater: { char: '≈', fg: '#4ea4ff', bg: '#0e2741', walkable: false },
+  stoneWall: { char: '▓', fg: '#969696', bg: '#2f2f2f', walkable: false },
   floor: { char: '.', fg: palette.floorFg, bg: palette.floorBg, walkable: true },
   wood: { char: '+', fg: '#9d7444', bg: palette.floorBg, walkable: false },
 };
