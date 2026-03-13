@@ -1,7 +1,11 @@
-export function resolveMapCollision(entity, map) {
+export function resolveMapCollision(entity, map, isWalkableAt = null) {
   const x = Math.round(entity.x);
   const y = Math.round(entity.y);
-  if (!map[y] || !map[y][x] || !map[y][x].walkable) {
+  const blocked = typeof isWalkableAt === 'function'
+    ? !isWalkableAt(entity.x, entity.y)
+    : !map[y] || !map[y][x] || !map[y][x].walkable;
+
+  if (blocked) {
     entity.x -= entity.vx * 0.016;
     entity.y -= entity.vy * 0.016;
     entity.vx *= 0.2;

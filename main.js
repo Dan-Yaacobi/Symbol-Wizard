@@ -226,6 +226,18 @@ const dialogueManager = new DialogueManager({
 });
 let slotPressLatch = [false, false, false, false];
 
+
+const playerCollisionMask = [
+  { x: 0, y: 0 },
+  { x: 1, y: 0 },
+  { x: -1, y: 0 },
+  { x: 0, y: 1 },
+  { x: 0, y: -1 },
+];
+
+const forcedBlockingTiles = new Set(['denseTree', 'rockCliff', 'deepWater', 'stoneWall', '♣', '▲', '≈', '▓']);
+
+
 function triggerDestructionSound(kind) {
   const soundSystem = globalThis?.soundSystem;
   if (!soundSystem || typeof soundSystem.play !== 'function') return;
@@ -258,9 +270,19 @@ function spawnDestructionEffects(object) {
 }
 
 function isWalkable(x, y) {
-  const tx = Math.round(x);
-  const ty = Math.round(y);
-  return map[ty]?.[tx]?.walkable;
+  const originX = Math.round(x);
+  const originY = Math.round(y);
+
+  for (const offset of playerCollisionMask) {
+    const tx = originX + offset.x;
+    const ty = originY + offset.y;
+    const tile = map[ty]?.[tx];
+    if (!tile) return false;
+    if (!tile.walkable) return false;
+    if (forcedBlockingTiles.has(tile.type) || forcedBlockingTiles.has(tile.char)) return false;
+  }
+
+  return true;
 }
 
 function handlePlayer(dt) {
@@ -280,11 +302,11 @@ function handlePlayer(dt) {
   player.vy = moveY * player.speed;
 
   player.x += player.vx * dt;
-  if (!isWalkable(player.x, player.y)) resolveMapCollision(player, map);
+  if (!isWalkable(player.x, player.y)) resolveMapCollision(player, map, isWalkable);
   resolveObjectCollision(player, worldObjects);
 
   player.y += player.vy * dt;
-  if (!isWalkable(player.x, player.y)) resolveMapCollision(player, map);
+  if (!isWalkable(player.x, player.y)) resolveMapCollision(player, map, isWalkable);
   resolveObjectCollision(player, worldObjects);
 
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
