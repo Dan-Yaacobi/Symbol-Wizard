@@ -77,7 +77,7 @@ export class RoomTransitionSystem {
     context.activeRoom.state.visited = true;
     targetRoom.state.visited = true;
 
-    const offset = inwardOffset(targetEntrance.direction, 1);
+    const offset = inwardOffset(targetEntrance.direction, 2);
     context.player.x = targetEntrance.x + offset.x;
     context.player.y = targetEntrance.y + offset.y;
 

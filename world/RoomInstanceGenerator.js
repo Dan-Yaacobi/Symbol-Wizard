@@ -19,12 +19,6 @@ function baseRoomTiles(width, height, rng) {
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const edge = x === 0 || y === 0 || x === width - 1 || y === height - 1;
-      if (edge) {
-        grid[y][x] = cloneTile(tiles.wall);
-        continue;
-      }
-
       if (rng() < 0.07) grid[y][x].char = ',';
     }
   }
@@ -32,11 +26,48 @@ function baseRoomTiles(width, height, rng) {
   return grid;
 }
 
-function carveAnchorTile(tileMap, anchor) {
-  const row = tileMap[anchor.y];
-  if (!row || !row[anchor.x]) return false;
-  row[anchor.x] = cloneTile(tiles.floor);
+function carveFloor(tileMap, x, y) {
+  const row = tileMap[y];
+  if (!row || !row[x]) return false;
+  row[x] = cloneTile(tiles.floor);
   return true;
+}
+
+function carvePathToAnchor(tileMap, start, anchor) {
+  let x = start.x;
+  let y = start.y;
+
+  while (x !== anchor.x) {
+    x += x < anchor.x ? 1 : -1;
+    carveFloor(tileMap, x, y);
+  }
+
+  while (y !== anchor.y) {
+    y += y < anchor.y ? 1 : -1;
+    carveFloor(tileMap, x, y);
+  }
+}
+
+function carveExitOpening(tileMap, anchor) {
+  const horizontalOpening = anchor.direction === 'north' || anchor.direction === 'south';
+
+  for (let offset = -1; offset <= 1; offset += 1) {
+    const x = horizontalOpening ? anchor.x + offset : anchor.x;
+    const y = horizontalOpening ? anchor.y : anchor.y + offset;
+    carveFloor(tileMap, x, y);
+
+    if (horizontalOpening) {
+      carveFloor(tileMap, x, anchor.y - 1);
+      carveFloor(tileMap, x, anchor.y + 1);
+    } else {
+      carveFloor(tileMap, anchor.x - 1, y);
+      carveFloor(tileMap, anchor.x + 1, y);
+    }
+  }
+}
+
+function carveAnchorTile(tileMap, anchor) {
+  return carveFloor(tileMap, anchor.x, anchor.y);
 }
 
 function markAnchorTile(tileMap, anchor, tileType, id) {
@@ -57,11 +88,20 @@ function markAnchorTile(tileMap, anchor, tileType, id) {
 
 export function generateRoomInstance({
   roomNode,
-  roomWidth = 64,
-  roomHeight = 40,
+  roomWidth = 120,
+  roomHeight = 80,
 } = {}) {
   const rng = createRng(roomNode.seed >>> 0);
   const tilesGrid = baseRoomTiles(roomWidth, roomHeight, rng);
+  const center = {
+    x: Math.floor(roomWidth / 2),
+    y: Math.floor(roomHeight / 2),
+  };
+
+  for (const exit of Object.values(roomNode.exits)) {
+    carvePathToAnchor(tilesGrid, center, exit);
+    carveExitOpening(tilesGrid, exit);
+  }
 
   for (const [entranceId, entrance] of Object.entries(roomNode.entrances)) {
     markAnchorTile(tilesGrid, entrance, 'entrance', entranceId);

@@ -6,7 +6,7 @@ function randomSeed() {
 }
 
 export class BiomeGenerator {
-  constructor({ roomWidth = 64, roomHeight = 40 } = {}) {
+  constructor({ roomWidth = 120, roomHeight = 80 } = {}) {
     this.roomWidth = roomWidth;
     this.roomHeight = roomHeight;
     this.biomes = new Map();
@@ -53,7 +53,14 @@ export class BiomeGenerator {
 
     console.debug('[BiomeGenerator] start room debug', {
       startRoomId: biome.startRoomId,
-      startRoomExits: Object.entries(startRoomNode.exits).map(([exitId, anchor]) => ({ exitId, ...anchor })),
+      exits: Object.keys(startRoomNode.exits),
+      entrances: Object.keys(startRoomNode.entrances),
+      exitCoordinates: Object.entries(startRoomNode.exits).map(([exitId, anchor]) => ({
+        exitId,
+        x: anchor.x,
+        y: anchor.y,
+        direction: anchor.direction,
+      })),
       startRoomConnections: startRoomNode.connections.map((connection) => ({ ...connection })),
     });
   }
