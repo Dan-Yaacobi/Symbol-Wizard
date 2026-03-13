@@ -86,6 +86,19 @@ function markAnchorTile(tileMap, anchor, tileType, id) {
   tileMap[anchor.y][anchor.x] = tile;
 }
 
+function buildExitZone(anchor, roomWidth, roomHeight, radius = 2) {
+  const tiles = [];
+
+  for (let y = anchor.y - radius; y <= anchor.y + radius; y += 1) {
+    for (let x = anchor.x - radius; x <= anchor.x + radius; x += 1) {
+      if (x < 0 || y < 0 || x >= roomWidth || y >= roomHeight) continue;
+      tiles.push({ x, y });
+    }
+  }
+
+  return tiles;
+}
+
 export function generateRoomInstance({
   roomNode,
   roomWidth = 120,
@@ -98,6 +111,8 @@ export function generateRoomInstance({
     y: Math.floor(roomHeight / 2),
   };
 
+  const exitZones = [];
+
   for (const exit of Object.values(roomNode.exits)) {
     carvePathToAnchor(tilesGrid, center, exit);
     carveExitOpening(tilesGrid, exit);
@@ -109,6 +124,11 @@ export function generateRoomInstance({
 
   for (const [exitId, exit] of Object.entries(roomNode.exits)) {
     markAnchorTile(tilesGrid, exit, 'exit', exitId);
+    exitZones.push({
+      exitId,
+      direction: exit.direction,
+      tiles: buildExitZone(exit, roomWidth, roomHeight),
+    });
   }
 
   return {
@@ -117,6 +137,7 @@ export function generateRoomInstance({
     entities: [],
     entrances: structuredClone(roomNode.entrances),
     exits: structuredClone(roomNode.exits),
+    exitZones,
     state: {
       visited: roomNode.state?.visited ?? false,
     },
