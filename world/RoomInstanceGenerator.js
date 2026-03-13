@@ -218,6 +218,14 @@ function carveRoadToAnchor(tileMap, start, anchor, rng, {
   carveFloorCircle(tileMap, anchor.x, anchor.y, exitRadius, tiles.pathPebble, { type: 'road' }, roadMask);
 }
 
+function buildExitClearing(tileMap, anchor, rng, protectedMask = null, {
+  minRadius = 3,
+  maxRadius = 4,
+} = {}) {
+  const radius = randomInt(rng, minRadius, maxRadius);
+  carveFloorCircle(tileMap, anchor.x, anchor.y, radius, tiles.pathPebble, { type: 'road' }, protectedMask);
+}
+
 function carveExitOpening(tileMap, anchor) {
   const horizontalOpening = anchor.direction === 'north' || anchor.direction === 'south';
 
@@ -535,13 +543,15 @@ function scatterDecoratives(tileMap, rng, blockedMask) {
   }
 }
 
-function applySoftBoundaries(tileMap, boundaryTiles, rng, center) {
+function applySoftBoundariesWithProtection(tileMap, boundaryTiles, rng, center, protectedMask) {
   const width = tileMap[0].length;
   const height = tileMap.length;
   const maxRadius = Math.hypot(width * 0.5, height * 0.5);
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
+      if (protectedMask.has(`${x},${y}`)) continue;
+
       const edgeDistance = Math.min(x, y, width - 1 - x, height - 1 - y);
       const radialDistance = Math.hypot(x - center.x, y - center.y);
       const radialRatio = radialDistance / maxRadius;
@@ -553,6 +563,49 @@ function applySoftBoundaries(tileMap, boundaryTiles, rng, center) {
       const boundaryTile = pickBoundaryTileVariant(boundaryTiles, x, y, rng);
       tileMap[y][x] = tileFrom(boundaryTile, { type: 'boundary' });
     }
+  }
+}
+
+function hasPathToAnchor(tileMap, start, anchor) {
+  if (!isInside(tileMap, start.x, start.y) || !isInside(tileMap, anchor.x, anchor.y)) return false;
+  if (!isWalkableTile(tileMap, start.x, start.y) || !isWalkableTile(tileMap, anchor.x, anchor.y)) return false;
+
+  const queue = [{ x: start.x, y: start.y }];
+  const visited = new Set([`${start.x},${start.y}`]);
+  const directions = [
+    { x: 1, y: 0 },
+    { x: -1, y: 0 },
+    { x: 0, y: 1 },
+    { x: 0, y: -1 },
+  ];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current.x === anchor.x && current.y === anchor.y) return true;
+
+    for (const direction of directions) {
+      const nx = current.x + direction.x;
+      const ny = current.y + direction.y;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      if (!isInside(tileMap, nx, ny) || !isWalkableTile(tileMap, nx, ny)) continue;
+
+      visited.add(key);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+
+  return false;
+}
+
+function ensureAnchorConnectivity(tileMap, rng, start, anchors, protectedMask, roadMask) {
+  for (const anchor of anchors) {
+    if (hasPathToAnchor(tileMap, start, anchor)) continue;
+
+    carveRoadToAnchor(tileMap, start, anchor, rng, { roadMask, minRadius: 2, maxRadius: 3, exitRadius: 4 });
+    buildExitClearing(tileMap, anchor, rng, protectedMask);
+    carveExitOpening(tileMap, anchor);
+    protectedMask.add(`${anchor.x},${anchor.y}`);
   }
 }
 
@@ -722,11 +775,24 @@ export function generateRoomInstance({
   const primaryRoadPath = buildPrimaryRoadPath(resolvedExits, resolvedEntrances, terrainCenter);
   carvePrimaryRoadNetwork(tilesGrid, primaryRoadPath, terrainCenter, rng, roadMask);
   const exitZones = [];
+  const accessProtectionMask = new Set([`${center.x},${center.y}`]);
 
-  for (const exit of Object.values(resolvedExits)) carveExitOpening(tilesGrid, exit);
-  for (const entrance of Object.values(resolvedEntrances)) carveExitOpening(tilesGrid, entrance);
+  for (const exit of Object.values(resolvedExits)) {
+    carveRoadToAnchor(tilesGrid, center, exit, rng, { roadMask });
+    buildExitClearing(tilesGrid, exit, rng, accessProtectionMask);
+    carveExitOpening(tilesGrid, exit);
+    accessProtectionMask.add(`${exit.x},${exit.y}`);
+  }
+
+  for (const entrance of Object.values(resolvedEntrances)) {
+    carveRoadToAnchor(tilesGrid, center, entrance, rng, { roadMask });
+    buildExitClearing(tilesGrid, entrance, rng, accessProtectionMask);
+    carveExitOpening(tilesGrid, entrance);
+    accessProtectionMask.add(`${entrance.x},${entrance.y}`);
+  }
 
   const roadClearanceMask = createRoadClearanceMask(roadMask, roomWidth, roomHeight, 4);
+  const terrainProtectionMask = new Set([...roadClearanceMask, ...accessProtectionMask]);
   const broadTerrainSpread = {
     centerBias: terrainCenter,
     spreadX: roomWidth * 0.9,
@@ -739,7 +805,7 @@ export function generateRoomInstance({
     radiusMin: 4,
     radiusMax: 11,
     tile: tiles.denseTree,
-    avoidMask: roadClearanceMask,
+    avoidMask: terrainProtectionMask,
     noiseThreshold: 1.0,
     metadata: { type: 'forest' },
     ...broadTerrainSpread,
@@ -750,7 +816,7 @@ export function generateRoomInstance({
     radiusMin: 3,
     radiusMax: 8,
     tile: tileFrom(tiles.rockCliff, { char: '∎', fg: '#8c8f96', bg: '#2a2e35' }),
-    avoidMask: roadClearanceMask,
+    avoidMask: terrainProtectionMask,
     noiseThreshold: 0.95,
     metadata: { type: 'rock-field' },
     ...broadTerrainSpread,
@@ -761,7 +827,7 @@ export function generateRoomInstance({
     radiusMin: 4,
     radiusMax: 9,
     tile: tiles.water,
-    avoidMask: roadClearanceMask,
+    avoidMask: terrainProtectionMask,
     noiseThreshold: 1.0,
     metadata: { type: 'water' },
     ...broadTerrainSpread,
@@ -781,14 +847,25 @@ export function generateRoomInstance({
   // Landmark placement
   tryPlaceLandmarks(tilesGrid, rng, roadMask, landmarkPlacementMask);
 
-  // Terrain object clusters
-  const terrainClusterMask = new Set([...roadClearanceMask, ...landmarkPlacementMask]);
+  // 4) Terrain object clusters
+  const terrainClusterMask = new Set([...terrainProtectionMask, ...landmarkPlacementMask]);
   placeTerrainObjectClusters(tilesGrid, rng, terrainClusterMask, roadMask);
 
-  // 4) Decorative scattering (non-blocking)
-  scatterDecoratives(tilesGrid, rng, terrainClusterMask);
+  // 5) Biome boundaries (cannot overwrite roads/exit clearings)
+  applySoftBoundariesWithProtection(tilesGrid, boundaryTiles, rng, center, terrainProtectionMask);
 
-  applySoftBoundaries(tilesGrid, boundaryTiles, rng, center);
+  // Connectivity validation and self-heal pass.
+  ensureAnchorConnectivity(
+    tilesGrid,
+    rng,
+    center,
+    [...Object.values(resolvedExits), ...Object.values(resolvedEntrances)],
+    terrainProtectionMask,
+    roadMask,
+  );
+
+  // 6) Decorative scattering (non-blocking)
+  scatterDecoratives(tilesGrid, rng, terrainClusterMask);
 
   for (const [entranceId, entrance] of Object.entries(resolvedEntrances)) {
     markAnchorTile(tilesGrid, entrance, 'entrance', entranceId);
