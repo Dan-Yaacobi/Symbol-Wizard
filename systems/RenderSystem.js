@@ -11,12 +11,12 @@ function colorForEntity(entity) {
     if (entity.variant?.includes('brown')) return '#be8e62';
     return '#d06f6f';
   }
-  if (entity.type === 'destructible') {
+  if (entity.interaction === 'destroy') {
     if (entity.kind === 'vase') return '#baa6e0';
     if (entity.kind === 'crate') return '#bc8a56';
     return '#9f7344';
   }
-  if (entity.type === 'nature') {
+  if (entity.category === 'decorative' || entity.category === 'terrain') {
     if (entity.spriteKey?.includes('flower-red')) return '#d66f82';
     if (entity.spriteKey?.includes('flower-yellow')) return '#d7b45a';
     if (entity.spriteKey?.includes('flower-blue')) return '#6a9fd4';
@@ -247,7 +247,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   renderer.renderBackground(map, camera);
 
   for (const object of worldObjects) {
-    if (object.type === 'destructible' && object.destroyed && object.breakTimer > 0) {
+    if (object.interaction === 'destroy' && object.destroyed && object.breakTimer > 0) {
       const progress = 1 - object.breakTimer / object.breakDuration;
       const index = Math.min(object.breakFrames.length - 1, Math.floor(progress * object.breakFrames.length));
       const breakArt = sprites[object.breakFrames[index]];

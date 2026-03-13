@@ -67,7 +67,7 @@ export function updateProjectiles(
     if (!map[ty] || !map[ty][tx] || !map[ty][tx].walkable) deadProjectiles.add(p);
 
     for (const object of worldObjects) {
-      if (object.type !== 'destructible' || object.destroyed) continue;
+      if (object.interaction !== 'destroy' || object.destroyed) continue;
       if (collides({ ...p, radius: p.radius ?? 0.8 }, object)) {
         deadProjectiles.add(p);
         const broke = object.applyDamage(p.damage ?? 2);
