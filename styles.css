@@ -33,10 +33,15 @@ body {
   place-items: center;
 }
 
-#gameCanvas {
-  width: calc(var(--canvas-base-width) * 1px) !important;
-  height: calc(var(--canvas-base-height) * 1px) !important;
+.game-canvas-frame {
+  width: min(1800px, calc(100vw - 16px));
   aspect-ratio: 16 / 9;
+}
+
+#gameCanvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
   border: 2px solid var(--panel-border);
   background: #000;
   image-rendering: pixelated;
