@@ -138,12 +138,10 @@ function paintBaseTerrain(tileMap, rng) {
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const soilBand = ((Math.floor(x / 7) + Math.floor(y / 6)) % 9) / 9;
+      const patchBand = ((Math.floor(x / 11) + Math.floor(y / 9)) % 10) / 10;
       const noise = rng();
 
-      if (soilBand + noise * 0.6 > 0.9) {
-        tileMap[y][x] = tileFrom(tiles.dirt, { type: 'ground' });
-      } else if (noise < 0.18) {
+      if (patchBand + noise * 0.35 > 0.94) {
         tileMap[y][x] = tileFrom(tiles.grassDark, { type: 'ground' });
       } else {
         tileMap[y][x] = tileFrom(tiles.grass, { type: 'ground' });
@@ -175,13 +173,16 @@ function carveFloorCircle(tileMap, x, y, radius = 2, tile = tiles.floor, metadat
 function carveRoadToAnchor(tileMap, start, anchor, rng, {
   minRadius = 2,
   maxRadius = 3,
-  exitRadius = 4,
+  exitRadius = 3,
   roadMask = null,
 } = {}) {
   const position = { x: start.x, y: start.y };
   const totalDistance = Math.max(1, Math.hypot(anchor.x - start.x, anchor.y - start.y));
   const maxSteps = Math.ceil(totalDistance * 1.75);
   const initialRadius = randomInt(rng, minRadius, maxRadius);
+  const bendStrength = 0.22 + rng() * 0.24;
+  const bendPhase = rng() * Math.PI * 2;
+  const bendSign = rng() < 0.5 ? -1 : 1;
 
   carveFloorCircle(tileMap, Math.round(position.x), Math.round(position.y), initialRadius, tiles.pathPebble, { type: 'road' }, roadMask);
 
@@ -193,8 +194,10 @@ function carveRoadToAnchor(tileMap, start, anchor, rng, {
 
     const towardX = dx / distance;
     const towardY = dy / distance;
-    const lateralScale = Math.min(0.35, distance / 60);
-    const lateralJitter = (rng() - 0.5) * lateralScale;
+    const progress = 1 - Math.min(1, distance / totalDistance);
+    const lateralScale = Math.min(0.28, distance / 80);
+    const curveOffset = Math.sin((progress * Math.PI * 1.35) + bendPhase) * bendStrength * bendSign;
+    const lateralJitter = ((rng() - 0.5) * lateralScale) + curveOffset;
 
     let stepX = towardX - towardY * lateralJitter;
     let stepY = towardY + towardX * lateralJitter;
@@ -207,7 +210,6 @@ function carveRoadToAnchor(tileMap, start, anchor, rng, {
     position.x += stepX;
     position.y += stepY;
 
-    const progress = 1 - Math.min(1, distance / totalDistance);
     const widening = progress > 0.78 ? 1 : 0;
     const radius = Math.min(exitRadius, randomInt(rng, minRadius, maxRadius) + widening);
     carveFloorCircle(tileMap, Math.round(position.x), Math.round(position.y), radius, tiles.pathPebble, { type: 'road' }, roadMask);
@@ -241,6 +243,41 @@ function carveExitOpening(tileMap, anchor) {
       carveFloor(tileMap, anchor.x - 1, y, tiles.pathPebble, { type: 'road' });
       carveFloor(tileMap, anchor.x + 1, y, tiles.pathPebble, { type: 'road' });
     }
+  }
+}
+
+function buildPrimaryRoadPath(exits, entrances, center) {
+  const anchors = [...Object.values(entrances), ...Object.values(exits)];
+  if (!anchors.length) return [center];
+
+  const sortedAnchors = [...anchors].sort((left, right) => {
+    const leftAngle = Math.atan2(left.y - center.y, left.x - center.x);
+    const rightAngle = Math.atan2(right.y - center.y, right.x - center.x);
+    return leftAngle - rightAngle;
+  });
+
+  return [sortedAnchors[0], ...sortedAnchors.slice(1), sortedAnchors[0]];
+}
+
+function carvePrimaryRoadNetwork(tileMap, roadPath, terrainCenter, rng, roadMask) {
+  carveFloorCircle(tileMap, terrainCenter.x, terrainCenter.y, 3, tiles.pathPebble, { type: 'road' }, roadMask);
+
+  for (let i = 0; i < roadPath.length - 1; i += 1) {
+    carveRoadToAnchor(tileMap, roadPath[i], roadPath[i + 1], rng, {
+      minRadius: 2,
+      maxRadius: 3,
+      exitRadius: 3,
+      roadMask,
+    });
+  }
+
+  for (const point of roadPath) {
+    carveRoadToAnchor(tileMap, point, terrainCenter, rng, {
+      minRadius: 2,
+      maxRadius: 3,
+      exitRadius: 3,
+      roadMask,
+    });
   }
 }
 
@@ -574,12 +611,18 @@ function ensureAnchorConnectivity(tileMap, rng, start, anchors, protectedMask, r
 
 function carveRoadClearings(tileMap, roadMask, rng) {
   for (const key of roadMask) {
-    if (rng() > 0.045) continue;
     const [xString, yString] = key.split(',');
     const x = Number(xString);
     const y = Number(yString);
-    const radius = randomInt(rng, 3, 6);
-    carveFloorCircle(tileMap, x, y, radius, tiles.grass, { type: 'clearing' });
+
+    if (rng() < 0.32) {
+      const wornRadius = randomInt(rng, 1, 2);
+      carveFloorCircle(tileMap, x, y, wornRadius, tiles.dirt, { type: 'worn-path' });
+    }
+
+    if (rng() > 0.05) continue;
+    const clearRadius = randomInt(rng, 4, 7);
+    carveFloorCircle(tileMap, x, y, clearRadius, tiles.grass, { type: 'clearing' });
   }
 }
 
@@ -729,8 +772,8 @@ export function generateRoomInstance({
   paintBaseTerrain(tilesGrid, rng);
   const roadMask = new Set();
 
-  carveFloor(tilesGrid, center.x, center.y, tiles.pathPebble, { type: 'road' });
-  roadMask.add(`${center.x},${center.y}`);
+  const primaryRoadPath = buildPrimaryRoadPath(resolvedExits, resolvedEntrances, terrainCenter);
+  carvePrimaryRoadNetwork(tilesGrid, primaryRoadPath, terrainCenter, rng, roadMask);
   const exitZones = [];
   const accessProtectionMask = new Set([`${center.x},${center.y}`]);
 
@@ -756,20 +799,9 @@ export function generateRoomInstance({
     spreadY: roomHeight * 0.9,
   };
 
-  // 1) Terrain generation
+  // 3) Terrain clusters
   paintTerrainRegion(tilesGrid, rng, {
-    regionCount: randomInt(rng, 8, 12),
-    radiusMin: 5,
-    radiusMax: 14,
-    tile: tiles.grass,
-    avoidMask: roadMask,
-    noiseThreshold: 1.1,
-    metadata: { type: 'clearing' },
-    ...broadTerrainSpread,
-  });
-
-  paintTerrainRegion(tilesGrid, rng, {
-    regionCount: randomInt(rng, 10, 15),
+    regionCount: randomInt(rng, 11, 16),
     radiusMin: 4,
     radiusMax: 11,
     tile: tiles.denseTree,
@@ -780,7 +812,7 @@ export function generateRoomInstance({
   });
 
   paintTerrainRegion(tilesGrid, rng, {
-    regionCount: randomInt(rng, 5, 9),
+    regionCount: randomInt(rng, 5, 8),
     radiusMin: 3,
     radiusMax: 8,
     tile: tileFrom(tiles.rockCliff, { char: '∎', fg: '#8c8f96', bg: '#2a2e35' }),
@@ -791,7 +823,7 @@ export function generateRoomInstance({
   });
 
   paintTerrainRegion(tilesGrid, rng, {
-    regionCount: randomInt(rng, 3, 5),
+    regionCount: randomInt(rng, 3, 6),
     radiusMin: 4,
     radiusMax: 9,
     tile: tiles.water,
@@ -803,7 +835,7 @@ export function generateRoomInstance({
 
   carveRoadClearings(tilesGrid, roadMask, rng);
 
-  // 2) Road generation already carved earlier. Now build object layers.
+  // Additional placements near roads and exits.
   const landmarkBufferMask = buildProtectedZoneMask(
     [...Object.values(resolvedExits), ...Object.values(resolvedEntrances)],
     roomWidth,
@@ -812,7 +844,7 @@ export function generateRoomInstance({
   );
   const landmarkPlacementMask = new Set(landmarkBufferMask);
 
-  // 3) Landmark placement
+  // Landmark placement
   tryPlaceLandmarks(tilesGrid, rng, roadMask, landmarkPlacementMask);
 
   // 4) Terrain object clusters
