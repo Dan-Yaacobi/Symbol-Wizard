@@ -1,4 +1,4 @@
-import { generateRoomGraph } from './RoomGraphGenerator.js';
+import { generateBiomeGraph } from './BiomeGraphGenerator.js';
 import { generateRoomInstance } from './RoomInstanceGenerator.js';
 
 function randomSeed() {
@@ -24,7 +24,7 @@ export class BiomeGenerator {
 
   enterBiome(biomeId, seed = randomSeed()) {
     if (!this.biomes.has(biomeId)) {
-      const graph = generateRoomGraph({
+      const graph = generateBiomeGraph({
         seed,
         roomWidth: this.roomWidth,
         roomHeight: this.roomHeight,
