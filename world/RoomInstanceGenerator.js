@@ -32,6 +32,19 @@ function randomInt(rng, min, max) {
   return Math.floor(rng() * (max - min + 1)) + min;
 }
 
+function weightedPick(rng, weightedEntries) {
+  const totalWeight = weightedEntries.reduce((sum, entry) => sum + entry.weight, 0);
+  if (totalWeight <= 0) return weightedEntries[0]?.value;
+
+  let roll = rng() * totalWeight;
+  for (const entry of weightedEntries) {
+    roll -= entry.weight;
+    if (roll <= 0) return entry.value;
+  }
+
+  return weightedEntries[weightedEntries.length - 1]?.value;
+}
+
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -503,73 +516,135 @@ function tryPlaceLandmarks(tileMap, rng, roadMask, blockedMask) {
 }
 
 function terrainObjectTemplates() {
+  const withTerrainObjectMeta = (base, overrides = {}) => tileFrom(base, {
+    type: 'terrain-object',
+    ...overrides,
+  });
+
   return [
     {
       name: 'forest-grove',
       minTiles: 16,
       footprint: [
-        { x: -2, y: -1, role: 'edge' }, { x: -1, y: -1, role: 'core' }, { x: 0, y: -1, role: 'core' }, { x: 1, y: -1, role: 'core' }, { x: 2, y: -1, role: 'edge' },
-        { x: -2, y: 0, role: 'core' }, { x: -1, y: 0, role: 'core' }, { x: 0, y: 0, role: 'core' }, { x: 1, y: 0, role: 'core' }, { x: 2, y: 0, role: 'core' },
-        { x: -2, y: 1, role: 'edge' }, { x: -1, y: 1, role: 'core' }, { x: 0, y: 1, role: 'core' }, { x: 1, y: 1, role: 'core' }, { x: 2, y: 1, role: 'edge' },
-        { x: -1, y: -2, role: 'edge' }, { x: 0, y: -2, role: 'edge' }, { x: 1, y: -2, role: 'edge' },
-        { x: -1, y: 2, role: 'edge' }, { x: 0, y: 2, role: 'edge' }, { x: 1, y: 2, role: 'edge' },
+        { x: -3, y: 0, role: 'edge' }, { x: -2, y: -1, role: 'edge' }, { x: -2, y: 0, role: 'body' }, { x: -2, y: 1, role: 'edge' },
+        { x: -1, y: -2, role: 'edge' }, { x: -1, y: -1, role: 'body' }, { x: -1, y: 0, role: 'center' }, { x: -1, y: 1, role: 'body' }, { x: -1, y: 2, role: 'edge' },
+        { x: 0, y: -2, role: 'body' }, { x: 0, y: -1, role: 'center' }, { x: 0, y: 0, role: 'center' }, { x: 0, y: 1, role: 'center' }, { x: 0, y: 2, role: 'body' },
+        { x: 1, y: -2, role: 'edge' }, { x: 1, y: -1, role: 'body' }, { x: 1, y: 0, role: 'center' }, { x: 1, y: 1, role: 'body' }, { x: 1, y: 2, role: 'edge' },
+        { x: 2, y: -1, role: 'edge' }, { x: 2, y: 0, role: 'body' }, { x: 2, y: 1, role: 'edge' }, { x: 3, y: 0, role: 'edge' },
       ],
-      tileForCell: (cell) => (cell.role === 'core'
-        ? tileFrom(tiles.denseTree, {
-          char: '♣',
-          type: 'terrain-object',
-          objectType: 'forest-grove',
-          interaction: 'collidable',
-          collidable: true,
-          destroyable: true,
-          walkable: false,
-        })
-        : tileFrom(tiles.denseTreeBloom, {
-          type: 'terrain-object',
+      tileForCell: (cell, rng) => {
+        if (cell.role === 'center' && rng() < 0.2) {
+          return withTerrainObjectMeta(tiles.wood, {
+            char: '│',
+            fg: '#6b4f2a',
+            bg: '#223223',
+            objectType: 'forest-grove',
+            interaction: 'destroyable',
+            collidable: true,
+            destroyable: true,
+            walkable: false,
+          });
+        }
+
+        const centerLeaf = weightedPick(rng, [
+          { value: { char: '♣', fg: '#2f7d32' }, weight: 40 },
+          { value: { char: '♠', fg: '#3b8f3d' }, weight: 40 },
+          { value: { char: '¶', fg: '#2c6e2f' }, weight: 20 },
+        ]);
+        const edgeLeaf = weightedPick(rng, [
+          { value: { char: '♣', fg: '#4a9e4f' }, weight: 55 },
+          { value: { char: '♠', fg: '#57ab5c' }, weight: 45 },
+        ]);
+
+        const canopy = cell.role === 'edge' ? edgeLeaf : centerLeaf;
+        return withTerrainObjectMeta(tiles.denseTreeBloom, {
+          char: canopy.char,
+          fg: canopy.fg,
           objectType: 'forest-grove',
           interaction: 'destroyable',
           collidable: true,
           destroyable: true,
           walkable: false,
-        })),
+        });
+      },
     },
     {
       name: 'rock-formation',
       minTiles: 8,
       footprint: [
-        { x: 0, y: -2 },
-        { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
-        { x: -2, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 0 },
-        { x: -2, y: 1 }, { x: -1, y: 1 }, { x: 0, y: 1 },
+        { x: 0, y: -3, role: 'edge' },
+        { x: -1, y: -2, role: 'edge' }, { x: 0, y: -2, role: 'body' }, { x: 1, y: -2, role: 'edge' },
+        { x: -2, y: -1, role: 'edge' }, { x: -1, y: -1, role: 'body' }, { x: 0, y: -1, role: 'center' }, { x: 1, y: -1, role: 'body' }, { x: 2, y: -1, role: 'edge' },
+        { x: -2, y: 0, role: 'body' }, { x: -1, y: 0, role: 'center' }, { x: 0, y: 0, role: 'center' }, { x: 1, y: 0, role: 'center' }, { x: 2, y: 0, role: 'body' },
+        { x: -1, y: 1, role: 'debris' }, { x: 0, y: 1, role: 'debris' }, { x: 1, y: 1, role: 'debris' },
       ],
-      tileForCell: () => tileFrom(tiles.rockCliff, {
-        char: '▲',
-        fg: '#8d9199',
-        bg: '#262b33',
-        type: 'terrain-object',
-        objectType: 'rock-formation',
-        interaction: 'collidable',
-        collidable: true,
-        destroyable: false,
-        walkable: false,
-      }),
+      tileForCell: (cell, rng) => {
+        if (cell.role === 'debris') {
+          return withTerrainObjectMeta(tiles.rockCliff, {
+            char: '·',
+            fg: '#777c83',
+            bg: '#252a31',
+            objectType: 'rock-formation',
+            interaction: 'walkable',
+            collidable: false,
+            destroyable: false,
+            walkable: true,
+          });
+        }
+
+        const glyph = cell.role === 'edge' ? '∆' : '▲';
+        const color = weightedPick(rng, [
+          { value: cell.role === 'edge' ? '#9ca0a6' : '#8c8f96', weight: 75 },
+          { value: '#a8adb3', weight: 25 },
+        ]);
+
+        return withTerrainObjectMeta(tiles.rockCliff, {
+          char: glyph,
+          fg: color,
+          bg: '#262b33',
+          objectType: 'rock-formation',
+          interaction: 'collidable',
+          collidable: true,
+          destroyable: false,
+          walkable: false,
+        });
+      },
     },
     {
       name: 'small-pond',
       minTiles: 6,
       footprint: [
-        { x: -2, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 },
-        { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
-        { x: -1, y: 1 }, { x: 0, y: 1 }, { x: 1, y: 1 },
+        { x: -3, y: 0, role: 'shore' }, { x: -2, y: -1, role: 'shore' }, { x: -2, y: 0, role: 'edge' }, { x: -2, y: 1, role: 'shore' },
+        { x: -1, y: -2, role: 'shore' }, { x: -1, y: -1, role: 'edge' }, { x: -1, y: 0, role: 'body' }, { x: -1, y: 1, role: 'edge' }, { x: -1, y: 2, role: 'shore' },
+        { x: 0, y: -2, role: 'edge' }, { x: 0, y: -1, role: 'body' }, { x: 0, y: 0, role: 'center' }, { x: 0, y: 1, role: 'body' }, { x: 0, y: 2, role: 'edge' },
+        { x: 1, y: -2, role: 'shore' }, { x: 1, y: -1, role: 'edge' }, { x: 1, y: 0, role: 'body' }, { x: 1, y: 1, role: 'edge' }, { x: 1, y: 2, role: 'shore' },
+        { x: 2, y: -1, role: 'shore' }, { x: 2, y: 0, role: 'edge' }, { x: 2, y: 1, role: 'shore' }, { x: 3, y: 0, role: 'shore' },
       ],
-      tileForCell: () => tileFrom(tiles.water, {
-        type: 'terrain-object',
-        objectType: 'small-pond',
-        interaction: 'collidable',
-        collidable: true,
-        destroyable: false,
-        walkable: false,
-      }),
+      tileForCell: (cell, rng) => {
+        if (cell.role === 'shore') {
+          return withTerrainObjectMeta(tiles.dirt, {
+            char: '·',
+            fg: '#7c6f58',
+            bg: '#2f2f2a',
+            objectType: 'small-pond',
+            interaction: 'walkable',
+            collidable: false,
+            destroyable: false,
+            walkable: true,
+          });
+        }
+
+        const isDeep = cell.role === 'center' || (cell.role === 'body' && rng() < 0.55);
+        return withTerrainObjectMeta(tiles.water, {
+          char: isDeep ? '~' : '≈',
+          fg: isDeep ? '#3a6ea5' : '#4f83c2',
+          objectType: 'small-pond',
+          interaction: 'collidable',
+          collidable: true,
+          destroyable: false,
+          walkable: false,
+        });
+      },
     },
     {
       name: 'fallen-tree',
@@ -599,31 +674,54 @@ function terrainObjectTemplates() {
       name: 'ruins',
       minTiles: 10,
       footprint: [
-        { x: -2, y: -1, role: 'wall' }, { x: -1, y: -1, role: 'wall' }, { x: 0, y: -1, role: 'wall' }, { x: 1, y: -1, role: 'wall' }, { x: 2, y: -1, role: 'wall' },
-        { x: -2, y: 0, role: 'wall' }, { x: 2, y: 0, role: 'wall' },
-        { x: -2, y: 1, role: 'rubble' }, { x: -1, y: 1, role: 'rubble' }, { x: 0, y: 1, role: 'rubble' }, { x: 1, y: 1, role: 'rubble' }, { x: 2, y: 1, role: 'rubble' },
+        { x: -3, y: -1, role: 'debris' },
+        { x: -2, y: -2, role: 'edge' }, { x: -1, y: -2, role: 'edge' }, { x: 0, y: -2, role: 'edge' }, { x: 1, y: -2, role: 'edge' }, { x: 2, y: -2, role: 'edge' },
+        { x: -2, y: -1, role: 'body' }, { x: -1, y: -1, role: 'center' }, { x: 0, y: -1, role: 'pillar' }, { x: 1, y: -1, role: 'center' }, { x: 2, y: -1, role: 'body' },
+        { x: -2, y: 0, role: 'body' }, { x: -1, y: 0, role: 'debris' }, { x: 0, y: 0, role: 'debris' }, { x: 1, y: 0, role: 'debris' }, { x: 2, y: 0, role: 'body' },
+        { x: -2, y: 1, role: 'debris' }, { x: -1, y: 1, role: 'debris' }, { x: 0, y: 1, role: 'debris' }, { x: 1, y: 1, role: 'debris' }, { x: 2, y: 1, role: 'debris' },
+        { x: 3, y: -1, role: 'debris' },
       ],
-      tileForCell: (cell) => (cell.role === 'wall'
-        ? tileFrom(tiles.stoneWall, {
-          char: '▓',
-          type: 'terrain-object',
+      tileForCell: (cell, rng) => {
+        if (cell.role === 'debris') {
+          return withTerrainObjectMeta(tiles.rockCliff, {
+            char: '·',
+            fg: '#7f848b',
+            bg: '#22262d',
+            objectType: 'ruins',
+            interaction: 'walkable',
+            collidable: false,
+            destroyable: true,
+            walkable: true,
+          });
+        }
+
+        if (cell.role === 'pillar') {
+          return withTerrainObjectMeta(tiles.stoneWall, {
+            char: '║',
+            fg: '#c0c3c9',
+            objectType: 'ruins',
+            interaction: 'collidable',
+            collidable: true,
+            destroyable: false,
+            walkable: false,
+          });
+        }
+
+        const stoneGlyph = weightedPick(rng, [
+          { value: '▓', weight: 65 },
+          { value: '▒', weight: 35 },
+        ]);
+        const stoneColor = cell.role === 'edge' ? '#aeb1b8' : '#9b9fa6';
+        return withTerrainObjectMeta(tiles.stoneWall, {
+          char: stoneGlyph,
+          fg: stoneColor,
           objectType: 'ruins',
           interaction: 'collidable',
           collidable: true,
           destroyable: false,
           walkable: false,
-        })
-        : tileFrom(tiles.rockCliff, {
-          char: '·',
-          fg: '#8e949c',
-          bg: '#22262d',
-          type: 'terrain-object',
-          objectType: 'ruins',
-          interaction: 'walkable',
-          collidable: false,
-          destroyable: true,
-          walkable: true,
-        })),
+        });
+      },
     },
   ];
 }
@@ -649,7 +747,7 @@ function placeTerrainObjectTemplates(tileMap, rng, blockedMask, roadMask) {
 
       if (!canPlaceCells(tileMap, center, template.footprint, blockedMask, { requireWalkable: true })) continue;
 
-      stampCells(tileMap, center, template.footprint, (cell) => template.tileForCell(cell));
+      stampCells(tileMap, center, template.footprint, (cell) => template.tileForCell(cell, rng));
       markMaskFromCells(blockedMask, center, template.footprint, 1);
       break;
     }
