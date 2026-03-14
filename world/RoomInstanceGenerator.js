@@ -57,81 +57,6 @@ function tileMapWithBiomeBoundary(width, height, boundaryTiles, rng) {
   }));
 }
 
-function centroidFromPolygon(polygon) {
-  if (!polygon?.length) return { x: 0, y: 0 };
-
-  let sumX = 0;
-  let sumY = 0;
-  for (const vertex of polygon) {
-    sumX += vertex.x;
-    sumY += vertex.y;
-  }
-
-  return {
-    x: Math.round(sumX / polygon.length),
-    y: Math.round(sumY / polygon.length),
-  };
-}
-
-function generatePolygonVertices(width, height, rng) {
-  const center = {
-    x: Math.floor(width / 2),
-    y: Math.floor(height / 2),
-  };
-
-  const vertexCount = randomInt(rng, 10, 16);
-  const minRadiusX = width * 0.28;
-  const maxRadiusX = width * 0.44;
-  const minRadiusY = height * 0.28;
-  const maxRadiusY = height * 0.44;
-  const baseAngle = rng() * Math.PI * 2;
-
-  const vertices = [];
-  for (let i = 0; i < vertexCount; i += 1) {
-    const t = i / vertexCount;
-    const angleJitter = (rng() - 0.5) * (Math.PI / vertexCount);
-    const angle = baseAngle + t * Math.PI * 2 + angleJitter;
-
-    const radiusX = minRadiusX + (maxRadiusX - minRadiusX) * (0.2 + rng() * 0.8);
-    const radiusY = minRadiusY + (maxRadiusY - minRadiusY) * (0.2 + rng() * 0.8);
-
-    const x = Math.round(center.x + Math.cos(angle) * radiusX);
-    const y = Math.round(center.y + Math.sin(angle) * radiusY);
-
-    vertices.push({
-      x: Math.max(2, Math.min(width - 3, x)),
-      y: Math.max(2, Math.min(height - 3, y)),
-    });
-  }
-
-  return vertices;
-}
-
-function pointInPolygon(x, y, polygon) {
-  let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
-    const xi = polygon[i].x;
-    const yi = polygon[i].y;
-    const xj = polygon[j].x;
-    const yj = polygon[j].y;
-
-    const intersects = ((yi > y) !== (yj > y))
-      && (x < ((xj - xi) * (y - yi)) / ((yj - yi) || Number.EPSILON) + xi);
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}
-
-function paintPolygonFloor(tileMap, polygon, rng) {
-  for (let y = 0; y < tileMap.length; y += 1) {
-    for (let x = 0; x < tileMap[0].length; x += 1) {
-      if (!pointInPolygon(x + 0.5, y + 0.5, polygon)) continue;
-      tileMap[y][x] = tileFrom(tiles.grass, { type: 'clearing' });
-      if (rng() < 0.07) tileMap[y][x].char = ',';
-    }
-  }
-}
-
 function paintBaseTerrain(tileMap, rng) {
   const width = tileMap[0].length;
   const height = tileMap.length;
@@ -281,43 +206,132 @@ function carvePrimaryRoadNetwork(tileMap, roadPath, terrainCenter, rng, roadMask
   }
 }
 
-function paintTerrainRegion(tileMap, rng, {
-  regionCount,
-  radiusMin,
-  radiusMax,
+function paintIrregularTerrainPatch(tileMap, rng, {
+  center,
+  radius,
   tile,
-  avoidMask,
-  noiseThreshold,
   metadata,
-  centerBias,
-  spreadX,
-  spreadY,
+  avoidMask,
+  protectedMask = null,
+  deformation = 0.35,
 }) {
   const width = tileMap[0].length;
   const height = tileMap.length;
+  const radiusX = Math.max(2, Math.round(radius * (0.8 + rng() * 0.5)));
+  const radiusY = Math.max(2, Math.round(radius * (0.8 + rng() * 0.5)));
 
-  for (let i = 0; i < regionCount; i += 1) {
-    const cx = Math.max(3, Math.min(width - 4, Math.round(centerBias.x + (rng() - 0.5) * spreadX)));
-    const cy = Math.max(3, Math.min(height - 4, Math.round(centerBias.y + (rng() - 0.5) * spreadY)));
+  for (let y = center.y - radiusY - 1; y <= center.y + radiusY + 1; y += 1) {
+    if (y < 1 || y >= height - 1) continue;
 
-    const radiusX = randomInt(rng, radiusMin, radiusMax);
-    const radiusY = randomInt(rng, radiusMin, radiusMax);
+    for (let x = center.x - radiusX - 1; x <= center.x + radiusX + 1; x += 1) {
+      if (x < 1 || x >= width - 1) continue;
+      if (avoidMask.has(`${x},${y}`)) continue;
 
-    for (let y = cy - radiusY; y <= cy + radiusY; y += 1) {
-      if (y < 1 || y >= height - 1) continue;
-      for (let x = cx - radiusX; x <= cx + radiusX; x += 1) {
-        if (x < 1 || x >= width - 1) continue;
-        if (avoidMask.has(`${x},${y}`)) continue;
+      const nx = (x - center.x) / Math.max(1, radiusX);
+      const ny = (y - center.y) / Math.max(1, radiusY);
+      const ellipseDistance = (nx * nx) + (ny * ny);
+      const angle = Math.atan2(ny, nx);
+      const warp = Math.sin((angle * 3.4) + rng() * Math.PI * 2) * deformation;
+      const noise = (rng() - 0.5) * (deformation * 0.7);
+      if (ellipseDistance + warp + noise > 1.02) continue;
 
-        const nx = (x - cx) / Math.max(1, radiusX);
-        const ny = (y - cy) / Math.max(1, radiusY);
-        const ellipse = nx * nx + ny * ny;
-        const jitter = (rng() - 0.5) * 0.4;
-        if (ellipse + jitter > noiseThreshold) continue;
-
-        tileMap[y][x] = tileFrom(tile, metadata);
-      }
+      tileMap[y][x] = tileFrom(tile, metadata);
+      if (protectedMask) protectedMask.add(`${x},${y}`);
     }
+  }
+}
+
+function carveRoadsideClearings(tileMap, roadMask, rng, protectedMask, {
+  minCount = 5,
+  maxCount = 10,
+  minRadius = 6,
+  maxRadius = 10,
+} = {}) {
+  const roadPoints = collectRoadPoints(roadMask);
+  const count = randomInt(rng, minCount, maxCount);
+
+  for (let i = 0; i < count; i += 1) {
+    const roadPoint = roadPoints[randomInt(rng, 0, Math.max(0, roadPoints.length - 1))];
+    if (!roadPoint) continue;
+
+    const offsetAngle = rng() * Math.PI * 2;
+    const offsetDistance = randomInt(rng, 2, 7);
+    const center = {
+      x: roadPoint.x + Math.round(Math.cos(offsetAngle) * offsetDistance),
+      y: roadPoint.y + Math.round(Math.sin(offsetAngle) * offsetDistance),
+    };
+
+    const clearRadius = randomInt(rng, minRadius, maxRadius);
+    paintIrregularTerrainPatch(tileMap, rng, {
+      center,
+      radius: clearRadius,
+      tile: tiles.grass,
+      metadata: { type: 'clearing' },
+      avoidMask: roadMask,
+      protectedMask,
+      deformation: 0.28,
+    });
+  }
+}
+
+function generateTerrainPatches(tileMap, rng, avoidMask, protectedMask, terrainCenter) {
+  const width = tileMap[0].length;
+  const height = tileMap.length;
+  const patchCount = randomInt(rng, 10, 20);
+
+  const patchStyles = [
+    {
+      weight: 0.45,
+      tile: tiles.denseTree,
+      metadata: { type: 'forest-cluster', walkable: false },
+      deformation: 0.38,
+    },
+    {
+      weight: 0.25,
+      tile: tileFrom(tiles.rockCliff, { char: '∎', fg: '#8c8f96', bg: '#2a2e35' }),
+      metadata: { type: 'rock-cluster', walkable: false },
+      deformation: 0.32,
+    },
+    {
+      weight: 0.15,
+      tile: tiles.water,
+      metadata: { type: 'water-pool', walkable: false },
+      deformation: 0.35,
+    },
+    {
+      weight: 0.15,
+      tile: tiles.grass,
+      metadata: { type: 'clearing' },
+      deformation: 0.25,
+    },
+  ];
+
+  const pickPatchStyle = () => {
+    const roll = rng();
+    let cursor = 0;
+    for (const style of patchStyles) {
+      cursor += style.weight;
+      if (roll <= cursor) return style;
+    }
+    return patchStyles[patchStyles.length - 1];
+  };
+
+  for (let i = 0; i < patchCount; i += 1) {
+    const style = pickPatchStyle();
+    const center = {
+      x: Math.max(3, Math.min(width - 4, Math.round(terrainCenter.x + (rng() - 0.5) * width * 0.85))),
+      y: Math.max(3, Math.min(height - 4, Math.round(terrainCenter.y + (rng() - 0.5) * height * 0.85))),
+    };
+
+    paintIrregularTerrainPatch(tileMap, rng, {
+      center,
+      radius: randomInt(rng, 6, 20),
+      tile: style.tile,
+      metadata: style.metadata,
+      avoidMask,
+      protectedMask,
+      deformation: style.deformation,
+    });
   }
 }
 
@@ -764,8 +778,7 @@ export function generateRoomInstance({
     y: Math.floor(roomHeight / 2),
   };
 
-  const polygon = generatePolygonVertices(roomWidth, roomHeight, rng);
-  const terrainCenter = centroidFromPolygon(polygon);
+  const terrainCenter = { ...center };
   const resolvedAnchors = resolveRoomAnchors(roomNode.exits, roomNode.entrances, roomWidth, roomHeight);
   const resolvedExits = resolvedAnchors.exits;
   const resolvedEntrances = resolvedAnchors.entrances;
@@ -793,46 +806,18 @@ export function generateRoomInstance({
 
   const roadClearanceMask = createRoadClearanceMask(roadMask, roomWidth, roomHeight, 4);
   const terrainProtectionMask = new Set([...roadClearanceMask, ...accessProtectionMask]);
-  const broadTerrainSpread = {
-    centerBias: terrainCenter,
-    spreadX: roomWidth * 0.9,
-    spreadY: roomHeight * 0.9,
-  };
+  // 3) Terrain patch system (forest/rock/water/clearings)
+  generateTerrainPatches(tilesGrid, rng, terrainProtectionMask, terrainProtectionMask, terrainCenter);
 
-  // 3) Terrain clusters
-  paintTerrainRegion(tilesGrid, rng, {
-    regionCount: randomInt(rng, 11, 16),
-    radiusMin: 4,
-    radiusMax: 11,
-    tile: tiles.denseTree,
-    avoidMask: terrainProtectionMask,
-    noiseThreshold: 1.0,
-    metadata: { type: 'forest' },
-    ...broadTerrainSpread,
+  // Natural open clearings along roads for encounters and landmarks.
+  carveRoadsideClearings(tilesGrid, roadMask, rng, terrainProtectionMask, {
+    minCount: 6,
+    maxCount: 12,
+    minRadius: 6,
+    maxRadius: 10,
   });
 
-  paintTerrainRegion(tilesGrid, rng, {
-    regionCount: randomInt(rng, 5, 8),
-    radiusMin: 3,
-    radiusMax: 8,
-    tile: tileFrom(tiles.rockCliff, { char: '∎', fg: '#8c8f96', bg: '#2a2e35' }),
-    avoidMask: terrainProtectionMask,
-    noiseThreshold: 0.95,
-    metadata: { type: 'rock-field' },
-    ...broadTerrainSpread,
-  });
-
-  paintTerrainRegion(tilesGrid, rng, {
-    regionCount: randomInt(rng, 3, 6),
-    radiusMin: 4,
-    radiusMax: 9,
-    tile: tiles.water,
-    avoidMask: terrainProtectionMask,
-    noiseThreshold: 1.0,
-    metadata: { type: 'water' },
-    ...broadTerrainSpread,
-  });
-
+  // Add subtle worn road shoulders after clearings are carved.
   carveRoadClearings(tilesGrid, roadMask, rng);
 
   // Additional placements near roads and exits.
