@@ -17,9 +17,10 @@ function mergeMask(target, source) {
 }
 
 export class RoomGenerator {
-  constructor({ roomWidth = 240, roomHeight = 160 } = {}) {
+  constructor({ roomWidth = 240, roomHeight = 160, biomeConfig = null } = {}) {
     this.roomWidth = roomWidth;
     this.roomHeight = roomHeight;
+    this.biomeConfig = biomeConfig;
     this.terrainGenerator = new TerrainGenerator({ roomWidth, roomHeight });
     this.objectPlacementSystem = new ObjectPlacementSystem();
   }
@@ -28,7 +29,8 @@ export class RoomGenerator {
     const rng = createRng(roomNode.seed >>> 0);
     const center = { x: Math.floor(this.roomWidth / 2), y: Math.floor(this.roomHeight / 2) };
 
-    const { grid } = this.terrainGenerator.initializeTiles(roomNode, rng);
+    const effectiveBiomeConfig = roomNode.biomeConfig ?? this.biomeConfig;
+    const { grid } = this.terrainGenerator.initializeTiles(roomNode, rng, effectiveBiomeConfig);
 
     // 1) generate exits
     const {
@@ -48,7 +50,7 @@ export class RoomGenerator {
     this.terrainGenerator.generateMainRoad(grid, center, allAnchors, rng, mainRoadMask);
 
     // 3) generate branch roads
-    this.terrainGenerator.generateBranchRoads(grid, rng, allAnchors, mainRoadMask, branchRoadMask, center);
+    this.terrainGenerator.generateBranchRoads(grid, rng, allAnchors, mainRoadMask, branchRoadMask, center, effectiveBiomeConfig);
 
     const roadMask = new Set();
     mergeMask(roadMask, mainRoadMask);
@@ -72,6 +74,7 @@ export class RoomGenerator {
     // 4) place objects
     const objectBlockedMask = new Set(protectedMask);
     const objects = this.objectPlacementSystem.placeObjects({
+      biomeConfig: effectiveBiomeConfig,
       tiles: grid,
       rng,
       blockedMask: objectBlockedMask,

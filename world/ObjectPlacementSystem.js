@@ -123,6 +123,43 @@ function stampObjectTiles(tiles, object) {
   }
 }
 
+export class ObjectPlacementSystem {
+  placeObjects({ tiles, rng, roadMask, blockedMask, roomId, biomeConfig = null }) {
+    const roadPoints = collectRoadPoints(roadMask);
+    const templates = buildPlacementTemplates();
+    const density = Math.max(0, Math.min(1, biomeConfig?.objectDensity ?? 0.75));
+    const minCount = Math.max(4, Math.floor(10 + (26 * density)));
+    const maxCount = Math.max(minCount, Math.floor(14 + (34 * density)));
+    const count = randomInt(rng, minCount, maxCount);
+    const objects = [];
+
+    for (let i = 0; i < count; i += 1) {
+      const template = templates[randomInt(rng, 0, templates.length - 1)];
+      if (!template) continue;
+
+      for (let attempt = 0; attempt < 38; attempt += 1) {
+        const road = roadPoints[randomInt(rng, 0, Math.max(0, roadPoints.length - 1))] ?? { x: Math.floor(tiles[0].length / 2), y: Math.floor(tiles.length / 2) };
+        const angle = rng() * Math.PI * 2;
+        const distance = randomInt(rng, 6, 18);
+        const center = {
+          x: Math.round(road.x + Math.cos(angle) * distance),
+          y: Math.round(road.y + Math.sin(angle) * distance),
+        };
+
+        if (!canPlaceObject(tiles, center, template.footprint, blockedMask)) continue;
+
+        const placed = spawnObject(template.type, center, {
+          id: `${roomId}-object-${objects.length}`,
+          footprint: structuredClone(template.footprint),
+          state: { spawned: true },
+        });
+
+        if (!placed) break;
+
+        objects.push(placed);
+        stampObjectTiles(tiles, placed, rng);
+        markObject(blockedMask, center, placed.footprint, placed.collision ? 1 : 0);
+        break;
 function placeFromPool({ tiles, rng, blockedMask, roomId, pools, targetMin, targetMax, idPrefix, padding }) {
   const objects = [];
   const targetCount = randomInt(rng, targetMin, targetMax);

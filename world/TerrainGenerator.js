@@ -238,6 +238,61 @@ function applyBiomeBoundaryRing(tileMap, boundaryTiles, rng, biomeType, thicknes
   }
 }
 
+
+
+function pointInPolygon(x, y, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+    const xi = polygon[i].x;
+    const yi = polygon[i].y;
+    const xj = polygon[j].x;
+    const yj = polygon[j].y;
+    const intersect = ((yi > y) !== (yj > y))
+      && (x < (((xj - xi) * (y - yi)) / ((yj - yi) || 1e-9)) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function buildRoomPolygon(roomWidth, roomHeight, rng, biomeConfig = null) {
+  const irregularity = clamp(biomeConfig?.shapeIrregularity ?? 0.7, 0, 1);
+  const range = biomeConfig?.roomSizeRange ?? [0.58, 0.9];
+  const minScale = clamp(Math.min(range[0], range[1]), 0.35, 0.98);
+  const maxScale = clamp(Math.max(range[0], range[1]), minScale, 0.98);
+
+  const center = {
+    x: Math.floor(roomWidth / 2) + Math.round((rng() - 0.5) * 8),
+    y: Math.floor(roomHeight / 2) + Math.round((rng() - 0.5) * 8),
+  };
+
+  const baseRadius = (Math.min(roomWidth, roomHeight) * (minScale + ((maxScale - minScale) * rng()))) / 2;
+  const vertexCount = randomInt(rng, 8, 12 + Math.round(irregularity * 6));
+  const points = [];
+
+  for (let i = 0; i < vertexCount; i += 1) {
+    const angleJitter = ((rng() - 0.5) * (Math.PI / vertexCount)) * (0.4 + irregularity);
+    const angle = ((Math.PI * 2 * i) / vertexCount) + angleJitter;
+    const radialNoise = 1 + ((rng() - 0.5) * (0.3 + (irregularity * 0.65)));
+    const radiusX = baseRadius * radialNoise;
+    const radiusY = baseRadius * (0.8 + (rng() * 0.35)) * (1 + ((rng() - 0.5) * irregularity * 0.4));
+
+    points.push({
+      x: clamp(Math.round(center.x + (Math.cos(angle) * radiusX)), 1, roomWidth - 2),
+      y: clamp(Math.round(center.y + (Math.sin(angle) * radiusY)), 1, roomHeight - 2),
+    });
+  }
+
+  return points;
+}
+
+function applyPolygonMask(tileMap, boundaryTiles, rng, polygon) {
+  for (let y = 0; y < tileMap.length; y += 1) {
+    for (let x = 0; x < (tileMap[0]?.length ?? 0); x += 1) {
+      if (pointInPolygon(x + 0.5, y + 0.5, polygon)) continue;
+      tileMap[y][x] = cloneTile(pickBoundaryTileVariant(boundaryTiles, x, y, rng));
+    }
+  }
+}
 function paintIrregularTerrainPatch(tileMap, rng, { center, radius, tile, metadata, avoidMask, protectedMask, deformation = 0.35 }) {
   const width = tileMap[0].length;
   const height = tileMap.length;
@@ -315,7 +370,7 @@ export class TerrainGenerator {
     this.roomHeight = roomHeight;
   }
 
-  initializeTiles(roomNode, rng) {
+  initializeTiles(roomNode, rng, biomeConfig = null) {
     const biomeType = roomNode.biomeType ?? 'forest';
     const boundaryTiles = (biomeWallTypes[biomeType] ?? biomeWallTypes.forest).map((key) => tiles[key]).filter(Boolean);
     const grid = Array.from({ length: this.roomHeight }, (_, y) => Array.from({ length: this.roomWidth }, (_, x) => cloneTile(pickBoundaryTileVariant(boundaryTiles, x, y, rng))));
@@ -330,9 +385,11 @@ export class TerrainGenerator {
       }
     }
 
-    applyBiomeBoundaryRing(grid, boundaryTiles, rng, biomeType, 3);
+    const polygon = buildRoomPolygon(this.roomWidth, this.roomHeight, rng, biomeConfig);
+    applyPolygonMask(grid, boundaryTiles, rng, polygon);
+    applyBiomeBoundaryRing(grid, boundaryTiles, rng, biomeType, 2);
 
-    return { grid, boundaryTiles };
+    return { grid, boundaryTiles, polygon };
   }
 
   generateExits(tileMap, roomNode, rng) {
@@ -367,14 +424,16 @@ export class TerrainGenerator {
     }
   }
 
-  generateBranchRoads(tileMap, rng, anchors, mainRoadMask, branchRoadMask, center) {
+  generateBranchRoads(tileMap, rng, anchors, mainRoadMask, branchRoadMask, center, biomeConfig = null) {
+    const branchDensity = clamp(biomeConfig?.roadBranchDensity ?? 0.6, 0, 1);
     const mainRoadPoints = collectRoadPoints(mainRoadMask);
     for (const anchor of anchors) {
+      if (rng() > branchDensity) continue;
       const target = nearestRoadPoint(anchor, mainRoadPoints) ?? center;
       carveRoadToAnchor(tileMap, anchor, target, rng, { minRadius: 1, maxRadius: 1, exitRadius: 1, roadMask: branchRoadMask });
     }
 
-    const desiredBranches = randomInt(rng, 3, 6);
+    const desiredBranches = randomInt(rng, 1, Math.max(1, Math.round(2 + (8 * branchDensity))));
     for (let i = 0; i < desiredBranches; i += 1) {
       const branchStart = mainRoadPoints[randomInt(rng, 0, Math.max(0, mainRoadPoints.length - 1))] ?? center;
       const angle = rng() * Math.PI * 2;
@@ -391,9 +450,10 @@ export class TerrainGenerator {
     // Terrain blobs intentionally removed. Environmental objects now come from ObjectPlacementSystem + ObjectLibrary.
   }
 
-  placeLandmarks(tileMap, rng, roadMask, blockedMask) {
+  placeLandmarks(tileMap, rng, roadMask, blockedMask, biomeConfig = null) {
     const roadPoints = collectRoadPoints(roadMask);
-    const landmarkCount = randomInt(rng, 1, 3);
+    const landmarkFrequency = clamp(biomeConfig?.landmarkFrequency ?? 0.65, 0, 1);
+    const landmarkCount = randomInt(rng, 0, Math.max(1, Math.round(1 + (4 * landmarkFrequency))));
     for (let i = 0; i < landmarkCount; i += 1) {
       let placed = false;
       for (let attempt = 0; attempt < 45 && !placed; attempt += 1) {
