@@ -189,7 +189,10 @@ function carveExitOpening(tileMap, anchor) {
 }
 
 function buildPrimaryRoadPath(exits, entrances, center) {
-  const anchors = [...Object.values(entrances), ...Object.values(exits)];
+  const anchors = Object.values(exits);
+  if (!anchors.length) {
+    anchors.push(...Object.values(entrances));
+  }
   if (!anchors.length) return [center];
 
   const sortedAnchors = [...anchors].sort((left, right) => {
@@ -202,7 +205,7 @@ function buildPrimaryRoadPath(exits, entrances, center) {
 }
 
 function carvePrimaryRoadNetwork(tileMap, roadPath, terrainCenter, rng, roadMask) {
-  carveFloorCircle(tileMap, terrainCenter.x, terrainCenter.y, 3, tiles.pathPebble, { type: 'road' }, roadMask);
+  carveFloorCircle(tileMap, terrainCenter.x, terrainCenter.y, 3, tiles.pathPebble, { type: 'road', roadTier: 'main' }, roadMask);
 
   for (let i = 0; i < roadPath.length - 1; i += 1) {
     carveRoadToAnchor(tileMap, roadPath[i], roadPath[i + 1], rng, {
@@ -212,13 +215,58 @@ function carvePrimaryRoadNetwork(tileMap, roadPath, terrainCenter, rng, roadMask
       roadMask,
     });
   }
+}
 
-  for (const point of roadPath) {
-    carveRoadToAnchor(tileMap, point, terrainCenter, rng, {
-      minRadius: 2,
-      maxRadius: 3,
-      exitRadius: 3,
-      roadMask,
+function nearestRoadPoint(source, roadPoints) {
+  if (!roadPoints.length) return null;
+  let nearest = roadPoints[0];
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (const point of roadPoints) {
+    const distance = Math.hypot(source.x - point.x, source.y - point.y);
+    if (distance >= nearestDistance) continue;
+    nearest = point;
+    nearestDistance = distance;
+  }
+
+  return nearest;
+}
+
+function mergeRoadMasks(targetMask, sourceMask) {
+  for (const key of sourceMask) targetMask.add(key);
+}
+
+function carveBranchRoadNetwork(tileMap, anchors, terrainCenter, rng, mainRoadMask, branchRoadMask) {
+  const roadPoints = collectRoadPoints(mainRoadMask);
+
+  for (const anchor of anchors) {
+    const target = nearestRoadPoint(anchor, roadPoints) ?? terrainCenter;
+    carveRoadToAnchor(tileMap, anchor, target, rng, {
+      minRadius: 1,
+      maxRadius: 1,
+      exitRadius: 1,
+      roadMask: branchRoadMask,
+    });
+  }
+
+  const desiredBranches = randomInt(rng, 3, 6);
+  const width = tileMap[0].length;
+  const height = tileMap.length;
+
+  for (let i = 0; i < desiredBranches; i += 1) {
+    const branchStart = roadPoints[randomInt(rng, 0, Math.max(0, roadPoints.length - 1))] ?? terrainCenter;
+    const angle = rng() * Math.PI * 2;
+    const distance = randomInt(rng, 10, 20);
+    const target = {
+      x: clamp(Math.round(branchStart.x + Math.cos(angle) * distance), 2, width - 3),
+      y: clamp(Math.round(branchStart.y + Math.sin(angle) * distance), 2, height - 3),
+    };
+
+    carveRoadToAnchor(tileMap, branchStart, target, rng, {
+      minRadius: 1,
+      maxRadius: 1,
+      exitRadius: 1,
+      roadMask: branchRoadMask,
     });
   }
 }
@@ -831,6 +879,54 @@ function hasPathToAnchor(tileMap, start, anchor) {
   return false;
 }
 
+function hasPathToRoadMask(tileMap, start, roadMask) {
+  if (!isInside(tileMap, start.x, start.y) || !isWalkableTile(tileMap, start.x, start.y)) return false;
+
+  const queue = [{ x: start.x, y: start.y }];
+  const visited = new Set([`${start.x},${start.y}`]);
+  const directions = [
+    { x: 1, y: 0 },
+    { x: -1, y: 0 },
+    { x: 0, y: 1 },
+    { x: 0, y: -1 },
+  ];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (roadMask.has(`${current.x},${current.y}`)) return true;
+
+    for (const direction of directions) {
+      const nx = current.x + direction.x;
+      const ny = current.y + direction.y;
+      const key = `${nx},${ny}`;
+      if (visited.has(key)) continue;
+      if (!isInside(tileMap, nx, ny) || !isWalkableTile(tileMap, nx, ny)) continue;
+
+      visited.add(key);
+      queue.push({ x: nx, y: ny });
+    }
+  }
+
+  return false;
+}
+
+function ensureExitConnectionToMainRoad(tileMap, rng, anchors, mainRoadMask, branchRoadMask) {
+  const mainRoadPoints = collectRoadPoints(mainRoadMask);
+  for (const anchor of anchors) {
+    if (hasPathToRoadMask(tileMap, anchor, mainRoadMask)) continue;
+
+    const nearestMainRoad = nearestRoadPoint(anchor, mainRoadPoints);
+    if (!nearestMainRoad) continue;
+
+    carveRoadToAnchor(tileMap, anchor, nearestMainRoad, rng, {
+      minRadius: 1,
+      maxRadius: 1,
+      exitRadius: 1,
+      roadMask: branchRoadMask,
+    });
+  }
+}
+
 function ensureAnchorConnectivity(tileMap, rng, start, anchors, protectedMask, roadMask) {
   for (const anchor of anchors) {
     if (hasPathToAnchor(tileMap, start, anchor)) continue;
@@ -839,23 +935,6 @@ function ensureAnchorConnectivity(tileMap, rng, start, anchors, protectedMask, r
     buildExitClearing(tileMap, anchor, rng, protectedMask);
     carveExitOpening(tileMap, anchor);
     protectedMask.add(`${anchor.x},${anchor.y}`);
-  }
-}
-
-function carveRoadClearings(tileMap, roadMask, rng) {
-  for (const key of roadMask) {
-    const [xString, yString] = key.split(',');
-    const x = Number(xString);
-    const y = Number(yString);
-
-    if (rng() < 0.32) {
-      const wornRadius = randomInt(rng, 1, 2);
-      carveFloorCircle(tileMap, x, y, wornRadius, tiles.dirt, { type: 'worn-path' });
-    }
-
-    if (rng() > 0.05) continue;
-    const clearRadius = randomInt(rng, 4, 7);
-    carveFloorCircle(tileMap, x, y, clearRadius, tiles.grass, { type: 'clearing' });
   }
 }
 
@@ -1080,32 +1159,41 @@ export function generateRoomInstance({
   );
   paintBaseTerrain(tilesGrid, rng);
   const roadMask = new Set();
+  const mainRoadMask = new Set();
+  const branchRoadMask = new Set();
 
   const primaryRoadPath = buildPrimaryRoadPath(
     Object.fromEntries(Object.entries(resolvedExits).map(([id, passage]) => [id, passage.roadAnchor])),
     Object.fromEntries(Object.entries(resolvedEntrances).map(([id, passage]) => [id, passage.roadAnchor])),
     terrainCenter,
   );
-  carvePrimaryRoadNetwork(tilesGrid, primaryRoadPath, terrainCenter, rng, roadMask);
+  carvePrimaryRoadNetwork(tilesGrid, primaryRoadPath, terrainCenter, rng, mainRoadMask);
   const exitZones = [];
   const exitCorridors = [];
   const accessProtectionMask = new Set([`${center.x},${center.y}`]);
+  const allAnchors = [
+    ...Object.values(resolvedExits).map((passage) => passage.roadAnchor),
+    ...Object.values(resolvedEntrances).map((passage) => passage.roadAnchor),
+  ];
 
   for (const exit of Object.values(resolvedExits)) {
-    carveRoadToAnchor(tilesGrid, center, exit.roadAnchor, rng, { roadMask });
     buildExitClearing(tilesGrid, exit.roadAnchor, rng, accessProtectionMask);
     carveExitOpening(tilesGrid, { ...exit.roadAnchor, direction: exit.direction });
-    carveEdgePassage(tilesGrid, exit, roadMask, roomWidth, roomHeight);
+    carveEdgePassage(tilesGrid, exit, branchRoadMask, roomWidth, roomHeight);
     accessProtectionMask.add(`${exit.roadAnchor.x},${exit.roadAnchor.y}`);
   }
 
   for (const entrance of Object.values(resolvedEntrances)) {
-    carveRoadToAnchor(tilesGrid, center, entrance.roadAnchor, rng, { roadMask });
     buildExitClearing(tilesGrid, entrance.roadAnchor, rng, accessProtectionMask);
     carveExitOpening(tilesGrid, { ...entrance.roadAnchor, direction: entrance.direction });
-    carveEdgePassage(tilesGrid, entrance, roadMask, roomWidth, roomHeight);
+    carveEdgePassage(tilesGrid, entrance, branchRoadMask, roomWidth, roomHeight);
     accessProtectionMask.add(`${entrance.roadAnchor.x},${entrance.roadAnchor.y}`);
   }
+
+  carveBranchRoadNetwork(tilesGrid, allAnchors, terrainCenter, rng, mainRoadMask, branchRoadMask);
+  ensureExitConnectionToMainRoad(tilesGrid, rng, allAnchors, mainRoadMask, branchRoadMask);
+  mergeRoadMasks(roadMask, mainRoadMask);
+  mergeRoadMasks(roadMask, branchRoadMask);
 
   const roadClearanceMask = createRoadClearanceMask(roadMask, roomWidth, roomHeight, 4);
   const terrainProtectionMask = new Set([...roadClearanceMask, ...accessProtectionMask]);
@@ -1120,9 +1208,6 @@ export function generateRoomInstance({
     maxRadius: 10,
   });
 
-  // Add subtle worn road shoulders after clearings are carved.
-  carveRoadClearings(tilesGrid, roadMask, rng);
-
   // Additional placements near roads and exits.
   const landmarkBufferMask = buildProtectedZoneMask(
     [
@@ -1136,7 +1221,7 @@ export function generateRoomInstance({
   const landmarkPlacementMask = new Set(landmarkBufferMask);
 
   // Landmark placement
-  tryPlaceLandmarks(tilesGrid, rng, roadMask, landmarkPlacementMask);
+  tryPlaceLandmarks(tilesGrid, rng, branchRoadMask, landmarkPlacementMask);
 
   // 4) Terrain object clusters
   const terrainClusterMask = new Set([...terrainProtectionMask, ...landmarkPlacementMask]);
@@ -1150,7 +1235,7 @@ export function generateRoomInstance({
     tilesGrid,
     rng,
     center,
-    [...Object.values(resolvedExits).map((passage) => passage.roadAnchor), ...Object.values(resolvedEntrances).map((passage) => passage.roadAnchor)],
+    allAnchors,
     terrainProtectionMask,
     roadMask,
   );
