@@ -4,52 +4,52 @@ function isWalkableTile(room, x, y) {
   return Boolean(tile?.walkable);
 }
 
-function isInExitZone(room, x, y) {
-  if (!room?.exitZones?.length) return false;
-  return room.exitZones.some((zone) => {
-    if (!zone?.edgeStart || !zone?.edgeEnd) return false;
-
-    const minX = Math.min(zone.edgeStart.x, zone.edgeEnd.x);
-    const maxX = Math.max(zone.edgeStart.x, zone.edgeEnd.x);
-    const minY = Math.min(zone.edgeStart.y, zone.edgeEnd.y);
-    const maxY = Math.max(zone.edgeStart.y, zone.edgeEnd.y);
-
-    return x >= minX && x <= maxX && y >= minY && y <= maxY;
-  });
+function isInExitCorridor(room, x, y) {
+  if (!room?.exitCorridors?.length) return false;
+  return room.exitCorridors.some((corridor) => corridor?.edgeTiles?.some((tile) => tile.x === x && tile.y === y));
 }
 
 function buildInwardSpawnPosition(room, entrance, inset = 4) {
-  const roomWidth = room?.tiles?.[0]?.length ?? 0;
-  const roomHeight = room?.tiles?.length ?? 0;
   const direction = entrance?.direction;
+  if (!direction) {
+    return {
+      x: entrance?.spawn?.x ?? entrance?.roadAnchor?.x ?? entrance?.x,
+      y: entrance?.spawn?.y ?? entrance?.roadAnchor?.y ?? entrance?.y,
+    };
+  }
+
+  const minEdgeX = Math.min(entrance?.edgeStart?.x ?? entrance.x ?? 0, entrance?.edgeEnd?.x ?? entrance.x ?? 0);
+  const maxEdgeX = Math.max(entrance?.edgeStart?.x ?? entrance.x ?? 0, entrance?.edgeEnd?.x ?? entrance.x ?? 0);
+  const minEdgeY = Math.min(entrance?.edgeStart?.y ?? entrance.y ?? 0, entrance?.edgeEnd?.y ?? entrance.y ?? 0);
+  const maxEdgeY = Math.max(entrance?.edgeStart?.y ?? entrance.y ?? 0, entrance?.edgeEnd?.y ?? entrance.y ?? 0);
+
+  const centerX = Math.round((minEdgeX + maxEdgeX) / 2);
+  const centerY = Math.round((minEdgeY + maxEdgeY) / 2);
 
   if (direction === 'east') {
-    return { x: Math.max(1, roomWidth - 1 - inset), y: entrance.y };
+    return { x: maxEdgeX - inset, y: centerY };
   }
 
   if (direction === 'west') {
-    return { x: inset, y: entrance.y };
+    return { x: minEdgeX + inset, y: centerY };
   }
 
   if (direction === 'north') {
-    return { x: entrance.x, y: inset };
+    return { x: centerX, y: minEdgeY + inset };
   }
 
   if (direction === 'south') {
-    return { x: entrance.x, y: Math.max(1, roomHeight - 1 - inset) };
+    return { x: centerX, y: maxEdgeY - inset };
   }
 
-  return {
-    x: entrance?.spawn?.x ?? entrance?.roadAnchor?.x ?? entrance?.x,
-    y: entrance?.spawn?.y ?? entrance?.roadAnchor?.y ?? entrance?.y,
-  };
+  return { x: centerX, y: centerY };
 }
 
 function findSpawnPosition(room, preferredX, preferredY, maxRadius = 6) {
   const startX = Math.round(preferredX);
   const startY = Math.round(preferredY);
 
-  if (isWalkableTile(room, startX, startY) && !isInExitZone(room, startX, startY)) {
+  if (isWalkableTile(room, startX, startY) && !isInExitCorridor(room, startX, startY)) {
     return { x: startX, y: startY };
   }
 
@@ -62,7 +62,7 @@ function findSpawnPosition(room, preferredX, preferredY, maxRadius = 6) {
         if (!isWalkableTile(room, x, y)) continue;
 
         if (!fallback) fallback = { x, y };
-        if (!isInExitZone(room, x, y)) return { x, y };
+        if (!isInExitCorridor(room, x, y)) return { x, y };
       }
     }
   }
@@ -125,25 +125,7 @@ export class RoomTransitionSystem {
     const tx = Math.round(player.x);
     const ty = Math.round(player.y);
 
-    const roomWidth = activeRoom.tiles?.[0]?.length ?? 0;
-    const roomHeight = activeRoom.tiles?.length ?? 0;
-
-    const hitZone = activeRoom.exitCorridors.find((corridor) => {
-      if (!corridor?.start || !corridor?.end) return false;
-
-      const minX = Math.min(corridor.start.x, corridor.end.x);
-      const maxX = Math.max(corridor.start.x, corridor.end.x);
-      const minY = Math.min(corridor.start.y, corridor.end.y);
-      const maxY = Math.max(corridor.start.y, corridor.end.y);
-      const inCorridor = tx >= minX && tx <= maxX && ty >= minY && ty <= maxY;
-      if (!inCorridor) return false;
-
-      if (corridor.direction === 'east') return tx >= roomWidth - 2;
-      if (corridor.direction === 'west') return tx <= 1;
-      if (corridor.direction === 'north') return ty <= 1;
-      if (corridor.direction === 'south') return ty >= roomHeight - 2;
-      return false;
-    });
+    const hitZone = activeRoom.exitCorridors.find((corridor) => corridor?.edgeTiles?.some((tile) => tile.x === tx && tile.y === ty));
 
     return hitZone?.exitId ?? null;
   }
