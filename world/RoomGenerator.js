@@ -69,9 +69,7 @@ export class RoomGenerator {
     const protectedMask = new Set(roadMask);
     mergeMask(protectedMask, spawnMask);
 
-    // 4) generate terrain patches
-    this.terrainGenerator.generateTerrainPatches(grid, rng, protectedMask, center);
-
+    // 4) place objects
     const objectBlockedMask = new Set(protectedMask);
 
     // 5) place objects

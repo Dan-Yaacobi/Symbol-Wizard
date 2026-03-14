@@ -5,57 +5,96 @@ const OBJECT_CATEGORY = {
   SOLID_TERRAIN: 'solid-terrain',
 };
 
+function forestPalette(char, fg, bg, walkable = false) {
+  return { char, fg, bg, walkable };
+}
+
 export const objectLibrary = {
-  flower_patch: {
-    id: 'flower_patch', name: 'Flower Patch', category: OBJECT_CATEGORY.DECORATIVE,
-    footprint: [[0, 0]], tilePalette: ['"'], interactionType: 'none', collision: false,
+  oak_tree: {
+    id: 'oak_tree', name: 'Oak Tree', category: OBJECT_CATEGORY.SOLID_TERRAIN,
+    footprint: [[0, 0]], interactionType: 'none', collision: true,
     health: null, destructible: false, lootTable: [],
+    tileVariants: [
+      forestPalette('♣', '#3f8f4d', '#09150d', false),
+      forestPalette('♧', '#4d9b59', '#0a1a11', false),
+      forestPalette('♤', '#2f7f44', '#08120a', false),
+    ],
   },
-  small_stones: {
-    id: 'small_stones', name: 'Small Stones', category: OBJECT_CATEGORY.DECORATIVE,
-    footprint: [[0, 0]], tilePalette: ['·'], interactionType: 'none', collision: false,
+  pine_tree: {
+    id: 'pine_tree', name: 'Pine Tree', category: OBJECT_CATEGORY.SOLID_TERRAIN,
+    footprint: [[0, 0], [0, 1]], interactionType: 'none', collision: true,
     health: null, destructible: false, lootTable: [],
+    tileVariants: [
+      forestPalette('♠', '#2f7a3f', '#071109', false),
+      forestPalette('♤', '#2a6c38', '#060f08', false),
+      forestPalette('♣', '#3a8c48', '#08140a', false),
+    ],
   },
-  shrine: {
-    id: 'shrine', name: 'Shrine', category: OBJECT_CATEGORY.INTERACTABLE,
-    footprint: [[0, 0]], tilePalette: ['⊙'], interactionType: 'activate', collision: true,
+  bush: {
+    id: 'bush', name: 'Bush', category: OBJECT_CATEGORY.DECORATIVE,
+    footprint: [[0, 0]], interactionType: 'none', collision: false,
     health: null, destructible: false, lootTable: [],
+    tileVariants: [
+      forestPalette('✿', '#67b36d', '#133022', true),
+      forestPalette('❀', '#6dbf73', '#163626', true),
+      forestPalette('❁', '#55a962', '#112a1d', true),
+    ],
   },
-  chest: {
-    id: 'chest', name: 'Chest', category: OBJECT_CATEGORY.INTERACTABLE,
-    footprint: [[0, 0]], tilePalette: ['▣'], interactionType: 'open', collision: true,
-    health: null, destructible: false, lootTable: [{ type: 'gold', min: 2, max: 10 }],
+  wildflowers: {
+    id: 'wildflowers', name: 'Wildflowers', category: OBJECT_CATEGORY.DECORATIVE,
+    footprint: [[0, 0]], interactionType: 'none', collision: false,
+    health: null, destructible: false, lootTable: [],
+    tileVariants: [
+      forestPalette('*', '#d98da8', '#1a3b28', true),
+      forestPalette('✶', '#e4c072', '#1c402b', true),
+      forestPalette('✷', '#8cb7e8', '#173a27', true),
+    ],
+  },
+  stone_cluster: {
+    id: 'stone_cluster', name: 'Stone Cluster', category: OBJECT_CATEGORY.SOLID_TERRAIN,
+    footprint: [[0, 0], [1, 0]], interactionType: 'none', collision: true,
+    health: null, destructible: false, lootTable: [],
+    tileVariants: [
+      { char: '▲', fg: '#8d949f', bg: '#252c33', walkable: false },
+      { char: '∆', fg: '#9aa1aa', bg: '#2a3138', walkable: false },
+      { char: '◭', fg: '#7f8893', bg: '#222830', walkable: false },
+    ],
   },
   barrel: {
     id: 'barrel', name: 'Barrel', category: OBJECT_CATEGORY.DESTRUCTIBLE,
-    footprint: [[0, 0]], tilePalette: ['◍'], interactionType: 'none', collision: true,
+    footprint: [[0, 0]], interactionType: 'none', collision: true,
     health: 2, destructible: true, lootTable: [{ type: 'gold', min: 1, max: 4 }],
+    tileVariants: [
+      { char: '◍', fg: '#b98b56', bg: '#3f2d1a', walkable: false },
+      { char: '◉', fg: '#c49661', bg: '#47311d', walkable: false },
+    ],
   },
   crate: {
     id: 'crate', name: 'Crate', category: OBJECT_CATEGORY.DESTRUCTIBLE,
-    footprint: [[0, 0]], tilePalette: ['▧'], interactionType: 'none', collision: true,
+    footprint: [[0, 0]], interactionType: 'none', collision: true,
     health: 3, destructible: true, lootTable: [{ type: 'gold', min: 1, max: 5 }],
+    tileVariants: [
+      { char: '▧', fg: '#c59663', bg: '#4a3421', walkable: false },
+      { char: '▣', fg: '#b8864f', bg: '#402b19', walkable: false },
+    ],
   },
-  forest_grove: {
-    id: 'forest_grove', name: 'Forest Grove', category: OBJECT_CATEGORY.DESTRUCTIBLE,
-    footprint: [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]], tilePalette: ['♣', '♠', '¶'],
-    interactionType: 'none', collision: true, health: 10, destructible: true,
-    lootTable: [{ type: 'minor-item', min: 1, max: 2 }],
+  shrine: {
+    id: 'shrine', name: 'Shrine', category: OBJECT_CATEGORY.INTERACTABLE,
+    footprint: [[0, 0]], interactionType: 'activate', collision: true,
+    health: null, destructible: false, lootTable: [],
+    tileVariants: [
+      { char: '⊙', fg: '#d7d0bf', bg: '#303030', walkable: false },
+      { char: '◌', fg: '#c7c1b1', bg: '#2a2a2a', walkable: false },
+    ],
   },
-  rock_formation: {
-    id: 'rock_formation', name: 'Rock Formation', category: OBJECT_CATEGORY.SOLID_TERRAIN,
-    footprint: [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]], tilePalette: ['▲', '∆'],
-    interactionType: 'none', collision: true, health: null, destructible: false, lootTable: [],
-  },
-  ruins: {
-    id: 'ruins', name: 'Ruins', category: OBJECT_CATEGORY.SOLID_TERRAIN,
-    footprint: [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]], tilePalette: ['▓', '▒', '║'],
-    interactionType: 'none', collision: true, health: null, destructible: false, lootTable: [],
-  },
-  small_pond: {
-    id: 'small_pond', name: 'Small Pond', category: OBJECT_CATEGORY.SOLID_TERRAIN,
-    footprint: [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]], tilePalette: ['~', '≈'],
-    interactionType: 'none', collision: true, health: null, destructible: false, lootTable: [],
+  chest: {
+    id: 'chest', name: 'Chest', category: OBJECT_CATEGORY.INTERACTABLE,
+    footprint: [[0, 0]], interactionType: 'open', collision: true,
+    health: null, destructible: false, lootTable: [{ type: 'gold', min: 2, max: 10 }],
+    tileVariants: [
+      { char: '▣', fg: '#d8b16f', bg: '#4d3823', walkable: false },
+      { char: '▤', fg: '#caa161', bg: '#442f1c', walkable: false },
+    ],
   },
 };
 
@@ -83,6 +122,7 @@ export function spawnObject(type, position, overrides = {}) {
     position: { x: position.x, y: position.y },
     footprint,
     tilePalette: definition.tilePalette,
+    tileVariants: definition.tileVariants ?? [],
     interactionType: definition.interactionType,
     collision: Boolean(definition.collision),
     walkable: !definition.collision,

@@ -26,20 +26,43 @@ export function scanExitCorridors(tileMap, resolvedExits, roomWidth, roomHeight)
 
   for (const [exitId, passage] of Object.entries(resolvedExits)) {
     const edgeTiles = [];
+    const triggerSet = new Set();
+    const triggerTiles = [];
+    const depth = Math.max(1, passage.triggerDepth ?? 7);
+
     if (passage.direction === 'north' || passage.direction === 'south') {
-      const y = passage.direction === 'north' ? 0 : roomHeight - 1;
-      for (let x = passage.edgeStart.x; x <= passage.edgeEnd.x; x += 1) {
-        if (tileMap?.[y]?.[x]?.walkable) edgeTiles.push({ x, y });
+      for (let d = 0; d < depth; d += 1) {
+        const y = passage.direction === 'north' ? d : (roomHeight - 1) - d;
+        for (let x = passage.edgeStart.x; x <= passage.edgeEnd.x; x += 1) {
+          if (!tileMap?.[y]?.[x]?.walkable) continue;
+          const key = `${x},${y}`;
+          if (d === 0) edgeTiles.push({ x, y });
+          if (triggerSet.has(key)) continue;
+          triggerSet.add(key);
+          triggerTiles.push({ x, y });
+        }
       }
     } else {
-      const x = passage.direction === 'west' ? 0 : roomWidth - 1;
-      for (let y = passage.edgeStart.y; y <= passage.edgeEnd.y; y += 1) {
-        if (tileMap?.[y]?.[x]?.walkable) edgeTiles.push({ x, y });
+      for (let d = 0; d < depth; d += 1) {
+        const x = passage.direction === 'west' ? d : (roomWidth - 1) - d;
+        for (let y = passage.edgeStart.y; y <= passage.edgeEnd.y; y += 1) {
+          if (!tileMap?.[y]?.[x]?.walkable) continue;
+          const key = `${x},${y}`;
+          if (d === 0) edgeTiles.push({ x, y });
+          if (triggerSet.has(key)) continue;
+          triggerSet.add(key);
+          triggerTiles.push({ x, y });
+        }
       }
     }
 
-    if (edgeTiles.length > 0) {
-      corridors.push({ exitId, direction: passage.direction, edgeTiles });
+    if (triggerTiles.length > 0) {
+      corridors.push({
+        exitId,
+        direction: passage.direction,
+        edgeTiles,
+        triggerTiles,
+      });
     }
   }
 

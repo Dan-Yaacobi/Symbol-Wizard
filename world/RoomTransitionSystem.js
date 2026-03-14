@@ -20,7 +20,7 @@ function isObjectBlocked(room, x, y) {
 
 function isInExitCorridor(room, x, y) {
   if (!room?.exitCorridors?.length) return false;
-  return room.exitCorridors.some((corridor) => corridor?.edgeTiles?.some((tile) => tile.x === x && tile.y === y));
+  return room.exitCorridors.some((corridor) => (corridor?.triggerTiles ?? corridor?.edgeTiles ?? []).some((tile) => tile.x === x && tile.y === y));
 }
 
 function buildInwardSpawnPosition(room, entrance, inset = 4) {
@@ -140,7 +140,7 @@ export class RoomTransitionSystem {
     const tx = Math.round(player.x);
     const ty = Math.round(player.y);
 
-    const hitZone = activeRoom.exitCorridors.find((corridor) => corridor?.edgeTiles?.some((tile) => tile.x === tx && tile.y === ty));
+    const hitZone = activeRoom.exitCorridors.find((corridor) => (corridor?.triggerTiles ?? corridor?.edgeTiles ?? []).some((tile) => tile.x === tx && tile.y === ty));
 
     return hitZone?.exitId ?? null;
   }

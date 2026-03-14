@@ -12,6 +12,8 @@ export const tiles = {
   denseTree: { char: '♣', fg: '#3f8f4d', bg: '#0a1a10', walkable: false },
   denseTreeSpire: { char: '♠', fg: '#2d7a3e', bg: '#08160d', walkable: false },
   denseTreeBloom: { char: '♧', fg: '#4a9c58', bg: '#0c1f13', walkable: false },
+  denseTreeCanopy: { char: '♤', fg: '#2f6f3b', bg: '#061008', walkable: false },
+  denseTreeShadow: { char: '♠', fg: '#245f33', bg: '#050d07', walkable: false },
   rockCliff: { char: '▲', fg: '#8b8f96', bg: '#2a2f37', walkable: false },
   deepWater: { char: '≈', fg: '#4ea4ff', bg: '#0e2741', walkable: false },
   stoneWall: { char: '▓', fg: '#969696', bg: '#2f2f2f', walkable: false },
