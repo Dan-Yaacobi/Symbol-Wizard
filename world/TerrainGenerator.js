@@ -179,6 +179,20 @@ function carveRoadToAnchor(tileMap, start, anchor, rng, { minRadius, maxRadius, 
   carveFloorCircle(tileMap, anchor.x, anchor.y, exitRadius, tiles.pathPebble, { type: 'road' }, roadMask);
 }
 
+function applyBiomeBoundaryRing(tileMap, boundaryTiles, rng, thickness = 3) {
+  const width = tileMap[0]?.length ?? 0;
+  const height = tileMap.length;
+  if (!width || !height || !boundaryTiles.length) return;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const edgeDistance = Math.min(x, y, (width - 1) - x, (height - 1) - y);
+      if (edgeDistance >= thickness) continue;
+      tileMap[y][x] = cloneTile(pickBoundaryTileVariant(boundaryTiles, x, y, rng));
+    }
+  }
+}
+
 function paintIrregularTerrainPatch(tileMap, rng, { center, radius, tile, metadata, avoidMask, protectedMask, deformation = 0.35 }) {
   const width = tileMap[0].length;
   const height = tileMap.length;
@@ -271,6 +285,8 @@ export class TerrainGenerator {
       }
     }
 
+    applyBiomeBoundaryRing(grid, boundaryTiles, rng, 3);
+
     return { grid, boundaryTiles };
   }
 
@@ -301,9 +317,8 @@ export class TerrainGenerator {
   generateMainRoad(tileMap, center, anchors, rng, roadMask) {
     carveFloorCircle(tileMap, center.x, center.y, 3, tiles.pathPebble, { type: 'road' }, roadMask);
     const ordered = [...anchors].sort((a, b) => Math.atan2(a.y - center.y, a.x - center.x) - Math.atan2(b.y - center.y, b.x - center.x));
-    const path = ordered.length ? [ordered[0], ...ordered.slice(1), ordered[0]] : [center];
-    for (let i = 0; i < path.length - 1; i += 1) {
-      carveRoadToAnchor(tileMap, path[i], path[i + 1], rng, { minRadius: 2, maxRadius: 3, exitRadius: 3, roadMask });
+    for (const anchor of ordered) {
+      carveRoadToAnchor(tileMap, center, anchor, rng, { minRadius: 2, maxRadius: 2, exitRadius: 3, roadMask });
     }
   }
 

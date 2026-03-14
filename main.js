@@ -52,10 +52,41 @@ const npcs = [];
 let worldObjects = activeRoom.objects ?? [];
 const roomTransitionSystem = new RoomTransitionSystem({ biomeGenerator, fadeDurationMs: 150 });
 
+
+function resolveValidRoomSpawn(room, preferred) {
+  const startX = Math.round(preferred.x);
+  const startY = Math.round(preferred.y);
+
+  const isOpen = (x, y) => {
+    const tile = room?.tiles?.[y]?.[x];
+    if (!tile?.walkable) return false;
+    if (room?.collisionMap?.[y]?.[x]) return false;
+    return true;
+  };
+
+  if (isOpen(startX, startY)) return { x: startX, y: startY };
+
+  for (let radius = 1; radius <= 8; radius += 1) {
+    for (let y = startY - radius; y <= startY + radius; y += 1) {
+      for (let x = startX - radius; x <= startX + radius; x += 1) {
+        if (Math.max(Math.abs(x - startX), Math.abs(y - startY)) !== radius) continue;
+        if (isOpen(x, y)) return { x, y };
+      }
+    }
+  }
+
+  return { x: Math.floor(ROOM_W / 2), y: Math.floor(ROOM_H / 2) };
+}
+
 if (activeRoom.entrances['initial-spawn']) {
   const startEntrance = activeRoom.entrances['initial-spawn'];
-  player.x = startEntrance.x;
-  player.y = startEntrance.y;
+  const spawnBase = {
+    x: startEntrance.spawn?.x ?? startEntrance.roadAnchor?.x ?? startEntrance.x ?? Math.floor(ROOM_W / 2),
+    y: startEntrance.spawn?.y ?? startEntrance.roadAnchor?.y ?? startEntrance.y ?? Math.floor(ROOM_H / 2),
+  };
+  const spawn = resolveValidRoomSpawn(activeRoom, spawnBase);
+  player.x = spawn.x;
+  player.y = spawn.y;
 }
 camera.follow(player);
 let projectiles = [];

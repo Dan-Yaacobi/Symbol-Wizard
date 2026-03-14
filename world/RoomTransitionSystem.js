@@ -4,6 +4,20 @@ function isWalkableTile(room, x, y) {
   return Boolean(tile?.walkable);
 }
 
+function isObjectBlocked(room, x, y) {
+  const objects = room?.objects ?? [];
+  for (const object of objects) {
+    if (!object?.collision) continue;
+    const footprint = object.footprint ?? [[0, 0]];
+    for (const [dx, dy] of footprint) {
+      const ox = Math.round(object.x + dx);
+      const oy = Math.round(object.y + dy);
+      if (ox === x && oy === y) return true;
+    }
+  }
+  return false;
+}
+
 function isInExitCorridor(room, x, y) {
   if (!room?.exitCorridors?.length) return false;
   return room.exitCorridors.some((corridor) => corridor?.edgeTiles?.some((tile) => tile.x === x && tile.y === y));
@@ -49,7 +63,7 @@ function findSpawnPosition(room, preferredX, preferredY, maxRadius = 6) {
   const startX = Math.round(preferredX);
   const startY = Math.round(preferredY);
 
-  if (isWalkableTile(room, startX, startY) && !isInExitCorridor(room, startX, startY)) {
+  if (isWalkableTile(room, startX, startY) && !isInExitCorridor(room, startX, startY) && !isObjectBlocked(room, startX, startY)) {
     return { x: startX, y: startY };
   }
 
@@ -60,6 +74,7 @@ function findSpawnPosition(room, preferredX, preferredY, maxRadius = 6) {
       for (let x = startX - radius; x <= startX + radius; x += 1) {
         if (Math.max(Math.abs(x - startX), Math.abs(y - startY)) !== radius) continue;
         if (!isWalkableTile(room, x, y)) continue;
+        if (isObjectBlocked(room, x, y)) continue;
 
         if (!fallback) fallback = { x, y };
         if (!isInExitCorridor(room, x, y)) return { x, y };
