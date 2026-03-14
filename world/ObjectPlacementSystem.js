@@ -110,10 +110,13 @@ function stampObjectTiles(tiles, object, rng) {
 }
 
 export class ObjectPlacementSystem {
-  placeObjects({ tiles, rng, roadMask, blockedMask, roomId }) {
+  placeObjects({ tiles, rng, roadMask, blockedMask, roomId, biomeConfig = null }) {
     const roadPoints = collectRoadPoints(roadMask);
     const templates = buildPlacementTemplates();
-    const count = randomInt(rng, 26, 40);
+    const density = Math.max(0, Math.min(1, biomeConfig?.objectDensity ?? 0.75));
+    const minCount = Math.max(4, Math.floor(10 + (26 * density)));
+    const maxCount = Math.max(minCount, Math.floor(14 + (34 * density)));
+    const count = randomInt(rng, minCount, maxCount);
     const objects = [];
 
     for (let i = 0; i < count; i += 1) {

@@ -1,5 +1,6 @@
 import { generateBiomeGraph } from './BiomeGraphGenerator.js';
 import { generateRoomInstance } from './RoomInstanceGenerator.js';
+import { resolveBiomeConfig } from './BiomeConfig.js';
 
 function randomSeed() {
   return Math.floor(Math.random() * 0x7fffffff);
@@ -24,15 +25,19 @@ export class BiomeGenerator {
 
   enterBiome(biomeId, seed = randomSeed()) {
     if (!this.biomes.has(biomeId)) {
+      const biomeType = resolveBiomeType(biomeId);
+      const biomeConfig = resolveBiomeConfig(biomeType);
       const graph = generateBiomeGraph({
         seed,
         roomWidth: this.roomWidth,
         roomHeight: this.roomHeight,
+        biomeConfig,
       });
 
       const biome = {
         biomeId,
-        biomeType: resolveBiomeType(biomeId),
+        biomeType,
+        biomeConfig,
         seed,
         rooms: graph.rooms,
         startRoomId: graph.startRoomId,
@@ -40,6 +45,7 @@ export class BiomeGenerator {
 
       for (const roomNode of biome.rooms.values()) {
         roomNode.biomeType = biome.biomeType;
+        roomNode.biomeConfig = biome.biomeConfig;
       }
 
       this.biomes.set(biomeId, biome);
@@ -92,6 +98,7 @@ export class BiomeGenerator {
       roomNode,
       roomWidth: this.roomWidth,
       roomHeight: this.roomHeight,
+      biomeConfig: this.currentBiome?.biomeConfig,
     });
 
     this.roomCache.set(roomId, room);
