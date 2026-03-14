@@ -484,38 +484,155 @@ function tryPlaceLandmarks(tileMap, rng, roadMask, blockedMask) {
   return placements;
 }
 
-function placeTerrainObjectClusters(tileMap, rng, blockedMask, roadMask) {
+function terrainObjectTemplates() {
+  return [
+    {
+      name: 'forest-grove',
+      minTiles: 16,
+      footprint: [
+        { x: -2, y: -1, role: 'edge' }, { x: -1, y: -1, role: 'core' }, { x: 0, y: -1, role: 'core' }, { x: 1, y: -1, role: 'core' }, { x: 2, y: -1, role: 'edge' },
+        { x: -2, y: 0, role: 'core' }, { x: -1, y: 0, role: 'core' }, { x: 0, y: 0, role: 'core' }, { x: 1, y: 0, role: 'core' }, { x: 2, y: 0, role: 'core' },
+        { x: -2, y: 1, role: 'edge' }, { x: -1, y: 1, role: 'core' }, { x: 0, y: 1, role: 'core' }, { x: 1, y: 1, role: 'core' }, { x: 2, y: 1, role: 'edge' },
+        { x: -1, y: -2, role: 'edge' }, { x: 0, y: -2, role: 'edge' }, { x: 1, y: -2, role: 'edge' },
+        { x: -1, y: 2, role: 'edge' }, { x: 0, y: 2, role: 'edge' }, { x: 1, y: 2, role: 'edge' },
+      ],
+      tileForCell: (cell) => (cell.role === 'core'
+        ? tileFrom(tiles.denseTree, {
+          char: '♣',
+          type: 'terrain-object',
+          objectType: 'forest-grove',
+          interaction: 'collidable',
+          collidable: true,
+          destroyable: true,
+          walkable: false,
+        })
+        : tileFrom(tiles.denseTreeBloom, {
+          type: 'terrain-object',
+          objectType: 'forest-grove',
+          interaction: 'destroyable',
+          collidable: true,
+          destroyable: true,
+          walkable: false,
+        })),
+    },
+    {
+      name: 'rock-formation',
+      minTiles: 8,
+      footprint: [
+        { x: 0, y: -2 },
+        { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
+        { x: -2, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 0 },
+        { x: -2, y: 1 }, { x: -1, y: 1 }, { x: 0, y: 1 },
+      ],
+      tileForCell: () => tileFrom(tiles.rockCliff, {
+        char: '▲',
+        fg: '#8d9199',
+        bg: '#262b33',
+        type: 'terrain-object',
+        objectType: 'rock-formation',
+        interaction: 'collidable',
+        collidable: true,
+        destroyable: false,
+        walkable: false,
+      }),
+    },
+    {
+      name: 'small-pond',
+      minTiles: 6,
+      footprint: [
+        { x: -2, y: 0 }, { x: -1, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 },
+        { x: -1, y: -1 }, { x: 0, y: -1 }, { x: 1, y: -1 },
+        { x: -1, y: 1 }, { x: 0, y: 1 }, { x: 1, y: 1 },
+      ],
+      tileForCell: () => tileFrom(tiles.water, {
+        type: 'terrain-object',
+        objectType: 'small-pond',
+        interaction: 'collidable',
+        collidable: true,
+        destroyable: false,
+        walkable: false,
+      }),
+    },
+    {
+      name: 'fallen-tree',
+      minTiles: 5,
+      footprint: [
+        { x: -3, y: 0, role: 'log-end' },
+        { x: -2, y: 0, role: 'log' },
+        { x: -1, y: 0, role: 'log' },
+        { x: 0, y: 0, role: 'log' },
+        { x: 1, y: 0, role: 'log' },
+        { x: 2, y: 0, role: 'log' },
+        { x: 3, y: 0, role: 'log-end' },
+      ],
+      tileForCell: (cell) => tileFrom(tiles.wood, {
+        char: cell.role === 'log-end' ? '◉' : '═',
+        fg: cell.role === 'log-end' ? '#a17347' : '#9b6f41',
+        bg: '#262018',
+        type: 'terrain-object',
+        objectType: 'fallen-tree',
+        interaction: 'destroyable',
+        collidable: true,
+        destroyable: true,
+        walkable: false,
+      }),
+    },
+    {
+      name: 'ruins',
+      minTiles: 10,
+      footprint: [
+        { x: -2, y: -1, role: 'wall' }, { x: -1, y: -1, role: 'wall' }, { x: 0, y: -1, role: 'wall' }, { x: 1, y: -1, role: 'wall' }, { x: 2, y: -1, role: 'wall' },
+        { x: -2, y: 0, role: 'wall' }, { x: 2, y: 0, role: 'wall' },
+        { x: -2, y: 1, role: 'rubble' }, { x: -1, y: 1, role: 'rubble' }, { x: 0, y: 1, role: 'rubble' }, { x: 1, y: 1, role: 'rubble' }, { x: 2, y: 1, role: 'rubble' },
+      ],
+      tileForCell: (cell) => (cell.role === 'wall'
+        ? tileFrom(tiles.stoneWall, {
+          char: '▓',
+          type: 'terrain-object',
+          objectType: 'ruins',
+          interaction: 'collidable',
+          collidable: true,
+          destroyable: false,
+          walkable: false,
+        })
+        : tileFrom(tiles.rockCliff, {
+          char: '·',
+          fg: '#8e949c',
+          bg: '#22262d',
+          type: 'terrain-object',
+          objectType: 'ruins',
+          interaction: 'walkable',
+          collidable: false,
+          destroyable: true,
+          walkable: true,
+        })),
+    },
+  ];
+}
+
+function placeTerrainObjectTemplates(tileMap, rng, blockedMask, roadMask) {
   const roadPoints = collectRoadPoints(roadMask);
-  const clusterCount = randomInt(rng, 8, 14);
+  const templates = terrainObjectTemplates();
+  const placements = randomInt(rng, 8, 12);
 
-  for (let i = 0; i < clusterCount; i += 1) {
-    for (let attempt = 0; attempt < 24; attempt += 1) {
-      const road = roadPoints[randomInt(rng, 0, Math.max(0, roadPoints.length - 1))] ?? { x: Math.floor(tileMap[0].length / 2), y: Math.floor(tileMap.length / 2) };
+  for (let i = 0; i < placements; i += 1) {
+    const template = templates[randomInt(rng, 0, templates.length - 1)];
+    if (template.footprint.length < 3 || template.footprint.length < template.minTiles) continue;
+
+    for (let attempt = 0; attempt < 28; attempt += 1) {
+      const road = roadPoints[randomInt(rng, 0, Math.max(0, roadPoints.length - 1))]
+        ?? { x: Math.floor(tileMap[0].length / 2), y: Math.floor(tileMap.length / 2) };
       const angle = rng() * Math.PI * 2;
-      const distance = randomInt(rng, 10, 24);
-      const center = { x: Math.round(road.x + Math.cos(angle) * distance), y: Math.round(road.y + Math.sin(angle) * distance) };
-      const radiusX = randomInt(rng, 2, 4);
-      const radiusY = randomInt(rng, 2, 4);
-      const footprint = [];
-      for (let y = -radiusY; y <= radiusY; y += 1) {
-        for (let x = -radiusX; x <= radiusX; x += 1) {
-          const shapeNoise = (rng() - 0.5) * 0.35;
-          if (((x * x) / (radiusX * radiusX) + (y * y) / (radiusY * radiusY)) + shapeNoise > 1) continue;
-          footprint.push({ x, y });
-        }
-      }
+      const distance = randomInt(rng, 5, 14);
+      const center = {
+        x: Math.round(road.x + Math.cos(angle) * distance),
+        y: Math.round(road.y + Math.sin(angle) * distance),
+      };
 
-      if (!canPlaceCells(tileMap, center, footprint, blockedMask, { requireWalkable: true })) continue;
+      if (!canPlaceCells(tileMap, center, template.footprint, blockedMask, { requireWalkable: true })) continue;
 
-      const terrainPick = rng();
-      const terrainTile = terrainPick < 0.5
-        ? tileFrom(tiles.denseTree, { type: 'terrain-object', walkable: false })
-        : terrainPick < 0.8
-          ? tileFrom(tiles.rockCliff, { char: '▲', fg: '#8d9199', bg: '#262b33', type: 'terrain-object', walkable: false })
-          : tileFrom(tiles.water, { type: 'terrain-object', walkable: false });
-
-      stampCells(tileMap, center, footprint, () => ({ ...terrainTile }));
-      markMaskFromCells(blockedMask, center, footprint, 1);
+      stampCells(tileMap, center, template.footprint, (cell) => template.tileForCell(cell));
+      markMaskFromCells(blockedMask, center, template.footprint, 1);
       break;
     }
   }
@@ -849,7 +966,7 @@ export function generateRoomInstance({
 
   // 4) Terrain object clusters
   const terrainClusterMask = new Set([...terrainProtectionMask, ...landmarkPlacementMask]);
-  placeTerrainObjectClusters(tilesGrid, rng, terrainClusterMask, roadMask);
+  placeTerrainObjectTemplates(tilesGrid, rng, terrainClusterMask, roadMask);
 
   // 5) Biome boundaries (cannot overwrite roads/exit clearings)
   applySoftBoundariesWithProtection(tilesGrid, boundaryTiles, rng, center, terrainProtectionMask);
