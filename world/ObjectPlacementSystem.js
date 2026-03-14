@@ -17,12 +17,19 @@ function weightedChoice(rng, weightedEntries) {
   return weightedEntries[weightedEntries.length - 1]?.[0] ?? null;
 }
 
+function normalizeFootprintCells(footprint) {
+  if (!Array.isArray(footprint)) return [];
+  return footprint
+    .map((cell) => (Array.isArray(cell) ? { x: cell[0], y: cell[1] } : cell))
+    .filter((cell) => cell && Number.isInteger(cell.x) && Number.isInteger(cell.y));
+}
+
 function isValidFootprint(footprint) {
-  if (!Array.isArray(footprint) || footprint.length === 0) return false;
+  const cells = normalizeFootprintCells(footprint);
+  if (cells.length === 0) return false;
 
   const keySet = new Set();
-  for (const cell of footprint) {
-    if (!cell || !Number.isInteger(cell.x) || !Number.isInteger(cell.y)) return false;
+  for (const cell of cells) {
     keySet.add(`${cell.x},${cell.y}`);
   }
 
@@ -61,14 +68,14 @@ function buildCategoryPool(category) {
   return entries;
 }
 
-function canPlaceObject(tiles, center, footprint, blockedMask) {
-  for (const cell of footprint) {
+function canPlaceObject(tiles, center, footprint, blockedMask, allowOverlap = false) {
+  for (const cell of normalizeFootprintCells(footprint)) {
     const x = center.x + cell.x;
     const y = center.y + cell.y;
     const tile = tiles[y]?.[x];
     if (!tile?.walkable) return false;
     if (tile.type === 'road') return false;
-    if (blockedMask.has(`${x},${y}`)) return false;
+    if (!allowOverlap && blockedMask.has(`${x},${y}`)) return false;
   }
   return true;
 }
@@ -93,7 +100,7 @@ function samplePlacementCenter(tiles, rng) {
 }
 
 function markObject(mask, center, footprint, padding = 1) {
-  for (const cell of footprint) {
+  for (const cell of normalizeFootprintCells(footprint)) {
     const cx = center.x + cell.x;
     const cy = center.y + cell.y;
     for (let oy = -padding; oy <= padding; oy += 1) {
@@ -105,61 +112,29 @@ function markObject(mask, center, footprint, padding = 1) {
 }
 
 function stampObjectTiles(tiles, object) {
-  const variants = object.tileVariants ?? [];
-  if (variants.length === 0) return;
+  const objectTiles = Array.isArray(object.tiles) && object.tiles.length > 0
+    ? object.tiles
+    : object.tileVariants ?? [];
+  if (objectTiles.length === 0) return;
 
-  for (const [dx, dy] of object.footprint ?? [[0, 0]]) {
+  for (const tile of objectTiles) {
+    const dx = Number.isInteger(tile.x) ? tile.x : 0;
+    const dy = Number.isInteger(tile.y) ? tile.y : 0;
     const x = Math.round(object.x + dx);
     const y = Math.round(object.y + dy);
     if (!tiles[y]?.[x]) continue;
 
-    const variant = object.variant ?? variants[Math.abs((dx * 17) + (dy * 11)) % variants.length];
     tiles[y][x] = {
       ...tiles[y][x],
-      ...variant,
+      char: tile.char,
+      fg: tile.fg,
+      bg: tile.bg ?? null,
       type: `object-${object.type}`,
       walkable: object.collision ? false : tiles[y][x].walkable,
     };
   }
 }
 
-export class ObjectPlacementSystem {
-  placeObjects({ tiles, rng, roadMask, blockedMask, roomId, biomeConfig = null }) {
-    const roadPoints = collectRoadPoints(roadMask);
-    const templates = buildPlacementTemplates();
-    const density = Math.max(0, Math.min(1, biomeConfig?.objectDensity ?? 0.75));
-    const minCount = Math.max(4, Math.floor(10 + (26 * density)));
-    const maxCount = Math.max(minCount, Math.floor(14 + (34 * density)));
-    const count = randomInt(rng, minCount, maxCount);
-    const objects = [];
-
-    for (let i = 0; i < count; i += 1) {
-      const template = templates[randomInt(rng, 0, templates.length - 1)];
-      if (!template) continue;
-
-      for (let attempt = 0; attempt < 38; attempt += 1) {
-        const road = roadPoints[randomInt(rng, 0, Math.max(0, roadPoints.length - 1))] ?? { x: Math.floor(tiles[0].length / 2), y: Math.floor(tiles.length / 2) };
-        const angle = rng() * Math.PI * 2;
-        const distance = randomInt(rng, 6, 18);
-        const center = {
-          x: Math.round(road.x + Math.cos(angle) * distance),
-          y: Math.round(road.y + Math.sin(angle) * distance),
-        };
-
-        if (!canPlaceObject(tiles, center, template.footprint, blockedMask)) continue;
-
-        const placed = spawnObject(template.type, center, {
-          id: `${roomId}-object-${objects.length}`,
-          footprint: structuredClone(template.footprint),
-          state: { spawned: true },
-        });
-
-        if (!placed) break;
-
-        objects.push(placed);
-        stampObjectTiles(tiles, placed, rng);
-        markObject(blockedMask, center, placed.footprint, placed.collision ? 1 : 0);
-        break;
 function placeFromPool({ tiles, rng, blockedMask, roomId, pools, targetMin, targetMax, idPrefix, padding }) {
   const objects = [];
   const targetCount = randomInt(rng, targetMin, targetMax);
@@ -168,84 +143,53 @@ function placeFromPool({ tiles, rng, blockedMask, roomId, pools, targetMin, targ
     const definition = weightedChoice(rng, pools);
     if (!definition) continue;
 
-    let bestCenter = null;
-    let bestScore = -1;
+    let best = null;
 
     for (let attempt = 0; attempt < 45; attempt += 1) {
       const center = samplePlacementCenter(tiles, rng);
-      if (!canPlaceObject(tiles, center, definition.footprint, blockedMask)) continue;
+      const candidate = spawnObject(
+        definition.id,
+        center,
+        {
+          id: `${roomId}-${idPrefix}-${objects.length}`,
+          state: { spawned: true },
+        },
+        rng,
+      );
 
-      const score = tileVariationScore(tiles, center.x, center.y);
-      if (score > bestScore) {
-        bestScore = score;
-        bestCenter = center;
-      }
+      if (!candidate) continue;
+      if (!canPlaceObject(tiles, center, candidate.footprint, blockedMask, definition.allowOverlap)) continue;
+
+      const score = tileVariationScore(tiles, center.x, center.y) + (rng() * 0.5);
+      if (!best || score > best.score) best = { candidate, center, score };
     }
 
-    if (!bestCenter) continue;
+    if (!best) continue;
 
-    const placed = spawnObject(
-      definition.id,
-      bestCenter,
-      {
-        id: `${roomId}-${idPrefix}-${objects.length}`,
-        footprint: structuredClone(definition.footprint),
-        state: { spawned: true },
-      },
-      rng,
-    );
-
-    if (!placed) continue;
-
-    objects.push(placed);
-    stampObjectTiles(tiles, placed);
-    markObject(blockedMask, bestCenter, definition.footprint, padding);
+    objects.push(best.candidate);
+    stampObjectTiles(tiles, best.candidate);
+    markObject(blockedMask, best.center, best.candidate.footprint, padding);
   }
 
   return objects;
 }
 
-const OBJECT_POOL = [
-  ['pine_tree_small', 12],
-  ['pine_tree_large', 10],
-  ['oak_tree', 10],
-  ['dead_tree', 4],
-  ['fallen_log', 6],
-  ['mossy_rock', 6],
-  ['rock_cluster', 6],
-  ['berry_bush', 8],
-  ['thorn_bush', 5],
-  ['mushroom_cluster', 8],
-  ['tall_grass_patch', 9],
-  ['flower_patch_red', 7],
-  ['flower_patch_yellow', 7],
-  ['barrel', 2],
-  ['crate', 2],
-  ['vase', 2],
-  ['wooden_box', 2],
-  ['supply_bag', 2],
-  ['campfire', 1],
-  ['shrine', 1],
-  ['signpost', 1],
-  ['well', 1],
-].map(([id, weight]) => [objectLibrary[id], weight]);
+const NON_LANDMARK_POOL = Object.values(objectLibrary)
+  .filter((definition) => definition && definition.category !== OBJECT_CATEGORY.LANDMARK)
+  .map((definition) => [definition, Math.max(0.01, Number(definition.spawnWeight) || 1)]);
 
-const LANDMARK_POOL = [
-  ['ancient_tree', 4],
-  ['ruined_statue', 3],
-  ['stone_circle', 3],
-  ['abandoned_cart', 3],
-].map(([id, weight]) => [objectLibrary[id], weight]);
+const LANDMARK_POOL = Object.values(objectLibrary)
+  .filter((definition) => definition && definition.category === OBJECT_CATEGORY.LANDMARK)
+  .map((definition) => [definition, Math.max(0.01, Number(definition.spawnWeight) || 1)]);
 
 export class ObjectPlacementSystem {
   placeObjects({ tiles, rng, blockedMask, roomId }) {
-    const pool = OBJECT_POOL.filter(([entry]) => entry && entry.category !== OBJECT_CATEGORY.LANDMARK);
     return placeFromPool({
       tiles,
       rng,
       blockedMask,
       roomId,
-      pools: pool,
+      pools: NON_LANDMARK_POOL,
       targetMin: 28,
       targetMax: 44,
       idPrefix: 'object',
@@ -254,13 +198,12 @@ export class ObjectPlacementSystem {
   }
 
   placeLandmarks({ tiles, rng, blockedMask, roomId }) {
-    const pool = LANDMARK_POOL.filter(([entry]) => entry && entry.category === OBJECT_CATEGORY.LANDMARK);
     return placeFromPool({
       tiles,
       rng,
       blockedMask,
       roomId,
-      pools: pool,
+      pools: LANDMARK_POOL,
       targetMin: 1,
       targetMax: 3,
       idPrefix: 'landmark',
