@@ -37,7 +37,13 @@ function isValidFootprint(footprint) {
     const [xString, yString] = current.split(',');
     const cx = Number(xString);
     const cy = Number(yString);
-    const neighbors = [`${cx + 1},${cy}`, `${cx - 1},${cy}`, `${cx},${cy + 1}`, `${cx},${cy - 1}`];
+
+    const neighbors = [
+      `${cx + 1},${cy}`,
+      `${cx - 1},${cy}`,
+      `${cx},${cy + 1}`,
+      `${cx},${cy - 1}`,
+    ];
 
     for (const neighbor of neighbors) {
       if (!keySet.has(neighbor) || visited.has(neighbor)) continue;
@@ -53,7 +59,7 @@ function buildCategoryPool(category) {
   const entries = [];
 
   for (const definition of Object.values(objectLibrary)) {
-    if (definition.category !== category) continue;
+    if (category && definition.category !== category) continue;
     if (!isValidFootprint(definition.footprint)) continue;
     entries.push(definition);
   }
@@ -65,23 +71,33 @@ function canPlaceObject(tiles, center, footprint, blockedMask) {
   for (const cell of footprint) {
     const x = center.x + cell.x;
     const y = center.y + cell.y;
+
     const tile = tiles[y]?.[x];
     if (!tile?.walkable) return false;
     if (tile.type === 'road') return false;
     if (blockedMask.has(`${x},${y}`)) return false;
   }
+
   return true;
 }
 
 function tileVariationScore(tiles, x, y) {
   const centerType = tiles[y]?.[x]?.type;
   if (!centerType) return 0;
+
   let differences = 0;
-  const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const neighbors = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+
   for (const [dx, dy] of neighbors) {
     const neighborType = tiles[y + dy]?.[x + dx]?.type;
     if (neighborType && neighborType !== centerType) differences += 1;
   }
+
   return differences;
 }
 
@@ -96,6 +112,7 @@ function markObject(mask, center, footprint, padding = 1) {
   for (const cell of footprint) {
     const cx = center.x + cell.x;
     const cy = center.y + cell.y;
+
     for (let oy = -padding; oy <= padding; oy += 1) {
       for (let ox = -padding; ox <= padding; ox += 1) {
         mask.add(`${cx + ox},${cy + oy}`);
@@ -113,7 +130,10 @@ function stampObjectTiles(tiles, object) {
     const y = Math.round(object.y + dy);
     if (!tiles[y]?.[x]) continue;
 
-    const variant = object.variant ?? variants[Math.abs((dx * 17) + (dy * 11)) % variants.length];
+    const variant =
+      object.variant ??
+      variants[Math.abs(dx * 17 + dy * 11) % variants.length];
+
     tiles[y][x] = {
       ...tiles[y][x],
       ...variant,
@@ -123,44 +143,17 @@ function stampObjectTiles(tiles, object) {
   }
 }
 
-export class ObjectPlacementSystem {
-  placeObjects({ tiles, rng, roadMask, blockedMask, roomId, biomeConfig = null }) {
-    const roadPoints = collectRoadPoints(roadMask);
-    const templates = buildPlacementTemplates();
-    const density = Math.max(0, Math.min(1, biomeConfig?.objectDensity ?? 0.75));
-    const minCount = Math.max(4, Math.floor(10 + (26 * density)));
-    const maxCount = Math.max(minCount, Math.floor(14 + (34 * density)));
-    const count = randomInt(rng, minCount, maxCount);
-    const objects = [];
-
-    for (let i = 0; i < count; i += 1) {
-      const template = templates[randomInt(rng, 0, templates.length - 1)];
-      if (!template) continue;
-
-      for (let attempt = 0; attempt < 38; attempt += 1) {
-        const road = roadPoints[randomInt(rng, 0, Math.max(0, roadPoints.length - 1))] ?? { x: Math.floor(tiles[0].length / 2), y: Math.floor(tiles.length / 2) };
-        const angle = rng() * Math.PI * 2;
-        const distance = randomInt(rng, 6, 18);
-        const center = {
-          x: Math.round(road.x + Math.cos(angle) * distance),
-          y: Math.round(road.y + Math.sin(angle) * distance),
-        };
-
-        if (!canPlaceObject(tiles, center, template.footprint, blockedMask)) continue;
-
-        const placed = spawnObject(template.type, center, {
-          id: `${roomId}-object-${objects.length}`,
-          footprint: structuredClone(template.footprint),
-          state: { spawned: true },
-        });
-
-        if (!placed) break;
-
-        objects.push(placed);
-        stampObjectTiles(tiles, placed, rng);
-        markObject(blockedMask, center, placed.footprint, placed.collision ? 1 : 0);
-        break;
-function placeFromPool({ tiles, rng, blockedMask, roomId, pools, targetMin, targetMax, idPrefix, padding }) {
+function placeFromPool({
+  tiles,
+  rng,
+  blockedMask,
+  roomId,
+  pools,
+  targetMin,
+  targetMax,
+  idPrefix,
+  padding,
+}) {
   const objects = [];
   const targetCount = randomInt(rng, targetMin, targetMax);
 
@@ -239,7 +232,10 @@ const LANDMARK_POOL = [
 
 export class ObjectPlacementSystem {
   placeObjects({ tiles, rng, blockedMask, roomId }) {
-    const pool = OBJECT_POOL.filter(([entry]) => entry && entry.category !== OBJECT_CATEGORY.LANDMARK);
+    const pool = OBJECT_POOL.filter(
+      ([entry]) => entry && entry.category !== OBJECT_CATEGORY.LANDMARK,
+    );
+
     return placeFromPool({
       tiles,
       rng,
@@ -254,7 +250,10 @@ export class ObjectPlacementSystem {
   }
 
   placeLandmarks({ tiles, rng, blockedMask, roomId }) {
-    const pool = LANDMARK_POOL.filter(([entry]) => entry && entry.category === OBJECT_CATEGORY.LANDMARK);
+    const pool = LANDMARK_POOL.filter(
+      ([entry]) => entry && entry.category === OBJECT_CATEGORY.LANDMARK,
+    );
+
     return placeFromPool({
       tiles,
       rng,
@@ -270,8 +269,9 @@ export class ObjectPlacementSystem {
 }
 
 export function listObjectDefinitions(category = null) {
-  const entries = buildCategoryPool(category ?? OBJECT_CATEGORY.ENVIRONMENT)
-    .map((def) => def.id);
-  if (category) return entries;
+  if (category) {
+    return buildCategoryPool(category).map((def) => def.id);
+  }
+
   return Object.values(objectLibrary).map((def) => def.id);
 }
