@@ -1,10 +1,3 @@
-function inwardOffset(direction, distance = 1) {
-  if (direction === 'north') return { x: 0, y: distance };
-  if (direction === 'south') return { x: 0, y: -distance };
-  if (direction === 'west') return { x: distance, y: 0 };
-  return { x: -distance, y: 0 };
-}
-
 function isWalkableTile(room, x, y) {
   const row = room?.tiles?.[y];
   const tile = row?.[x];
@@ -13,7 +6,16 @@ function isWalkableTile(room, x, y) {
 
 function isInExitZone(room, x, y) {
   if (!room?.exitZones?.length) return false;
-  return room.exitZones.some((zone) => zone.tiles.some((tile) => tile.x === x && tile.y === y));
+  return room.exitZones.some((zone) => {
+    if (!zone?.edgeStart || !zone?.edgeEnd) return false;
+
+    const minX = Math.min(zone.edgeStart.x, zone.edgeEnd.x);
+    const maxX = Math.max(zone.edgeStart.x, zone.edgeEnd.x);
+    const minY = Math.min(zone.edgeStart.y, zone.edgeEnd.y);
+    const maxY = Math.max(zone.edgeStart.y, zone.edgeEnd.y);
+
+    return x >= minX && x <= maxX && y >= minY && y <= maxY;
+  });
 }
 
 function findSpawnPosition(room, preferredX, preferredY, maxRadius = 6) {
@@ -96,9 +98,26 @@ export class RoomTransitionSystem {
     const tx = Math.round(player.x);
     const ty = Math.round(player.y);
 
-    const hitZone = activeRoom.exitZones.find((zone) =>
-      zone.tiles.some((tile) => tile.x === tx && tile.y === ty),
-    );
+    const edgeThreshold = 1;
+    const roomWidth = activeRoom.tiles?.[0]?.length ?? 0;
+    const roomHeight = activeRoom.tiles?.length ?? 0;
+
+    const hitZone = activeRoom.exitZones.find((zone) => {
+      if (!zone?.edgeStart || !zone?.edgeEnd) return false;
+
+      const minX = Math.min(zone.edgeStart.x, zone.edgeEnd.x);
+      const maxX = Math.max(zone.edgeStart.x, zone.edgeEnd.x);
+      const minY = Math.min(zone.edgeStart.y, zone.edgeEnd.y);
+      const maxY = Math.max(zone.edgeStart.y, zone.edgeEnd.y);
+      const inCorridor = tx >= minX && tx <= maxX && ty >= minY && ty <= maxY;
+      if (!inCorridor) return false;
+
+      if (zone.direction === 'east') return tx >= roomWidth - 1 - edgeThreshold;
+      if (zone.direction === 'west') return tx <= edgeThreshold;
+      if (zone.direction === 'north') return ty <= edgeThreshold;
+      if (zone.direction === 'south') return ty >= roomHeight - 1 - edgeThreshold;
+      return false;
+    });
 
     return hitZone?.exitId ?? null;
   }
@@ -117,9 +136,8 @@ export class RoomTransitionSystem {
     context.activeRoom.state.visited = true;
     targetRoom.state.visited = true;
 
-    const offset = inwardOffset(targetEntrance.direction, 3);
-    const preferredSpawnX = targetEntrance.x + offset.x;
-    const preferredSpawnY = targetEntrance.y + offset.y;
+    const preferredSpawnX = targetEntrance.spawn?.x ?? targetEntrance.roadAnchor?.x ?? targetEntrance.x;
+    const preferredSpawnY = targetEntrance.spawn?.y ?? targetEntrance.roadAnchor?.y ?? targetEntrance.y;
     const spawn = findSpawnPosition(targetRoom, preferredSpawnX, preferredSpawnY);
     context.player.x = spawn.x;
     context.player.y = spawn.y;
