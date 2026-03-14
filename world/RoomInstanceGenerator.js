@@ -32,6 +32,10 @@ function randomInt(rng, min, max) {
   return Math.floor(rng() * (max - min + 1)) + min;
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function chooseBiomeWallTiles(roomNode) {
   const biomeType = roomNode.biomeType ?? 'forest';
   const tileKeys = biomeWallTypes[biomeType] ?? biomeWallTypes.forest;
@@ -647,43 +651,96 @@ function createRoadClearanceMask(roadMask, width, height, bufferRadius = 3) {
   return protectedMask;
 }
 
-function carveAnchorTile(tileMap, anchor) {
-  return carveFloor(tileMap, anchor.x, anchor.y);
-}
+function buildEdgePassage(anchor, roomWidth, roomHeight, rng) {
+  const direction = anchor.direction;
+  const corridorWidth = randomInt(rng, 8, 14);
+  const halfWidth = Math.floor(corridorWidth / 2);
+  const edgeInset = 4;
 
-function markAnchorTile(tileMap, anchor, tileType, id) {
-  if (!carveAnchorTile(tileMap, anchor)) return;
+  if (direction === 'north' || direction === 'south') {
+    const edgeY = direction === 'north' ? 0 : roomHeight - 1;
+    const baseX = clamp(anchor.x, edgeInset, roomWidth - 1 - edgeInset);
+    const edgeStartX = clamp(baseX - halfWidth, 0, roomWidth - 1);
+    const edgeEndX = clamp(baseX + halfWidth, 0, roomWidth - 1);
+    const centerX = Math.round((edgeStartX + edgeEndX) / 2);
 
-  const tile = {
-    ...tiles.floor,
-    char: tileType === 'exit' ? '>' : '<',
-    fg: tileType === 'exit' ? '#f2d67f' : '#8edcf4',
-    bg: '#1f2430',
-    walkable: true,
-    type: tileType,
-    direction: anchor.direction,
-  };
-
-  if (tileType === 'exit') {
-    tile.exitId = id;
-  } else {
-    tile.entranceId = id;
+    return {
+      direction,
+      x: centerX,
+      y: direction === 'north' ? 4 : roomHeight - 5,
+      edgeStart: { x: edgeStartX, y: edgeY },
+      edgeEnd: { x: edgeEndX, y: edgeY },
+      center: { x: centerX, y: edgeY },
+      roadAnchor: {
+        x: centerX,
+        y: direction === 'north' ? 4 : roomHeight - 5,
+      },
+      spawn: {
+        x: centerX,
+        y: direction === 'north' ? 4 : roomHeight - 5,
+      },
+    };
   }
 
-  tileMap[anchor.y][anchor.x] = tile;
+  const edgeX = direction === 'west' ? 0 : roomWidth - 1;
+  const baseY = clamp(anchor.y, edgeInset, roomHeight - 1 - edgeInset);
+  const edgeStartY = clamp(baseY - halfWidth, 0, roomHeight - 1);
+  const edgeEndY = clamp(baseY + halfWidth, 0, roomHeight - 1);
+  const centerY = Math.round((edgeStartY + edgeEndY) / 2);
+
+  return {
+    direction,
+    x: direction === 'west' ? 4 : roomWidth - 5,
+    y: centerY,
+    edgeStart: { x: edgeX, y: edgeStartY },
+    edgeEnd: { x: edgeX, y: edgeEndY },
+    center: { x: edgeX, y: centerY },
+    roadAnchor: {
+      x: direction === 'west' ? 4 : roomWidth - 5,
+      y: centerY,
+    },
+    spawn: {
+      x: direction === 'west' ? 4 : roomWidth - 5,
+      y: centerY,
+    },
+  };
 }
 
-function buildExitZone(anchor, roomWidth, roomHeight, radius = 2) {
-  const tiles = [];
+function carveEdgePassage(tileMap, passage, roadMask, roomWidth, roomHeight) {
+  const depth = 7;
+  const metadata = { type: 'road' };
 
-  for (let y = anchor.y - radius; y <= anchor.y + radius; y += 1) {
-    for (let x = anchor.x - radius; x <= anchor.x + radius; x += 1) {
-      if (x < 0 || y < 0 || x >= roomWidth || y >= roomHeight) continue;
-      tiles.push({ x, y });
+  if (passage.direction === 'north' || passage.direction === 'south') {
+    const yStep = passage.direction === 'north' ? 1 : -1;
+    const originY = passage.direction === 'north' ? 0 : roomHeight - 1;
+    for (let depthStep = 0; depthStep < depth; depthStep += 1) {
+      const y = originY + yStep * depthStep;
+      for (let x = passage.edgeStart.x; x <= passage.edgeEnd.x; x += 1) {
+        carveFloor(tileMap, x, y, tiles.pathPebble, metadata);
+        roadMask.add(`${x},${y}`);
+      }
+    }
+    return;
+  }
+
+  const xStep = passage.direction === 'west' ? 1 : -1;
+  const originX = passage.direction === 'west' ? 0 : roomWidth - 1;
+  for (let depthStep = 0; depthStep < depth; depthStep += 1) {
+    const x = originX + xStep * depthStep;
+    for (let y = passage.edgeStart.y; y <= passage.edgeEnd.y; y += 1) {
+      carveFloor(tileMap, x, y, tiles.pathPebble, metadata);
+      roadMask.add(`${x},${y}`);
     }
   }
+}
 
-  return tiles;
+function buildEdgeZone(exitId, passage) {
+  return {
+    exitId,
+    direction: passage.direction,
+    edgeStart: structuredClone(passage.edgeStart),
+    edgeEnd: structuredClone(passage.edgeEnd),
+  };
 }
 
 function anchorDirection(anchor, roomWidth, roomHeight) {
@@ -767,28 +824,38 @@ export function generateRoomInstance({
   const polygon = generatePolygonVertices(roomWidth, roomHeight, rng);
   const terrainCenter = centroidFromPolygon(polygon);
   const resolvedAnchors = resolveRoomAnchors(roomNode.exits, roomNode.entrances, roomWidth, roomHeight);
-  const resolvedExits = resolvedAnchors.exits;
-  const resolvedEntrances = resolvedAnchors.entrances;
+  const resolvedExits = Object.fromEntries(
+    Object.entries(resolvedAnchors.exits).map(([id, anchor]) => [id, buildEdgePassage(anchor, roomWidth, roomHeight, rng)]),
+  );
+  const resolvedEntrances = Object.fromEntries(
+    Object.entries(resolvedAnchors.entrances).map(([id, anchor]) => [id, buildEdgePassage(anchor, roomWidth, roomHeight, rng)]),
+  );
   paintBaseTerrain(tilesGrid, rng);
   const roadMask = new Set();
 
-  const primaryRoadPath = buildPrimaryRoadPath(resolvedExits, resolvedEntrances, terrainCenter);
+  const primaryRoadPath = buildPrimaryRoadPath(
+    Object.fromEntries(Object.entries(resolvedExits).map(([id, passage]) => [id, passage.roadAnchor])),
+    Object.fromEntries(Object.entries(resolvedEntrances).map(([id, passage]) => [id, passage.roadAnchor])),
+    terrainCenter,
+  );
   carvePrimaryRoadNetwork(tilesGrid, primaryRoadPath, terrainCenter, rng, roadMask);
   const exitZones = [];
   const accessProtectionMask = new Set([`${center.x},${center.y}`]);
 
   for (const exit of Object.values(resolvedExits)) {
-    carveRoadToAnchor(tilesGrid, center, exit, rng, { roadMask });
-    buildExitClearing(tilesGrid, exit, rng, accessProtectionMask);
-    carveExitOpening(tilesGrid, exit);
-    accessProtectionMask.add(`${exit.x},${exit.y}`);
+    carveRoadToAnchor(tilesGrid, center, exit.roadAnchor, rng, { roadMask });
+    buildExitClearing(tilesGrid, exit.roadAnchor, rng, accessProtectionMask);
+    carveExitOpening(tilesGrid, { ...exit.roadAnchor, direction: exit.direction });
+    carveEdgePassage(tilesGrid, exit, roadMask, roomWidth, roomHeight);
+    accessProtectionMask.add(`${exit.roadAnchor.x},${exit.roadAnchor.y}`);
   }
 
   for (const entrance of Object.values(resolvedEntrances)) {
-    carveRoadToAnchor(tilesGrid, center, entrance, rng, { roadMask });
-    buildExitClearing(tilesGrid, entrance, rng, accessProtectionMask);
-    carveExitOpening(tilesGrid, entrance);
-    accessProtectionMask.add(`${entrance.x},${entrance.y}`);
+    carveRoadToAnchor(tilesGrid, center, entrance.roadAnchor, rng, { roadMask });
+    buildExitClearing(tilesGrid, entrance.roadAnchor, rng, accessProtectionMask);
+    carveExitOpening(tilesGrid, { ...entrance.roadAnchor, direction: entrance.direction });
+    carveEdgePassage(tilesGrid, entrance, roadMask, roomWidth, roomHeight);
+    accessProtectionMask.add(`${entrance.roadAnchor.x},${entrance.roadAnchor.y}`);
   }
 
   const roadClearanceMask = createRoadClearanceMask(roadMask, roomWidth, roomHeight, 4);
@@ -837,7 +904,10 @@ export function generateRoomInstance({
 
   // Additional placements near roads and exits.
   const landmarkBufferMask = buildProtectedZoneMask(
-    [...Object.values(resolvedExits), ...Object.values(resolvedEntrances)],
+    [
+      ...Object.values(resolvedExits).map((passage) => passage.roadAnchor),
+      ...Object.values(resolvedEntrances).map((passage) => passage.roadAnchor),
+    ],
     roomWidth,
     roomHeight,
     7,
@@ -859,7 +929,7 @@ export function generateRoomInstance({
     tilesGrid,
     rng,
     center,
-    [...Object.values(resolvedExits), ...Object.values(resolvedEntrances)],
+    [...Object.values(resolvedExits).map((passage) => passage.roadAnchor), ...Object.values(resolvedEntrances).map((passage) => passage.roadAnchor)],
     terrainProtectionMask,
     roadMask,
   );
@@ -867,17 +937,8 @@ export function generateRoomInstance({
   // 6) Decorative scattering (non-blocking)
   scatterDecoratives(tilesGrid, rng, terrainClusterMask);
 
-  for (const [entranceId, entrance] of Object.entries(resolvedEntrances)) {
-    markAnchorTile(tilesGrid, entrance, 'entrance', entranceId);
-  }
-
   for (const [exitId, exit] of Object.entries(resolvedExits)) {
-    markAnchorTile(tilesGrid, exit, 'exit', exitId);
-    exitZones.push({
-      exitId,
-      direction: exit.direction,
-      tiles: buildExitZone(exit, roomWidth, roomHeight),
-    });
+    exitZones.push(buildEdgeZone(exitId, exit));
   }
 
   return {
