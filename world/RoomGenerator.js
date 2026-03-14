@@ -54,7 +54,20 @@ export class RoomGenerator {
     mergeMask(roadMask, mainRoadMask);
     mergeMask(roadMask, branchRoadMask);
 
+    const spawnMask = new Set();
+    for (const passage of Object.values(resolvedEntrances)) {
+      if (!passage?.spawn) continue;
+      const sx = Math.round(passage.spawn.x);
+      const sy = Math.round(passage.spawn.y);
+      for (let oy = -2; oy <= 2; oy += 1) {
+        for (let ox = -2; ox <= 2; ox += 1) {
+          spawnMask.add(`${sx + ox},${sy + oy}`);
+        }
+      }
+    }
+
     const protectedMask = new Set(roadMask);
+    mergeMask(protectedMask, spawnMask);
 
     // 4) generate terrain patches
     this.terrainGenerator.generateTerrainPatches(grid, rng, protectedMask, center);
