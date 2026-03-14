@@ -73,26 +73,28 @@ export class RoomGenerator {
 
     // 4) place objects
     const objectBlockedMask = new Set(protectedMask);
-
-    // 5) place objects
     const objects = this.objectPlacementSystem.placeObjects({
       biomeConfig: effectiveBiomeConfig,
       tiles: grid,
       rng,
-      roadMask,
       blockedMask: objectBlockedMask,
       roomId: roomNode.id,
     });
 
-    // 6) place landmarks
-    const landmarkMask = new Set(objectBlockedMask);
-    this.terrainGenerator.placeLandmarks(grid, rng, roadMask, landmarkMask, effectiveBiomeConfig);
+    // 5) place landmarks
+    const landmarks = this.objectPlacementSystem.placeLandmarks({
+      tiles: grid,
+      rng,
+      blockedMask: objectBlockedMask,
+      roomId: roomNode.id,
+    });
 
-    // 7) decorate
-    this.terrainGenerator.decorate(grid, rng, landmarkMask);
+    // 6) decorate
+    this.terrainGenerator.decorate(grid, rng, objectBlockedMask);
 
-    // 8) build collision map
-    const collisionMap = buildCollisionMap(grid, objects);
+    // 7) build collision map
+    const placedObjects = [...objects, ...landmarks];
+    const collisionMap = buildCollisionMap(grid, placedObjects);
     const exitCorridors = scanExitCorridors(grid, resolvedExits, this.roomWidth, this.roomHeight);
 
     return {
@@ -100,7 +102,7 @@ export class RoomGenerator {
       tiles: grid,
       collisionMap,
       entities: [],
-      objects,
+      objects: placedObjects,
       entrances: structuredClone(resolvedEntrances),
       exits: structuredClone(resolvedExits),
       exitCorridors,

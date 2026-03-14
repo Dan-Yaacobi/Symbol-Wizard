@@ -38,6 +38,18 @@ export function interactWithObject(object, context = {}) {
     object.state.opened = true;
     return true;
   }
+  if (object.interactionType === 'rest') {
+    object.state.rested = true;
+    return true;
+  }
+  if (object.interactionType === 'heal') {
+    object.state.used = true;
+    return true;
+  }
+  if (object.interactionType === 'message') {
+    object.state.read = true;
+    return true;
+  }
   if (typeof object.interact === 'function') {
     object.interact(context);
     return true;
