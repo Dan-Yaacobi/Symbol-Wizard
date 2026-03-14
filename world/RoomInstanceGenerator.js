@@ -1,4 +1,5 @@
 import { tiles } from './TilePalette.js';
+import { spawnObject } from './ObjectLibrary.js';
 
 const biomeWallTypes = {
   forest: ['denseTree', 'denseTreeSpire', 'denseTreeBloom'],
@@ -754,6 +755,80 @@ function placeTerrainObjectTemplates(tileMap, rng, blockedMask, roadMask) {
   }
 }
 
+function normalizeObjectType(rawType) {
+  const normalized = `${rawType ?? ''}`.trim().toLowerCase();
+  if (!normalized) return null;
+  return normalized.replace(/-/g, '_');
+}
+
+function extractRoomObjects(tileMap, roomId) {
+  const visited = new Set();
+  const roomObjects = [];
+  let index = 0;
+
+  const cardinal = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+
+  for (let y = 0; y < tileMap.length; y += 1) {
+    for (let x = 0; x < tileMap[0].length; x += 1) {
+      const key = `${x},${y}`;
+      if (visited.has(key)) continue;
+      const tile = tileMap[y]?.[x];
+      if (tile?.type !== 'terrain-object' || !tile.objectType) continue;
+
+      const objectType = normalizeObjectType(tile.objectType);
+      if (!objectType) continue;
+
+      const queue = [{ x, y }];
+      const cells = [];
+      visited.add(key);
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        cells.push(current);
+
+        for (const [dx, dy] of cardinal) {
+          const nx = current.x + dx;
+          const ny = current.y + dy;
+          const nKey = `${nx},${ny}`;
+          if (visited.has(nKey)) continue;
+          const nextTile = tileMap[ny]?.[nx];
+          if (nextTile?.type !== 'terrain-object' || normalizeObjectType(nextTile.objectType) !== objectType) continue;
+          visited.add(nKey);
+          queue.push({ x: nx, y: ny });
+        }
+      }
+
+      const center = {
+        x: Math.round(cells.reduce((sum, cell) => sum + cell.x, 0) / cells.length),
+        y: Math.round(cells.reduce((sum, cell) => sum + cell.y, 0) / cells.length),
+      };
+      const footprint = cells.map((cell) => [cell.x - center.x, cell.y - center.y]);
+      const object = spawnObject(objectType, center, {
+        id: `${roomId}-object-${index}`,
+        footprint,
+        state: { spawned: true },
+      });
+
+      index += 1;
+      if (!object) continue;
+
+      roomObjects.push(object);
+
+      for (const cell of cells) {
+        if (!tileMap[cell.y]?.[cell.x]) continue;
+        tileMap[cell.y][cell.x] = tileFrom(tileMap[cell.y][cell.x], { walkable: true });
+      }
+    }
+  }
+
+  return roomObjects;
+}
+
 function scatterDecoratives(tileMap, rng, blockedMask) {
   const width = tileMap[0].length;
   const height = tileMap.length;
@@ -1157,6 +1232,7 @@ export function generateRoomInstance({
 
   // 6) Decorative scattering (non-blocking)
   scatterDecoratives(tilesGrid, rng, terrainClusterMask);
+  const roomObjects = extractRoomObjects(tilesGrid, roomNode.id);
 
   for (const [exitId, exit] of Object.entries(resolvedExits)) {
     exitZones.push(buildEdgeZone(exitId, exit));
@@ -1167,6 +1243,7 @@ export function generateRoomInstance({
     id: roomNode.id,
     tiles: tilesGrid,
     entities: [],
+    objects: roomObjects,
     entrances: structuredClone(resolvedEntrances),
     exits: structuredClone(resolvedExits),
     exitZones,

@@ -1,4 +1,5 @@
 import { collides } from './CollisionSystem.js';
+import { applyAttackToObject, objectIntersectsCircle } from './ObjectInteractionSystem.js';
 
 function spawnProjectileTrail(projectile) {
   const particleCount = 2 + Math.floor(Math.random() * 3);
@@ -67,11 +68,11 @@ export function updateProjectiles(
     if (!map[ty] || !map[ty][tx] || !map[ty][tx].walkable) deadProjectiles.add(p);
 
     for (const object of worldObjects) {
-      if (object.interaction !== 'destroy' || object.destroyed) continue;
-      if (collides({ ...p, radius: p.radius ?? 0.8 }, object)) {
+      if (object.destroyed || !object.attackable) continue;
+      if (objectIntersectsCircle(object, p.x, p.y, p.radius ?? 0.8)) {
         deadProjectiles.add(p);
-        const broke = object.applyDamage(p.damage ?? 2);
-        if (broke) onDestructibleDestroyed?.(object);
+        const result = applyAttackToObject(object, p.damage ?? 2);
+        if (result.destroyed) onDestructibleDestroyed?.(object);
       }
     }
 

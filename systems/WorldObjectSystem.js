@@ -1,4 +1,11 @@
-import { collides } from './CollisionSystem.js';
+import { objectIntersectsCircle } from './ObjectInteractionSystem.js';
+
+function collisionNodes(object) {
+  if (Array.isArray(object.footprint) && object.footprint.length > 0) {
+    return object.footprint.map(([ox, oy]) => ({ x: object.x + ox, y: object.y + oy, radius: 0.7 }));
+  }
+  return [{ x: object.x, y: object.y, radius: object.radius ?? 1 }];
+}
 
 export function updateTownNpcs(npcs, map, dt) {
   for (const npc of npcs) {
@@ -62,16 +69,18 @@ export function updateTownNpcs(npcs, map, dt) {
 export function resolveObjectCollision(entity, worldObjects) {
   for (const object of worldObjects) {
     if (object.destroyed || !object.collision) continue;
-    if (!collides(entity, object)) continue;
+    if (!objectIntersectsCircle(object, entity.x, entity.y, entity.radius)) continue;
 
-    const dx = entity.x - object.x;
-    const dy = entity.y - object.y;
-    const distance = Math.hypot(dx, dy) || 0.001;
-    const overlap = (entity.radius + object.radius) - distance;
-    if (overlap <= 0) continue;
+    for (const node of collisionNodes(object)) {
+      const dx = entity.x - node.x;
+      const dy = entity.y - node.y;
+      const distance = Math.hypot(dx, dy) || 0.001;
+      const overlap = (entity.radius + node.radius) - distance;
+      if (overlap <= 0) continue;
 
-    entity.x += (dx / distance) * overlap;
-    entity.y += (dy / distance) * overlap;
+      entity.x += (dx / distance) * overlap;
+      entity.y += (dy / distance) * overlap;
+    }
   }
 }
 
@@ -85,8 +94,7 @@ export function updateDestructibleAnimations(worldObjects, dt) {
 export function cleanupDestroyedObjects(worldObjects) {
   for (let i = worldObjects.length - 1; i >= 0; i -= 1) {
     const object = worldObjects[i];
-    if (object.interaction !== 'destroy' || !object.destroyed) continue;
-    if (object.breakTimer > 0) continue;
+    if (!object.destroyed) continue;
     worldObjects.splice(i, 1);
   }
 }
