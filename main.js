@@ -19,6 +19,7 @@ import { abilityDefinitions, defaultAbilitySlots } from './data/abilities.js';
 import { AbilitySystem } from './systems/AbilitySystem.js';
 import { AbilityBar } from './ui/AbilityBar.js';
 import { SkillTreeWindow } from './ui/SkillTreeWindow.js';
+import { rollObjectLoot, tryInteractInFront } from './systems/ObjectInteractionSystem.js';
 import {
   cleanupDestroyedObjects,
   resolveObjectCollision,
@@ -45,9 +46,10 @@ const { biome, startRoom } = biomeGenerator.enterBiome('starting-biome');
 let activeRoom = startRoom;
 let map = activeRoom.tiles;
 const player = new Player(Math.floor(ROOM_W / 2), Math.floor(ROOM_H / 2));
+player.facing = { x: 0, y: 1 };
 const enemies = [];
 const npcs = [];
-const worldObjects = [];
+let worldObjects = activeRoom.objects ?? [];
 const roomTransitionSystem = new RoomTransitionSystem({ biomeGenerator, fadeDurationMs: 150 });
 
 if (activeRoom.entrances['initial-spawn']) {
@@ -226,7 +228,8 @@ const dialogueManager = new DialogueManager({
 });
 let slotPressLatch = [false, false, false, false];
 
-const forcedBlockingTiles = new Set(['denseTree', 'rockCliff', 'deepWater', 'stoneWall', '♣', '▲', '≈', '▓']);
+const forcedBlockingTiles = new Set(['denseTree', 'rockCliff', 'deepWater', 'stoneWall']);
+let interactLatch = false;
 
 
 function triggerDestructionSound(kind) {
@@ -393,6 +396,9 @@ function handlePlayer(dt) {
 
   player.vx = moveX * player.speed;
   player.vy = moveY * player.speed;
+  if (Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01) {
+    player.facing = { x: Math.round(moveX), y: Math.round(moveY) };
+  }
 
   movePlayerAxis(player.vx * dt, 0);
   resolveObjectCollision(player, worldObjects);
@@ -412,6 +418,12 @@ function handlePlayer(dt) {
   abilitySystem.tick(dt);
 
   if (!dialogueManager.isOpen) {
+    const interactDown = input.isDown('e');
+    if (interactDown && !interactLatch) {
+      tryInteractInFront(player, worldObjects);
+    }
+    interactLatch = interactDown;
+
     const target = input.getMouseWorldPosition();
     for (let i = 0; i < 4; i += 1) {
       const hotkey = String(i + 1);
@@ -432,7 +444,7 @@ if (diagMinimalMode) {
       map[y][x] = { char: ' ', fg: '#2a5f3a', bg: '#173823', walkable: true };
     }
   }
-  worldObjects.length = 0;
+  worldObjects = [];
   npcs.length = 0;
   enemies.length = 0;
   projectiles = [];
@@ -489,14 +501,11 @@ function tick(now) {
       worldObjects,
       (object) => {
         spawnDestructionEffects(object);
-        triggerDestructionSound(object.kind);
-
-        if (Math.random() <= object.dropChance) {
-          const drop = LootSystem.spawnDestructibleDrop(object);
-          if (!drop) return;
-          if (drop.type === 'gold' && drop.amount <= 0) return;
-          goldPiles.push(drop);
-        }
+        triggerDestructionSound(object.type);
+        const drop = rollObjectLoot(object);
+        if (!drop) return;
+        if (drop.type === 'gold' && drop.amount <= 0) return;
+        goldPiles.push(drop);
       },
     );
     projectiles = combat.projectiles;
@@ -521,6 +530,7 @@ function tick(now) {
   if (transitionResult?.room) {
     activeRoom = transitionResult.room;
     map = activeRoom.tiles;
+    worldObjects = activeRoom.objects ?? [];
     abilitySystem.map = map;
     camera.worldW = map[0]?.length ?? ROOM_W;
     camera.worldH = map.length ?? ROOM_H;

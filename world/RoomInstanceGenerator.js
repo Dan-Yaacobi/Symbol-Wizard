@@ -1,4 +1,5 @@
 import { tiles } from './TilePalette.js';
+import { spawnObject } from './ObjectLibrary.js';
 
 const biomeWallTypes = {
   forest: ['denseTree', 'denseTreeSpire', 'denseTreeBloom'],
@@ -802,6 +803,80 @@ function placeTerrainObjectTemplates(tileMap, rng, blockedMask, roadMask) {
   }
 }
 
+function normalizeObjectType(rawType) {
+  const normalized = `${rawType ?? ''}`.trim().toLowerCase();
+  if (!normalized) return null;
+  return normalized.replace(/-/g, '_');
+}
+
+function extractRoomObjects(tileMap, roomId) {
+  const visited = new Set();
+  const roomObjects = [];
+  let index = 0;
+
+  const cardinal = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+
+  for (let y = 0; y < tileMap.length; y += 1) {
+    for (let x = 0; x < tileMap[0].length; x += 1) {
+      const key = `${x},${y}`;
+      if (visited.has(key)) continue;
+      const tile = tileMap[y]?.[x];
+      if (tile?.type !== 'terrain-object' || !tile.objectType) continue;
+
+      const objectType = normalizeObjectType(tile.objectType);
+      if (!objectType) continue;
+
+      const queue = [{ x, y }];
+      const cells = [];
+      visited.add(key);
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        cells.push(current);
+
+        for (const [dx, dy] of cardinal) {
+          const nx = current.x + dx;
+          const ny = current.y + dy;
+          const nKey = `${nx},${ny}`;
+          if (visited.has(nKey)) continue;
+          const nextTile = tileMap[ny]?.[nx];
+          if (nextTile?.type !== 'terrain-object' || normalizeObjectType(nextTile.objectType) !== objectType) continue;
+          visited.add(nKey);
+          queue.push({ x: nx, y: ny });
+        }
+      }
+
+      const center = {
+        x: Math.round(cells.reduce((sum, cell) => sum + cell.x, 0) / cells.length),
+        y: Math.round(cells.reduce((sum, cell) => sum + cell.y, 0) / cells.length),
+      };
+      const footprint = cells.map((cell) => [cell.x - center.x, cell.y - center.y]);
+      const object = spawnObject(objectType, center, {
+        id: `${roomId}-object-${index}`,
+        footprint,
+        state: { spawned: true },
+      });
+
+      index += 1;
+      if (!object) continue;
+
+      roomObjects.push(object);
+
+      for (const cell of cells) {
+        if (!tileMap[cell.y]?.[cell.x]) continue;
+        tileMap[cell.y][cell.x] = tileFrom(tileMap[cell.y][cell.x], { walkable: true });
+      }
+    }
+  }
+
+  return roomObjects;
+}
+
 function scatterDecoratives(tileMap, rng, blockedMask) {
   const width = tileMap[0].length;
   const height = tileMap.length;
@@ -1042,33 +1117,80 @@ function carveEdgePassage(tileMap, passage, roadMask, roomWidth, roomHeight) {
   }
 }
 
-function buildEdgeZone(exitId, passage) {
-  return {
-    exitId,
-    direction: passage.direction,
-    edgeStart: structuredClone(passage.edgeStart),
-    edgeEnd: structuredClone(passage.edgeEnd),
-  };
-}
+function scanEdgeCorridors(tileMap, resolvedExits, roomWidth, roomHeight) {
+  const exitEntries = Object.entries(resolvedExits);
+  if (!exitEntries.length) return [];
 
-function buildExitCorridor(exitId, passage, roomWidth, roomHeight) {
-  if (passage.direction === 'north' || passage.direction === 'south') {
-    const corridorY = passage.direction === 'north' ? 1 : roomHeight - 2;
-    return {
+  const corridorByExitId = new Map(
+    exitEntries.map(([exitId, passage]) => [
       exitId,
-      direction: passage.direction,
-      start: { x: passage.edgeStart.x, y: corridorY },
-      end: { x: passage.edgeEnd.x, y: corridorY },
-    };
+      {
+        exitId,
+        direction: passage.direction,
+        edgeTiles: [],
+      },
+    ]),
+  );
+
+  const exitsByDirection = new Map();
+  for (const [exitId, passage] of exitEntries) {
+    if (!exitsByDirection.has(passage.direction)) exitsByDirection.set(passage.direction, []);
+    exitsByDirection.get(passage.direction).push({ exitId, passage });
   }
 
-  const corridorX = passage.direction === 'west' ? 1 : roomWidth - 2;
-  return {
-    exitId,
-    direction: passage.direction,
-    start: { x: corridorX, y: passage.edgeStart.y },
-    end: { x: corridorX, y: passage.edgeEnd.y },
-  };
+  function collectEdgeTiles(direction) {
+    const tilesOnEdge = [];
+
+    if (direction === 'north' || direction === 'south') {
+      const y = direction === 'north' ? 0 : roomHeight - 1;
+      for (let x = 0; x < roomWidth; x += 1) {
+        if (tileMap?.[y]?.[x]?.walkable) tilesOnEdge.push({ x, y });
+      }
+      return tilesOnEdge;
+    }
+
+    const x = direction === 'west' ? 0 : roomWidth - 1;
+    for (let y = 0; y < roomHeight; y += 1) {
+      if (tileMap?.[y]?.[x]?.walkable) tilesOnEdge.push({ x, y });
+    }
+
+    return tilesOnEdge;
+  }
+
+  function tileAxisValue(tile, direction) {
+    return direction === 'north' || direction === 'south' ? tile.x : tile.y;
+  }
+
+  function passageAxisValue(passage, direction) {
+    if (direction === 'north' || direction === 'south') {
+      return Math.round((passage.edgeStart.x + passage.edgeEnd.x) / 2);
+    }
+    return Math.round((passage.edgeStart.y + passage.edgeEnd.y) / 2);
+  }
+
+  for (const [direction, exits] of exitsByDirection.entries()) {
+    const edgeTiles = collectEdgeTiles(direction);
+    if (!edgeTiles.length) continue;
+
+    for (const tile of edgeTiles) {
+      const tileAxis = tileAxisValue(tile, direction);
+      let targetExit = exits[0];
+      let bestDistance = Number.POSITIVE_INFINITY;
+
+      for (const candidate of exits) {
+        const candidateAxis = passageAxisValue(candidate.passage, direction);
+        const distance = Math.abs(tileAxis - candidateAxis);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          targetExit = candidate;
+        }
+      }
+
+      corridorByExitId.get(targetExit.exitId)?.edgeTiles.push(tile);
+    }
+  }
+
+  return [...corridorByExitId.values()].filter((corridor) => corridor.edgeTiles.length > 0);
 }
 
 function anchorDirection(anchor, roomWidth, roomHeight) {
@@ -1167,9 +1289,7 @@ export function generateRoomInstance({
     Object.fromEntries(Object.entries(resolvedEntrances).map(([id, passage]) => [id, passage.roadAnchor])),
     terrainCenter,
   );
-  carvePrimaryRoadNetwork(tilesGrid, primaryRoadPath, terrainCenter, rng, mainRoadMask);
-  const exitZones = [];
-  const exitCorridors = [];
+  carvePrimaryRoadNetwork(tilesGrid, primaryRoadPath, terrainCenter, rng, roadMask);
   const accessProtectionMask = new Set([`${center.x},${center.y}`]);
   const allAnchors = [
     ...Object.values(resolvedExits).map((passage) => passage.roadAnchor),
@@ -1242,19 +1362,17 @@ export function generateRoomInstance({
 
   // 6) Decorative scattering (non-blocking)
   scatterDecoratives(tilesGrid, rng, terrainClusterMask);
+  const roomObjects = extractRoomObjects(tilesGrid, roomNode.id);
 
-  for (const [exitId, exit] of Object.entries(resolvedExits)) {
-    exitZones.push(buildEdgeZone(exitId, exit));
-    exitCorridors.push(buildExitCorridor(exitId, exit, roomWidth, roomHeight));
-  }
+  const exitCorridors = scanEdgeCorridors(tilesGrid, resolvedExits, roomWidth, roomHeight);
 
   return {
     id: roomNode.id,
     tiles: tilesGrid,
     entities: [],
+    objects: roomObjects,
     entrances: structuredClone(resolvedEntrances),
     exits: structuredClone(resolvedExits),
-    exitZones,
     exitCorridors,
     state: {
       visited: roomNode.state?.visited ?? false,
