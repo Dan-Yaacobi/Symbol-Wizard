@@ -25,16 +25,7 @@ function isValidFootprint(footprint) {
   }
 
   if (!keySet.has('0,0')) return false;
-  if (keySet.size > 9) return false;
-
-  let maxDistanceSquared = 0;
-  for (const key of keySet) {
-    const [xString, yString] = key.split(',');
-    const x = Number(xString);
-    const y = Number(yString);
-    maxDistanceSquared = Math.max(maxDistanceSquared, (x * x) + (y * y));
-  }
-  if (maxDistanceSquared > 8) return false;
+  if (keySet.size > 6) return false;
 
   const [first] = keySet;
   const queue = [first];
@@ -45,12 +36,7 @@ function isValidFootprint(footprint) {
     const [xString, yString] = current.split(',');
     const cx = Number(xString);
     const cy = Number(yString);
-    const neighbors = [
-      `${cx + 1},${cy}`,
-      `${cx - 1},${cy}`,
-      `${cx},${cy + 1}`,
-      `${cx},${cy - 1}`,
-    ];
+    const neighbors = [`${cx + 1},${cy}`, `${cx - 1},${cy}`, `${cx},${cy + 1}`, `${cx},${cy - 1}`];
 
     for (const neighbor of neighbors) {
       if (!keySet.has(neighbor) || visited.has(neighbor)) continue;
@@ -63,12 +49,17 @@ function isValidFootprint(footprint) {
 }
 
 function buildPlacementTemplates() {
-  const preferred = new Set(['forest_grove', 'rock_formation', 'small_pond', 'fallen_tree', 'ruins']);
+  const weightedIds = [
+    'oak_tree', 'oak_tree', 'oak_tree',
+    'pine_tree', 'pine_tree',
+    'bush', 'bush', 'wildflowers',
+    'stone_cluster', 'barrel', 'crate', 'chest', 'shrine',
+  ];
   const templates = [];
 
-  for (const [id, definition] of Object.entries(objectLibrary)) {
-    if (!preferred.has(id)) continue;
-    if (!isValidFootprint(definition.footprint)) continue;
+  for (const id of weightedIds) {
+    const definition = objectLibrary[id];
+    if (!definition || !isValidFootprint(definition.footprint)) continue;
     const template = spawnObject(id, { x: 0, y: 0 });
     if (template) templates.push(template);
   }
@@ -98,21 +89,41 @@ function markObject(mask, center, footprint, padding = 1) {
   }
 }
 
+function stampObjectTiles(tiles, object, rng) {
+  const variants = object.tileVariants ?? [];
+  if (variants.length === 0) return;
+
+  for (const [dx, dy] of object.footprint ?? [[0, 0]]) {
+    const x = Math.round(object.x + dx);
+    const y = Math.round(object.y + dy);
+    if (!tiles[y]?.[x]) continue;
+
+    const variantIndex = Math.abs((dx * 13) + (dy * 7) + Math.floor(rng() * 1000)) % variants.length;
+    const variant = variants[variantIndex];
+    tiles[y][x] = {
+      ...tiles[y][x],
+      ...variant,
+      type: `object-${object.type}`,
+      walkable: object.collision ? false : tiles[y][x].walkable,
+    };
+  }
+}
+
 export class ObjectPlacementSystem {
   placeObjects({ tiles, rng, roadMask, blockedMask, roomId }) {
     const roadPoints = collectRoadPoints(roadMask);
     const templates = buildPlacementTemplates();
-    const count = randomInt(rng, 8, 12);
+    const count = randomInt(rng, 26, 40);
     const objects = [];
 
     for (let i = 0; i < count; i += 1) {
       const template = templates[randomInt(rng, 0, templates.length - 1)];
       if (!template) continue;
 
-      for (let attempt = 0; attempt < 32; attempt += 1) {
+      for (let attempt = 0; attempt < 38; attempt += 1) {
         const road = roadPoints[randomInt(rng, 0, Math.max(0, roadPoints.length - 1))] ?? { x: Math.floor(tiles[0].length / 2), y: Math.floor(tiles.length / 2) };
         const angle = rng() * Math.PI * 2;
-        const distance = randomInt(rng, 5, 14);
+        const distance = randomInt(rng, 6, 18);
         const center = {
           x: Math.round(road.x + Math.cos(angle) * distance),
           y: Math.round(road.y + Math.sin(angle) * distance),
@@ -129,7 +140,8 @@ export class ObjectPlacementSystem {
         if (!placed) break;
 
         objects.push(placed);
-        markObject(blockedMask, center, placed.footprint, 1);
+        stampObjectTiles(tiles, placed, rng);
+        markObject(blockedMask, center, placed.footprint, placed.collision ? 1 : 0);
         break;
       }
     }

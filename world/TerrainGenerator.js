@@ -17,7 +17,7 @@ function clamp(value, min, max) {
 }
 
 const biomeWallTypes = {
-  forest: ['denseTree', 'denseTreeSpire', 'denseTreeBloom'],
+  forest: ['denseTree', 'denseTreeSpire', 'denseTreeBloom', 'denseTreeCanopy', 'denseTreeShadow'],
   mountain: ['rockCliff'],
   river: ['deepWater'],
   cave: ['stoneWall'],
@@ -119,6 +119,7 @@ function buildEdgePassage(anchor, roomWidth, roomHeight, rng) {
   const direction = anchor.direction;
   const corridorWidth = randomInt(rng, 8, 14);
   const halfWidth = Math.floor(corridorWidth / 2);
+  const triggerDepth = 7;
 
   if (direction === 'north' || direction === 'south') {
     const edgeY = direction === 'north' ? 0 : roomHeight - 1;
@@ -132,6 +133,7 @@ function buildEdgePassage(anchor, roomWidth, roomHeight, rng) {
       edgeEnd: { x: edgeEndX, y: edgeY },
       roadAnchor: { x: centerX, y: direction === 'north' ? 4 : roomHeight - 5 },
       spawn: { x: centerX, y: direction === 'north' ? 4 : roomHeight - 5 },
+      triggerDepth,
     };
   }
 
@@ -147,6 +149,7 @@ function buildEdgePassage(anchor, roomWidth, roomHeight, rng) {
     edgeEnd: { x: edgeX, y: edgeEndY },
     roadAnchor: { x: direction === 'west' ? 4 : roomWidth - 5, y: centerY },
     spawn: { x: direction === 'west' ? 4 : roomWidth - 5, y: centerY },
+    triggerDepth,
   };
 }
 
@@ -179,16 +182,58 @@ function carveRoadToAnchor(tileMap, start, anchor, rng, { minRadius, maxRadius, 
   carveFloorCircle(tileMap, anchor.x, anchor.y, exitRadius, tiles.pathPebble, { type: 'road' }, roadMask);
 }
 
-function applyBiomeBoundaryRing(tileMap, boundaryTiles, rng, thickness = 3) {
+function generateEdgeDepths(length, rng, minDepth, maxDepth, drift = 1.2) {
+  const values = Array.from({ length }, () => minDepth);
+  let current = randomInt(rng, minDepth, maxDepth);
+  for (let i = 0; i < length; i += 1) {
+    current += (rng() - 0.5) * drift;
+    current = clamp(current, minDepth, maxDepth);
+    values[i] = Math.round(current);
+  }
+  return values;
+}
+
+function applyBiomeBoundaryRing(tileMap, boundaryTiles, rng, biomeType, thickness = 3) {
   const width = tileMap[0]?.length ?? 0;
   const height = tileMap.length;
   if (!width || !height || !boundaryTiles.length) return;
 
+  if (biomeType !== 'forest') {
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const edgeDistance = Math.min(x, y, (width - 1) - x, (height - 1) - y);
+        if (edgeDistance >= thickness) continue;
+        tileMap[y][x] = cloneTile(pickBoundaryTileVariant(boundaryTiles, x, y, rng));
+      }
+    }
+    return;
+  }
+
+  const topDepth = generateEdgeDepths(width, rng, 4, 12, 1.1);
+  const bottomDepth = generateEdgeDepths(width, rng, 5, 14, 1.35);
+  const leftDepth = generateEdgeDepths(height, rng, 4, 11, 1.15);
+  const rightDepth = generateEdgeDepths(height, rng, 5, 13, 1.4);
+
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      const edgeDistance = Math.min(x, y, (width - 1) - x, (height - 1) - y);
-      if (edgeDistance >= thickness) continue;
-      tileMap[y][x] = cloneTile(pickBoundaryTileVariant(boundaryTiles, x, y, rng));
+      const distTop = y;
+      const distBottom = (height - 1) - y;
+      const distLeft = x;
+      const distRight = (width - 1) - x;
+
+      const hardEdge = distTop <= topDepth[x]
+        || distBottom <= bottomDepth[x]
+        || distLeft <= leftDepth[y]
+        || distRight <= rightDepth[y];
+
+      const softEdge = distTop <= topDepth[x] + 3
+        || distBottom <= bottomDepth[x] + 3
+        || distLeft <= leftDepth[y] + 3
+        || distRight <= rightDepth[y] + 3;
+
+      if (hardEdge || (softEdge && rng() < 0.45)) {
+        tileMap[y][x] = cloneTile(pickBoundaryTileVariant(boundaryTiles, x + Math.floor(rng() * 3), y, rng));
+      }
     }
   }
 }
@@ -285,7 +330,7 @@ export class TerrainGenerator {
       }
     }
 
-    applyBiomeBoundaryRing(grid, boundaryTiles, rng, 3);
+    applyBiomeBoundaryRing(grid, boundaryTiles, rng, biomeType, 3);
 
     return { grid, boundaryTiles };
   }
@@ -298,7 +343,7 @@ export class TerrainGenerator {
 
     for (const passage of [...Object.values(resolvedExits), ...Object.values(resolvedEntrances)]) {
       const isVertical = passage.direction === 'north' || passage.direction === 'south';
-      const depth = 7;
+      const depth = passage.triggerDepth ?? 7;
       for (let depthStep = 0; depthStep < depth; depthStep += 1) {
         if (isVertical) {
           const y = (passage.direction === 'north' ? 0 : this.roomHeight - 1) + (passage.direction === 'north' ? depthStep : -depthStep);
@@ -342,38 +387,8 @@ export class TerrainGenerator {
     }
   }
 
-  generateTerrainPatches(tileMap, rng, protectedMask, center) {
-    const styles = [
-      { weight: 0.45, tile: tiles.denseTree, metadata: { type: 'forest-cluster', walkable: false }, deformation: 0.38 },
-      { weight: 0.25, tile: tileFrom(tiles.rockCliff, { char: '∎', fg: '#8c8f96', bg: '#2a2e35' }), metadata: { type: 'rock-cluster', walkable: false }, deformation: 0.32 },
-      { weight: 0.15, tile: tiles.water, metadata: { type: 'water-pool', walkable: false }, deformation: 0.35 },
-      { weight: 0.15, tile: tiles.grass, metadata: { type: 'clearing' }, deformation: 0.25 },
-    ];
-
-    const patchCount = randomInt(rng, 10, 20);
-    for (let i = 0; i < patchCount; i += 1) {
-      let roll = rng();
-      let style = styles[styles.length - 1];
-      for (const candidate of styles) {
-        roll -= candidate.weight;
-        if (roll <= 0) { style = candidate; break; }
-      }
-
-      const patchCenter = {
-        x: Math.max(3, Math.min(this.roomWidth - 4, Math.round(center.x + (rng() - 0.5) * this.roomWidth * 0.85))),
-        y: Math.max(3, Math.min(this.roomHeight - 4, Math.round(center.y + (rng() - 0.5) * this.roomHeight * 0.85))),
-      };
-
-      paintIrregularTerrainPatch(tileMap, rng, {
-        center: patchCenter,
-        radius: randomInt(rng, 6, 20),
-        tile: style.tile,
-        metadata: style.metadata,
-        avoidMask: protectedMask,
-        protectedMask,
-        deformation: style.deformation,
-      });
-    }
+  generateTerrainPatches() {
+    // Terrain blobs intentionally removed. Environmental objects now come from ObjectPlacementSystem + ObjectLibrary.
   }
 
   placeLandmarks(tileMap, rng, roadMask, blockedMask) {
