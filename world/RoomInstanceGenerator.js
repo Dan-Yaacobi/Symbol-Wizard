@@ -874,6 +874,26 @@ function buildEdgeZone(exitId, passage) {
   };
 }
 
+function buildExitCorridor(exitId, passage, roomWidth, roomHeight) {
+  if (passage.direction === 'north' || passage.direction === 'south') {
+    const corridorY = passage.direction === 'north' ? 1 : roomHeight - 2;
+    return {
+      exitId,
+      direction: passage.direction,
+      start: { x: passage.edgeStart.x, y: corridorY },
+      end: { x: passage.edgeEnd.x, y: corridorY },
+    };
+  }
+
+  const corridorX = passage.direction === 'west' ? 1 : roomWidth - 2;
+  return {
+    exitId,
+    direction: passage.direction,
+    start: { x: corridorX, y: passage.edgeStart.y },
+    end: { x: corridorX, y: passage.edgeEnd.y },
+  };
+}
+
 function anchorDirection(anchor, roomWidth, roomHeight) {
   if (anchor?.direction) return anchor.direction;
   if (!anchor) return 'east';
@@ -970,6 +990,7 @@ export function generateRoomInstance({
   );
   carvePrimaryRoadNetwork(tilesGrid, primaryRoadPath, terrainCenter, rng, roadMask);
   const exitZones = [];
+  const exitCorridors = [];
   const accessProtectionMask = new Set([`${center.x},${center.y}`]);
 
   for (const exit of Object.values(resolvedExits)) {
@@ -1041,6 +1062,7 @@ export function generateRoomInstance({
 
   for (const [exitId, exit] of Object.entries(resolvedExits)) {
     exitZones.push(buildEdgeZone(exitId, exit));
+    exitCorridors.push(buildExitCorridor(exitId, exit, roomWidth, roomHeight));
   }
 
   return {
@@ -1050,6 +1072,7 @@ export function generateRoomInstance({
     entrances: structuredClone(resolvedEntrances),
     exits: structuredClone(resolvedExits),
     exitZones,
+    exitCorridors,
     state: {
       visited: roomNode.state?.visited ?? false,
     },
