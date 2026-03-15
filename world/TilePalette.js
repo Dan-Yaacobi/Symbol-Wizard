@@ -1,5 +1,4 @@
-import { palette } from '../entities/SpriteLibrary.js';
-import { visualTheme } from '../data/VisualTheme.js';
+import { visualPalette, visualTheme } from '../data/VisualTheme.js';
 
 const c = visualTheme.colors;
 
@@ -11,7 +10,7 @@ export const tiles = {
   pathPebble: { char: '.', fg: '#d5bc98', bg: c.dirtBg, walkable: true },
   water: { char: '~', fg: c.waterFg, bg: c.waterBg, walkable: false },
   fence: { char: '|', fg: c.woodFg, bg: c.grassBg, walkable: false },
-  wall: { char: '#', fg: palette.wallFg, bg: palette.wallBg, walkable: false },
+  wall: { char: '#', fg: visualPalette.stone.wallFg, bg: visualPalette.stone.wallBg, walkable: false },
   denseTree: { char: '♣', fg: c.treeFg, bg: '#0a1710', walkable: false },
   denseTreeSpire: { char: '♠', fg: c.treeDarkFg, bg: '#09130d', walkable: false },
   denseTreeBloom: { char: '♣', fg: '#70b573', bg: '#0f1a13', walkable: false },
@@ -20,8 +19,8 @@ export const tiles = {
   rockCliff: { char: '▲', fg: '#8b96a3', bg: '#2b3240', walkable: false },
   deepWater: { char: '≈', fg: '#79bdf2', bg: '#10263b', walkable: false },
   stoneWall: { char: '▓', fg: '#8f96a3', bg: '#333b49', walkable: false },
-  floor: { char: '.', fg: palette.floorFg, bg: palette.floorBg, walkable: true },
-  wood: { char: '+', fg: c.woodFg, bg: palette.floorBg, walkable: false },
+  floor: { char: '.', fg: visualPalette.ground.floorFg, bg: visualPalette.ground.floorBg, walkable: true },
+  wood: { char: '+', fg: c.woodFg, bg: visualPalette.ground.floorBg, walkable: false },
 };
 
 export function tileFrom(base, overrides = {}) {

@@ -1,4 +1,5 @@
 import { Projectile } from '../entities/Projectile.js';
+import { visualPalette } from '../data/VisualTheme.js';
 
 export class AbilitySystem {
   constructor({
@@ -94,7 +95,7 @@ export class AbilitySystem {
     if (!enemy || !enemy.alive || enemy.frozen) return false;
 
     enemy.frozen = true;
-    enemy.freezeTint = '#9edbff';
+    enemy.freezeTint = visualPalette.enemy.frozen;
     enemy.freezeGlow = '#d8f4ff';
     enemy.vx = 0;
     enemy.vy = 0;
@@ -113,7 +114,7 @@ export class AbilitySystem {
       x: enemy.x,
       y: enemy.y,
       radius: 2,
-      color: '#a8e7ff',
+      color: visualPalette.enemy.frozen,
       ttl: 0.16,
     });
 
@@ -167,7 +168,7 @@ export class AbilitySystem {
       x: this.player.x,
       y: this.player.y,
       radius: Math.max(this.camera.viewW, this.camera.viewH) * 0.5 + radiusPadding,
-      color: '#9adfff',
+      color: visualPalette.enemy.frozen,
       ttl: 0.22,
     });
 

@@ -1,4 +1,4 @@
-import { toSafeGlyph, visualTheme } from '../data/VisualTheme.js';
+import { renderLayers, toRenderCell, toSafeGlyph, visualTheme } from '../data/VisualTheme.js';
 
 export class Renderer {
   constructor(canvas, cols, rows, cellW = 8, cellH = 8) {
@@ -15,6 +15,7 @@ export class Renderer {
     this.ui = this.#createLayer();
 
     this.glyphCache = new Map();
+    this.glyphWarnings = new Set();
     this.lastCameraX = Number.NaN;
     this.lastCameraY = Number.NaN;
 
@@ -147,12 +148,25 @@ export class Renderer {
 
   #toCp437Code(char) {
     if (!char || typeof char !== 'string') return 32;
+    const original = char[0];
     const ch = toSafeGlyph(char);
     const asciiCode = ch.charCodeAt(0);
     if (asciiCode >= 0 && asciiCode <= 127) {
       return asciiCode;
     }
-    return Renderer.CP437_EXTENDED_MAP[ch] ?? 63;
+    const mapped = Renderer.CP437_EXTENDED_MAP[ch];
+    if (mapped !== undefined) return mapped;
+
+    const warningKey = `${original}->${ch}`;
+    if (!this.glyphWarnings.has(warningKey)) {
+      this.glyphWarnings.add(warningKey);
+      console.warn('[Renderer] Glyph fell back to ? due to CP437 miss.', {
+        originalGlyph: original,
+        safeGlyph: ch,
+      });
+    }
+
+    return 63;
   }
 
   #getGlyph(char, fg, bg) {
@@ -280,11 +294,32 @@ export class Renderer {
   }
 
   drawEntityGlyph(char, fg, bg, x, y) {
-    this.#drawGlyphToLayerPx(this.entities.ctx, char, fg, bg, x * this.cellW, y * this.cellH);
+    this.drawCell(toRenderCell({ glyph: char, fg, bg, layer: renderLayers.entities }), x, y);
   }
 
   drawUiGlyph(char, fg, bg, x, y) {
-    this.#drawGlyphToLayer(this.ui.ctx, char, fg, bg, x | 0, y | 0);
+    this.drawCell(toRenderCell({ glyph: char, fg, bg, layer: renderLayers.ui }), x | 0, y | 0);
+  }
+
+  drawCell(cell, x, y) {
+    if (!cell) return;
+    const safeCell = toRenderCell(cell);
+    if (safeCell.layer === renderLayers.ui) {
+      this.#drawGlyphToLayer(this.ui.ctx, safeCell.glyph, safeCell.fg, safeCell.bg, x | 0, y | 0);
+      return;
+    }
+
+    if (safeCell.layer === renderLayers.effects) {
+      this.#drawGlyphToLayerPx(this.effects.ctx, safeCell.glyph, safeCell.fg, safeCell.bg, x * this.cellW, y * this.cellH);
+      return;
+    }
+
+    if (safeCell.layer === renderLayers.background) {
+      this.#drawGlyphToLayerPx(this.background.ctx, safeCell.glyph, safeCell.fg, safeCell.bg, x * this.cellW, y * this.cellH);
+      return;
+    }
+
+    this.#drawGlyphToLayerPx(this.entities.ctx, safeCell.glyph, safeCell.fg, safeCell.bg, x * this.cellW, y * this.cellH);
   }
 
   drawUiText(text, fg, bg, x, y) {
