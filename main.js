@@ -20,6 +20,7 @@ import { AbilitySystem } from './systems/AbilitySystem.js';
 import { AbilityBar } from './ui/AbilityBar.js';
 import { SkillTreeWindow } from './ui/SkillTreeWindow.js';
 import { rollObjectLoot, tryInteractInFront } from './systems/ObjectInteractionSystem.js';
+import { loadObjectsFromFolder } from './world/ObjectLibrary.js';
 import {
   cleanupDestroyedObjects,
   resolveObjectCollision,
@@ -40,6 +41,8 @@ const camera = new Camera(VIEW_W, VIEW_H, ROOM_W, ROOM_H);
 const viewport = new Viewport(canvas);
 const input = new Input(canvas, viewport, camera, renderer.cellW, renderer.cellH);
 const chat = new ChatBox();
+
+await loadObjectsFromFolder('./assets/objects');
 
 const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H });
 const { biome, startRoom } = biomeGenerator.enterBiome('starting-biome');

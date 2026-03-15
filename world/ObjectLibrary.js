@@ -16,6 +16,15 @@ function normalizeFootprint(footprint) {
     .filter(Boolean);
 }
 
+
+function normalizeColor(color, fallback) {
+  if (Array.isArray(color) && color.length >= 3) {
+    const [r, g, b] = color;
+    return `rgb(${Number(r) | 0}, ${Number(g) | 0}, ${Number(b) | 0})`;
+  }
+  return typeof color === 'string' ? color : fallback;
+}
+
 function normalizeTiles(tiles) {
   if (!Array.isArray(tiles)) return [];
   return tiles
@@ -30,8 +39,8 @@ function normalizeTiles(tiles) {
         x,
         y,
         char,
-        fg: tile.fg ?? '#d8d2c4',
-        bg: tile.bg ?? null,
+        fg: normalizeColor(tile.fg, '#d8d2c4'),
+        bg: normalizeColor(tile.bg, 'rgba(0, 0, 0, 0)'),
       };
     })
     .filter(Boolean);
@@ -412,6 +421,64 @@ export const objectLibrary = {
     spawnWeight: 0.1,
   }),
 };
+
+
+function definitionFromPrefab(prefab) {
+  if (!prefab || typeof prefab !== 'object') return null;
+
+  const id = typeof prefab.id === 'string' && prefab.id.length > 0 ? prefab.id : null;
+  if (!id) return null;
+
+  const tags = Array.isArray(prefab.tags) && prefab.tags.length > 0 ? prefab.tags : ['forest'];
+  const visualTiles = normalizeTiles(prefab.visual ?? []);
+  const collisionFootprint = Array.isArray(prefab.collision)
+    ? prefab.collision
+      .map((cell) => {
+        const x = Number(cell?.x);
+        const y = Number(cell?.y);
+        if (!Number.isInteger(x) || !Number.isInteger(y)) return null;
+        return { x, y };
+      })
+      .filter(Boolean)
+    : [];
+
+  return createDefinition({
+    id,
+    category: OBJECT_CATEGORY.ENVIRONMENT,
+    biomeTags: tags,
+    blocksMovement: collisionFootprint.length > 0,
+    interactable: Array.isArray(prefab.interaction) && prefab.interaction.length > 0,
+    footprint: collisionFootprint,
+    tiles: visualTiles,
+    spawnWeight: Number(prefab.spawnWeight) || 1,
+    minClusterSize: Number(prefab.clusterMin) || 1,
+    maxClusterSize: Number(prefab.clusterMax) || 1,
+    clusterRadius: Number(prefab.clusterRadius) || 1,
+    biomeRarity: typeof prefab.rarity === 'string' ? prefab.rarity : 'common',
+  });
+}
+
+export async function loadObjectsFromFolder(basePath = './assets/objects') {
+  try {
+    const registryResponse = await fetch(`${basePath}/registry.json`, { cache: 'no-cache' });
+    if (!registryResponse.ok) return;
+
+    const registry = await registryResponse.json();
+    const objectFiles = Array.isArray(registry.objects) ? registry.objects : [];
+
+    await Promise.all(objectFiles.map(async (fileName) => {
+      const response = await fetch(`${basePath}/${fileName}`, { cache: 'no-cache' });
+      if (!response.ok) return;
+      const prefab = await response.json();
+      const definition = definitionFromPrefab(prefab);
+      if (definition?.id) {
+        objectLibrary[definition.id] = definition;
+      }
+    }));
+  } catch (error) {
+    console.warn('[ObjectLibrary] Failed to auto-load object prefabs.', error);
+  }
+}
 
 function maxFootprintDistance(footprint) {
   if (!Array.isArray(footprint) || footprint.length === 0) return 0;
