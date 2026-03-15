@@ -23,6 +23,14 @@ const biomeWallTypes = {
   cave: ['stoneWall'],
 };
 
+const MAX_EXITS_PER_ROOM = 4;
+const MIN_EXITS_PER_ROOM = 1;
+const MIN_EXIT_EDGE_DISTANCE_RATIO = 0.15;
+const MAIN_ROAD_WIDTH = 3;
+const BRANCH_ROAD_WIDTH = 2;
+const ROAD_CLEAR_RADIUS = 1;
+const ROAD_MERGE_DISTANCE = 5;
+
 function pickBoundaryTileVariant(boundaryTiles, x, y, rng) {
   if (boundaryTiles.length === 1) return boundaryTiles[0];
   const band = (Math.floor(x / 2) + Math.floor(y / 2)) % boundaryTiles.length;
@@ -153,12 +161,67 @@ function buildEdgePassage(anchor, roomWidth, roomHeight, rng) {
   };
 }
 
-function carveRoadToAnchor(tileMap, start, anchor, rng, { minRadius, maxRadius, exitRadius, roadMask }) {
+function edgeAxisValue(anchor) {
+  if (anchor.direction === 'north' || anchor.direction === 'south') return anchor.x;
+  return anchor.y;
+}
+
+function pickExitSubset(exits, roomWidth, roomHeight, rng) {
+  const exitEntries = Object.entries(exits ?? {});
+  if (!exitEntries.length) return {};
+
+  const maxTarget = exitEntries.length >= MAX_EXITS_PER_ROOM && rng() < 0.7 ? MAX_EXITS_PER_ROOM - 1 : MAX_EXITS_PER_ROOM;
+  const targetCount = Math.min(maxTarget, Math.max(MIN_EXITS_PER_ROOM, exitEntries.length));
+  const minEdgeDistance = Math.max(2, Math.round((Math.min(roomWidth, roomHeight)) * MIN_EXIT_EDGE_DISTANCE_RATIO));
+  const shuffled = [...exitEntries].sort(() => rng() - 0.5);
+  const selected = [];
+
+  for (const [id, anchor] of shuffled) {
+    if (selected.length >= targetCount) break;
+    const direction = anchorDirection(anchor, roomWidth, roomHeight);
+    const axis = edgeAxisValue({ ...anchor, direction });
+    const tooClose = selected.some(([, chosenAnchor]) => {
+      const chosenDirection = anchorDirection(chosenAnchor, roomWidth, roomHeight);
+      if (chosenDirection !== direction) return false;
+      const chosenAxis = edgeAxisValue({ ...chosenAnchor, direction: chosenDirection });
+      return Math.abs(axis - chosenAxis) < minEdgeDistance;
+    });
+    if (!tooClose) selected.push([id, anchor]);
+  }
+
+  if (selected.length < MIN_EXITS_PER_ROOM) {
+    selected.push(shuffled[0]);
+  }
+
+  const selectedIds = new Set(selected.map(([id]) => id));
+  if (selected.length < targetCount) {
+    for (const entry of shuffled) {
+      if (selected.length >= targetCount) break;
+      if (selectedIds.has(entry[0])) continue;
+      selected.push(entry);
+      selectedIds.add(entry[0]);
+    }
+  }
+
+  return Object.fromEntries(selected.slice(0, targetCount));
+}
+
+function carveRoadBrush(tileMap, x, y, width, marker = null) {
+  const start = -Math.floor(width / 2);
+  const end = start + width - 1;
+  for (let oy = start; oy <= end; oy += 1) {
+    for (let ox = start; ox <= end; ox += 1) {
+      carveFloor(tileMap, x + ox, y + oy, tiles.pathPebble, { type: 'road' }, marker);
+    }
+  }
+}
+
+function carveRoadToAnchor(tileMap, start, anchor, rng, { roadWidth, roadMask }) {
   const position = { x: start.x, y: start.y };
   const totalDistance = Math.max(1, Math.hypot(anchor.x - start.x, anchor.y - start.y));
   const maxSteps = Math.ceil(totalDistance * 1.75);
 
-  carveFloorCircle(tileMap, Math.round(position.x), Math.round(position.y), randomInt(rng, minRadius, maxRadius), tiles.pathPebble, { type: 'road' }, roadMask);
+  carveRoadBrush(tileMap, Math.round(position.x), Math.round(position.y), roadWidth, roadMask);
 
   for (let step = 0; step < maxSteps; step += 1) {
     const dx = anchor.x - position.x;
@@ -175,11 +238,73 @@ function carveRoadToAnchor(tileMap, start, anchor, rng, { minRadius, maxRadius, 
     position.x += (towardX - (towardY * lateralJitter)) * stepLength;
     position.y += (towardY + (towardX * lateralJitter)) * stepLength;
 
-    const radius = Math.min(exitRadius, randomInt(rng, minRadius, maxRadius) + (progress > 0.8 ? 1 : 0));
-    carveFloorCircle(tileMap, Math.round(position.x), Math.round(position.y), radius, tiles.pathPebble, { type: 'road' }, roadMask);
+    carveRoadBrush(tileMap, Math.round(position.x), Math.round(position.y), roadWidth, roadMask);
   }
 
-  carveFloorCircle(tileMap, anchor.x, anchor.y, exitRadius, tiles.pathPebble, { type: 'road' }, roadMask);
+  carveRoadBrush(tileMap, anchor.x, anchor.y, roadWidth, roadMask);
+}
+
+function clearRoadCorridor(tileMap, roadMask, radius = ROAD_CLEAR_RADIUS) {
+  const width = tileMap[0]?.length ?? 0;
+  const height = tileMap.length;
+  for (const key of roadMask) {
+    const [xString, yString] = key.split(',');
+    const x = Number(xString);
+    const y = Number(yString);
+    for (let oy = -radius; oy <= radius; oy += 1) {
+      for (let ox = -radius; ox <= radius; ox += 1) {
+        const tx = x + ox;
+        const ty = y + oy;
+        if (tx < 0 || ty < 0 || tx >= width || ty >= height) continue;
+        if (roadMask.has(`${tx},${ty}`)) continue;
+        const tile = tileMap[ty]?.[tx];
+        if (!tile || tile.walkable) continue;
+        tileMap[ty][tx] = tileFrom(tiles.grass, { type: 'ground' });
+      }
+    }
+  }
+}
+
+function mergeNearbyRoads(tileMap, roadMask, rng, { roadWidth, threshold = ROAD_MERGE_DISTANCE, maxMerges = 10 }) {
+  const points = collectRoadPoints(roadMask);
+  if (points.length < 2) return;
+
+  const gridSize = threshold;
+  const buckets = new Map();
+  for (const point of points) {
+    const bx = Math.floor(point.x / gridSize);
+    const by = Math.floor(point.y / gridSize);
+    const key = `${bx},${by}`;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(point);
+  }
+
+  let merges = 0;
+  const shuffled = [...points].sort(() => rng() - 0.5);
+  for (const point of shuffled) {
+    if (merges >= maxMerges) break;
+    const bx = Math.floor(point.x / gridSize);
+    const by = Math.floor(point.y / gridSize);
+    let nearest = null;
+    let nearestDist = Number.POSITIVE_INFINITY;
+
+    for (let oy = -1; oy <= 1; oy += 1) {
+      for (let ox = -1; ox <= 1; ox += 1) {
+        const neighborKey = `${bx + ox},${by + oy}`;
+        const candidates = buckets.get(neighborKey) ?? [];
+        for (const candidate of candidates) {
+          const dist = Math.hypot(point.x - candidate.x, point.y - candidate.y);
+          if (dist <= 2 || dist >= threshold || dist >= nearestDist) continue;
+          nearest = candidate;
+          nearestDist = dist;
+        }
+      }
+    }
+
+    if (!nearest) continue;
+    carveRoadToAnchor(tileMap, point, nearest, rng, { roadWidth, roadMask });
+    merges += 1;
+  }
 }
 
 function generateEdgeDepths(length, rng, minDepth, maxDepth, drift = 1.2) {
@@ -394,7 +519,12 @@ export class TerrainGenerator {
 
   generateExits(tileMap, roomNode, rng) {
     const roadMask = new Set();
-    const resolvedAnchors = resolveRoomAnchors(roomNode.exits, roomNode.entrances, this.roomWidth, this.roomHeight);
+    const limitedExits = pickExitSubset(roomNode.exits, this.roomWidth, this.roomHeight, rng);
+    if (Object.keys(limitedExits).length > MAX_EXITS_PER_ROOM) {
+      console.warn('Exit overflow detected');
+    }
+
+    const resolvedAnchors = resolveRoomAnchors(limitedExits, roomNode.entrances, this.roomWidth, this.roomHeight);
     const resolvedExits = Object.fromEntries(Object.entries(resolvedAnchors.exits).map(([id, anchor]) => [id, buildEdgePassage(anchor, this.roomWidth, this.roomHeight, rng)]));
     const resolvedEntrances = Object.fromEntries(Object.entries(resolvedAnchors.entrances).map(([id, anchor]) => [id, buildEdgePassage(anchor, this.roomWidth, this.roomHeight, rng)]));
 
@@ -404,24 +534,27 @@ export class TerrainGenerator {
       for (let depthStep = 0; depthStep < depth; depthStep += 1) {
         if (isVertical) {
           const y = (passage.direction === 'north' ? 0 : this.roomHeight - 1) + (passage.direction === 'north' ? depthStep : -depthStep);
-          for (let x = passage.edgeStart.x; x <= passage.edgeEnd.x; x += 1) carveFloor(tileMap, x, y, tiles.pathPebble, { type: 'road' }, roadMask);
+          for (let x = passage.edgeStart.x; x <= passage.edgeEnd.x; x += 1) carveRoadBrush(tileMap, x, y, MAIN_ROAD_WIDTH, roadMask);
         } else {
           const x = (passage.direction === 'west' ? 0 : this.roomWidth - 1) + (passage.direction === 'west' ? depthStep : -depthStep);
-          for (let y = passage.edgeStart.y; y <= passage.edgeEnd.y; y += 1) carveFloor(tileMap, x, y, tiles.pathPebble, { type: 'road' }, roadMask);
+          for (let y = passage.edgeStart.y; y <= passage.edgeEnd.y; y += 1) carveRoadBrush(tileMap, x, y, MAIN_ROAD_WIDTH, roadMask);
         }
       }
-      carveFloorCircle(tileMap, passage.roadAnchor.x, passage.roadAnchor.y, 4, tiles.pathPebble, { type: 'road' }, roadMask);
+      carveRoadBrush(tileMap, passage.roadAnchor.x, passage.roadAnchor.y, MAIN_ROAD_WIDTH, roadMask);
     }
 
+    clearRoadCorridor(tileMap, roadMask);
     return { resolvedExits, resolvedEntrances, roadMask };
   }
 
   generateMainRoad(tileMap, center, anchors, rng, roadMask) {
-    carveFloorCircle(tileMap, center.x, center.y, 3, tiles.pathPebble, { type: 'road' }, roadMask);
+    carveRoadBrush(tileMap, center.x, center.y, MAIN_ROAD_WIDTH, roadMask);
     const ordered = [...anchors].sort((a, b) => Math.atan2(a.y - center.y, a.x - center.x) - Math.atan2(b.y - center.y, b.x - center.x));
     for (const anchor of ordered) {
-      carveRoadToAnchor(tileMap, center, anchor, rng, { minRadius: 2, maxRadius: 2, exitRadius: 3, roadMask });
+      carveRoadToAnchor(tileMap, center, anchor, rng, { roadWidth: MAIN_ROAD_WIDTH, roadMask });
     }
+    mergeNearbyRoads(tileMap, roadMask, rng, { roadWidth: MAIN_ROAD_WIDTH });
+    clearRoadCorridor(tileMap, roadMask);
   }
 
   generateBranchRoads(tileMap, rng, anchors, mainRoadMask, branchRoadMask, center, biomeConfig = null) {
@@ -430,7 +563,7 @@ export class TerrainGenerator {
     for (const anchor of anchors) {
       if (rng() > branchDensity) continue;
       const target = nearestRoadPoint(anchor, mainRoadPoints) ?? center;
-      carveRoadToAnchor(tileMap, anchor, target, rng, { minRadius: 1, maxRadius: 1, exitRadius: 1, roadMask: branchRoadMask });
+      carveRoadToAnchor(tileMap, anchor, target, rng, { roadWidth: BRANCH_ROAD_WIDTH, roadMask: branchRoadMask });
     }
 
     const desiredBranches = randomInt(rng, 1, Math.max(1, Math.round(2 + (8 * branchDensity))));
@@ -442,8 +575,11 @@ export class TerrainGenerator {
         x: clamp(Math.round(branchStart.x + Math.cos(angle) * distance), 2, this.roomWidth - 3),
         y: clamp(Math.round(branchStart.y + Math.sin(angle) * distance), 2, this.roomHeight - 3),
       };
-      carveRoadToAnchor(tileMap, branchStart, target, rng, { minRadius: 1, maxRadius: 1, exitRadius: 1, roadMask: branchRoadMask });
+      carveRoadToAnchor(tileMap, branchStart, target, rng, { roadWidth: BRANCH_ROAD_WIDTH, roadMask: branchRoadMask });
     }
+
+    mergeNearbyRoads(tileMap, branchRoadMask, rng, { roadWidth: BRANCH_ROAD_WIDTH, maxMerges: 6 });
+    clearRoadCorridor(tileMap, branchRoadMask);
   }
 
   generateTerrainPatches() {
