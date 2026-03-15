@@ -135,6 +135,16 @@ const prefabEditor = new PrefabEditorScreen();
 await prefabEditor.initialize();
 let prefabEditorToggleLatch = false;
 
+const objectEditorButton = document.createElement('button');
+objectEditorButton.type = 'button';
+objectEditorButton.className = 'object-editor-button';
+objectEditorButton.textContent = 'Object Editor';
+objectEditorButton.addEventListener('click', () => {
+  if (prefabEditor.isOpen) return;
+  prefabEditor.open();
+});
+document.body.appendChild(objectEditorButton);
+
 const BOOT_DEBUG_PREFIX = 'BOOT:';
 const DIAG_PREFIX = 'DIAG:';
 let startupCompleteLogged = false;
@@ -516,7 +526,7 @@ function tick(now) {
     logDiag('game root _ready');
   }
 
-  const prefabToggleDown = input.isDown('f8');
+  const prefabToggleDown = input.isDown('f6');
   if (prefabToggleDown && !prefabEditorToggleLatch) prefabEditor.toggle();
   prefabEditorToggleLatch = prefabToggleDown;
 
