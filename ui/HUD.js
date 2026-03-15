@@ -1,12 +1,11 @@
-import { palette } from '../entities/SpriteLibrary.js';
-import { visualTheme } from '../data/VisualTheme.js';
+import { visualPalette, visualTheme } from '../data/VisualTheme.js';
 
 const c = visualTheme.colors;
 
 export function drawHUD(renderer, player, abilitySystem) {
   renderer.drawUiText(`HP:${Math.ceil(player.hp)}/${player.maxHp}`, c.health, c.night, 1, 1);
   renderer.drawUiText(`MP:${Math.ceil(player.mana)}/${player.maxMana}`, c.mana, c.night, 1, 2);
-  renderer.drawUiText(`Gold:${player.gold}`, palette.gold, c.night, 1, 3);
+  renderer.drawUiText(`Gold:${player.gold}`, visualPalette.gold.coin, c.night, 1, 3);
 
   for (let i = 0; i < 4; i += 1) {
     const ability = abilitySystem.getAbilityBySlot(i);

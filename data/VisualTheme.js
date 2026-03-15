@@ -64,10 +64,82 @@ export const visualTheme = {
     '‡': '+',
     'Δ': '▲',
     '⚠': '!',
+    '▦': '▒',
+    '▥': '▓',
+    '▩': '█',
+    '×': 'x',
+    '—': '-',
+  },
+};
+
+export const renderLayers = {
+  background: 'background',
+  entities: 'entities',
+  effects: 'effects',
+  ui: 'ui',
+};
+
+export const glyphDensity = {
+  low: new Set([' ', '.', ',', '~', '`', '"', ':', ';', '·']),
+  medium: new Set(['|', '/', '\\', '+', '#', '%', '=', '-', '_', '○', '◄', '►', '▲', '▼', '║', '▓', '▒']),
+  high: new Set(['@', '&', '$', '*', '!', '█', '♦']),
+};
+
+export const visualPalette = {
+  background: {
+    world: visualTheme.colors.worldBackground,
+    panel: visualTheme.colors.panel,
+  },
+  ground: {
+    floorFg: visualTheme.colors.floorFg,
+    floorBg: visualTheme.colors.floorBg,
+    dirtFg: visualTheme.colors.dirtFg,
+    dirtBg: visualTheme.colors.dirtBg,
+  },
+  foliage: {
+    bright: visualTheme.colors.treeFg,
+    dark: visualTheme.colors.treeDarkFg,
+    grassFg: visualTheme.colors.grassFg,
+    grassBg: visualTheme.colors.grassBg,
+  },
+  stone: {
+    wallFg: visualTheme.colors.wallFg,
+    wallBg: visualTheme.colors.wallBg,
+  },
+  player: {
+    primary: visualTheme.colors.playerPrimary,
+    accent: visualTheme.colors.playerAccent,
+    cast: '#f1e6ff',
+  },
+  enemy: {
+    slime: visualTheme.colors.slime,
+    skeleton: visualTheme.colors.skeleton,
+    frozen: visualTheme.colors.enemyFrozen,
+  },
+  ui: {
+    text: visualTheme.colors.text,
+    textMuted: visualTheme.colors.textMuted,
+  },
+  damage: {
+    normal: visualTheme.colors.damage,
+    frozen: visualTheme.colors.enemyFrozen,
+  },
+  gold: {
+    coin: visualTheme.colors.gold,
+    lootSpark: '#90f0d1',
   },
 };
 
 export function toSafeGlyph(char) {
   if (!char || typeof char !== 'string') return ' ';
   return visualTheme.glyphFallbacks[char[0]] ?? char[0];
+}
+
+export function toRenderCell({ glyph = ' ', fg = visualTheme.colors.text, bg = visualTheme.colors.worldBackground, layer = renderLayers.entities } = {}) {
+  return {
+    glyph: toSafeGlyph(glyph),
+    fg,
+    bg,
+    layer,
+  };
 }
