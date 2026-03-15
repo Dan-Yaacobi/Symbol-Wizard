@@ -465,6 +465,7 @@ function handlePlayer(dt) {
 
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
+  player.castTimer = Math.max(0, (player.castTimer ?? 0) - dt);
 
   if (!dialogueManager.isOpen) {
     const interactDown = input.isDown('e');

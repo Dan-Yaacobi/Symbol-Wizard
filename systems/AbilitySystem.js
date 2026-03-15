@@ -208,6 +208,7 @@ export class AbilitySystem {
 
     this.player.mana -= ability.manaCost;
     this.cooldowns.set(ability.id, ability.cooldown);
+    this.player.castTimer = Math.max(this.player.castTimer ?? 0, 0.24);
 
     const level = this.upgrades.get(ability.id) ?? 1;
 

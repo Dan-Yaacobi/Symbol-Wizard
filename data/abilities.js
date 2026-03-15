@@ -1,3 +1,5 @@
+import { visualTheme } from './VisualTheme.js';
+
 const projectileSprite = [
   [
     ' ===> ',
@@ -34,7 +36,7 @@ function castMagicBolt({ player, target, system, abilityLevel }) {
   console.log('Magic bolt fired toward:', dirX, dirY);
 
   const projectile = system.createProjectile(player.x, player.y, dirX, dirY, {
-    color: '#b7deff',
+    color: visualTheme.colors.projectileArcane,
     speed: 65 + abilityLevel * 6,
     damage: 3 + abilityLevel,
     ttl: 0.9,
@@ -56,7 +58,7 @@ function castFireBurst({ player, system, abilityLevel }) {
     x: player.x,
     y: player.y,
     radius,
-    color: '#ffbf7f',
+    color: '#f3b178',
     ttl: 0.22,
   });
 
@@ -68,7 +70,7 @@ function castFireBurst({ player, system, abilityLevel }) {
         sourceX: player.x,
         sourceY: player.y,
         strongHit: true,
-        particleColor: '#ffc8a2',
+        particleColor: '#ffd3a8',
       });
     }
   }

@@ -1,3 +1,5 @@
+import { toSafeGlyph, visualTheme } from '../data/VisualTheme.js';
+
 export class Renderer {
   constructor(canvas, cols, rows, cellW = 8, cellH = 8) {
     this.canvas = canvas;
@@ -145,7 +147,7 @@ export class Renderer {
 
   #toCp437Code(char) {
     if (!char || typeof char !== 'string') return 32;
-    const ch = char[0];
+    const ch = toSafeGlyph(char);
     const asciiCode = ch.charCodeAt(0);
     if (asciiCode >= 0 && asciiCode <= 127) {
       return asciiCode;
@@ -254,7 +256,7 @@ export class Renderer {
     const ctx = this.background.ctx;
     ctx.clearRect(0, 0, this.background.canvas.width, this.background.canvas.height);
 
-    const fallbackTile = { char: ' ', fg: '#243341', bg: '#0b1016' };
+    const fallbackTile = { char: ' ', fg: visualTheme.colors.floorFg, bg: visualTheme.colors.worldBackground };
     const mapHeight = map?.length ?? 0;
 
     for (let screenY = -1; screenY <= this.rows; screenY += 1) {

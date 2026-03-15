@@ -1,31 +1,34 @@
 import { getSpriteFrame, palette } from '../entities/SpriteLibrary.js';
+import { toSafeGlyph, visualTheme } from '../data/VisualTheme.js';
 
 function getEntitySprite(entity) {
   return getSpriteFrame(entity.spriteKey, entity.animationState ?? 'idle', entity.currentFrame ?? entity.frameIndex ?? 0);
 }
 
+const c = visualTheme.colors;
+
 function colorForEntity(entity) {
   if (entity.type === 'npc') return palette[entity.role] ?? palette.npc;
   if (entity.type === 'house') {
-    if (entity.variant?.includes('blue')) return '#7abce3';
-    if (entity.variant?.includes('brown')) return '#be8e62';
-    return '#d06f6f';
+    if (entity.variant?.includes('blue')) return '#8fbbe0';
+    if (entity.variant?.includes('brown')) return '#b48a60';
+    return '#c97d7d';
   }
   if (entity.interaction === 'destroy') {
-    if (entity.kind === 'vase') return '#baa6e0';
-    if (entity.kind === 'crate') return '#bc8a56';
-    return '#9f7344';
+    if (entity.kind === 'vase') return '#a893cf';
+    if (entity.kind === 'crate') return '#b18456';
+    return '#976d45';
   }
   if (entity.category === 'decorative' || entity.category === 'terrain') {
-    if (entity.spriteKey?.includes('flower-red')) return '#d66f82';
-    if (entity.spriteKey?.includes('flower-yellow')) return '#d7b45a';
-    if (entity.spriteKey?.includes('flower-blue')) return '#6a9fd4';
-    if (entity.spriteKey?.includes('tree-dark')) return '#4a8458';
-    if (entity.spriteKey?.includes('tree-bright')) return '#5da568';
-    if (entity.spriteKey?.includes('stone')) return '#8d97a8';
-    return '#5f9f68';
+    if (entity.spriteKey?.includes('flower-red')) return '#d1788a';
+    if (entity.spriteKey?.includes('flower-yellow')) return '#d8bc6b';
+    if (entity.spriteKey?.includes('flower-blue')) return '#78aeda';
+    if (entity.spriteKey?.includes('tree-dark')) return '#4f8459';
+    if (entity.spriteKey?.includes('tree-bright')) return '#65a96f';
+    if (entity.spriteKey?.includes('stone')) return '#8a98ab';
+    return '#6aa574';
   }
-  if (entity.type === 'fence') return '#b4916f';
+  if (entity.type === 'fence') return c.woodFg;
   return palette.npc;
 }
 
@@ -44,7 +47,7 @@ function drawSprite(renderer, camera, entity, color, forceSprite = null) {
       if (ch === ' ') continue;
       const screenX = baseX + sx - camera.x;
       const screenY = baseY + sy - camera.y;
-      renderer.drawEntityGlyph(ch, color, '#0b1016', screenX, screenY);
+      renderer.drawEntityGlyph(toSafeGlyph(ch), color, c.worldBackground, screenX, screenY);
     }
   }
 }
@@ -106,7 +109,7 @@ function drawProjectile(renderer, camera, projectile) {
         if (occupied.has(`${sx + ox},${sy + oy}`)) continue;
         const glowX = baseX + sx + ox - camera.x;
         const glowY = baseY + sy + oy - camera.y;
-        renderer.drawEntityGlyph('·', glowColor, '#0b1016', glowX, glowY);
+        renderer.drawEntityGlyph('·', glowColor, c.worldBackground, glowX, glowY);
       }
     }
   }
@@ -117,8 +120,8 @@ function drawProjectile(renderer, camera, projectile) {
     const glyph = alpha > 0.66 ? '•' : (alpha > 0.33 ? '·' : '.');
     renderer.drawEntityGlyph(
       glyph,
-      particle.color ?? projectile.trailColor ?? '#9fdfff',
-      '#0b1016',
+      particle.color ?? projectile.trailColor ?? c.projectileArcane,
+      c.worldBackground,
       Math.round(particle.x) - camera.x,
       Math.round(particle.y) - camera.y,
     );
@@ -131,7 +134,7 @@ function drawProjectile(renderer, camera, projectile) {
       if (ch === ' ') continue;
       const screenX = baseX + sx - camera.x;
       const screenY = baseY + sy - camera.y;
-      renderer.drawEntityGlyph(ch, projectile.color, '#0b1016', screenX, screenY);
+      renderer.drawEntityGlyph(toSafeGlyph(ch), projectile.color, c.worldBackground, screenX, screenY);
     }
   }
 }
@@ -158,8 +161,8 @@ function drawAbilityEffect(renderer, camera, effect) {
       const sx = Math.round(x) - camera.x;
       const sy = Math.round(y) - camera.y;
 
-      renderer.drawEntityGlyph('*', effect.glowColor ?? '#9ad5ff', '#0b1016', sx, sy);
-      renderer.drawEntityGlyph('⚡', effect.color ?? '#f3fbff', '#0b1016', sx, sy);
+      renderer.drawEntityGlyph('*', effect.glowColor ?? '#9ad5ff', c.worldBackground, sx, sy);
+      renderer.drawEntityGlyph('≈', effect.color ?? '#f3fbff', c.worldBackground, sx, sy);
     }
 
     return;
@@ -171,7 +174,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const t = i / steps;
       const x = effect.fromX + (effect.toX - effect.fromX) * t;
       const y = effect.fromY + (effect.toY - effect.fromY) * t;
-      renderer.drawEntityGlyph('~', effect.color ?? '#cfe7ff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+      renderer.drawEntityGlyph('~', effect.color ?? '#cfe7ff', c.worldBackground, Math.round(x) - camera.x, Math.round(y) - camera.y);
     }
     return;
   }
@@ -183,18 +186,18 @@ function drawAbilityEffect(renderer, camera, effect) {
       const angle = (Math.PI * 2 * i) / points;
       const x = effect.x + Math.cos(angle) * effect.radius;
       const y = effect.y + Math.sin(angle) * effect.radius;
-      renderer.drawEntityGlyph('·', effect.color ?? '#d8f1ff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+      renderer.drawEntityGlyph('·', effect.color ?? '#d8f1ff', c.worldBackground, Math.round(x) - camera.x, Math.round(y) - camera.y);
     }
     return;
   }
 
   if (effect.type === 'freeze-burst') {
-    const glyphs = ['*', '❄', '+'];
+    const glyphs = ['*', '≈', '+'];
     for (let i = 0; i < 10; i += 1) {
       const angle = (Math.PI * 2 * i) / 10;
       const x = effect.x + Math.cos(angle) * (effect.radius ?? 2);
       const y = effect.y + Math.sin(angle) * (effect.radius ?? 2);
-      renderer.drawEntityGlyph(glyphs[i % glyphs.length], effect.color ?? '#def5ff', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+      renderer.drawEntityGlyph(glyphs[i % glyphs.length], effect.color ?? '#def5ff', c.worldBackground, Math.round(x) - camera.x, Math.round(y) - camera.y);
     }
     return;
   }
@@ -204,7 +207,7 @@ function drawAbilityEffect(renderer, camera, effect) {
     for (const particle of effect.particles ?? []) {
       const lifeRatio = particle.life / Math.max(0.0001, particle.maxLife ?? particle.life ?? 1);
       const glyph = lifeRatio > 0.5 ? '*' : '·';
-      renderer.drawEntityGlyph(glyph, effect.color ?? '#d9dce3', '#0b1016', Math.round(particle.x) - camera.x, Math.round(particle.y) - camera.y);
+      renderer.drawEntityGlyph(glyph, effect.color ?? '#d9dce3', c.worldBackground, Math.round(particle.x) - camera.x, Math.round(particle.y) - camera.y);
     }
     return;
   }
@@ -216,7 +219,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const x = effect.x + Math.cos(angle) * effect.radius;
       const y = effect.y + Math.sin(angle) * effect.radius;
       const glyph = lifeRatio > 0.45 ? '*' : '·';
-      renderer.drawEntityGlyph(glyph, effect.color ?? '#ffb36e', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+      renderer.drawEntityGlyph(glyph, effect.color ?? '#ffb36e', c.worldBackground, Math.round(x) - camera.x, Math.round(y) - camera.y);
     }
     return;
   }
@@ -228,7 +231,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const travel = (1 - lifeRatio) * (piece.speed ?? 2.2);
       const x = effect.x + Math.cos(piece.angle) * travel;
       const y = effect.y + Math.sin(piece.angle) * travel;
-      renderer.drawEntityGlyph(glyph, effect.color ?? '#d5b79a', '#0b1016', Math.round(x) - camera.x, Math.round(y) - camera.y);
+      renderer.drawEntityGlyph(glyph, effect.color ?? '#d5b79a', c.worldBackground, Math.round(x) - camera.x, Math.round(y) - camera.y);
     }
   }
 }
@@ -242,7 +245,7 @@ function drawWorldObject(renderer, camera, object, overrideTiles = null) {
   for (const tile of tiles) {
     const sx = Math.round(object.x + (tile.x ?? 0)) - camera.x;
     const sy = Math.round(object.y + (tile.y ?? 0)) - camera.y;
-    renderer.drawEntityGlyph(tile.char ?? ' ', tile.fg ?? '#d8d2c4', tile.bg ?? '#0b1016', sx, sy);
+    renderer.drawEntityGlyph(toSafeGlyph(tile.char ?? ' '), tile.fg ?? '#d8d2c4', tile.bg ?? c.worldBackground, sx, sy);
   }
 }
 
@@ -250,9 +253,9 @@ function drawDebugCursorOverlay(renderer, camera, mouse) {
   if (!mouse) return;
 
   const worldScreen = camera.worldToScreen(mouse.worldX, mouse.worldY);
-  renderer.drawEntityGlyph('+', '#ff3f7f', '#0b1016', worldScreen.x, worldScreen.y);
+  renderer.drawEntityGlyph('+', '#ff3f7f', c.worldBackground, worldScreen.x, worldScreen.y);
 
-  renderer.drawUiGlyph('+', '#53f7ff', '#0b1016', mouse.canvasCellX, mouse.canvasCellY);
+  renderer.drawUiGlyph('+', '#53f7ff', c.worldBackground, mouse.canvasCellX, mouse.canvasCellY);
 }
 export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, combatTextSystem = null, abilityEffects = [], mouse = null) {
   renderer.renderBackground(map, camera);
@@ -275,11 +278,11 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     drawSprite(renderer, camera, npc, npcColor);
 
     if (npc.dialogueEngaged) {
-      const pulse = npc.dialoguePulse > 0 ? '◉' : '◌';
+      const pulse = npc.dialoguePulse > 0 ? '○' : '·';
       const sx = Math.round(npc.x) - camera.x;
       const sy = Math.round(npc.y) - 5 - camera.y;
-      renderer.drawEntityGlyph('✦', '#ffe6a8', '#0b1016', sx, sy);
-      renderer.drawEntityGlyph(pulse, '#f7c66e', '#0b1016', sx, sy + 1);
+      renderer.drawEntityGlyph('*', '#ffe6a8', c.worldBackground, sx, sy);
+      renderer.drawEntityGlyph(pulse, '#f7c66e', c.worldBackground, sx, sy + 1);
     }
   }
 
@@ -297,7 +300,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     if (enemy.frozen) {
       const sx = Math.round(enemy.x) - camera.x;
       const sy = Math.round(enemy.y) - 3 - camera.y;
-      renderer.drawEntityGlyph('❄', enemy.freezeGlow ?? '#d8f4ff', '#0b1016', sx, sy);
+      renderer.drawEntityGlyph('*', enemy.freezeGlow ?? '#d8f4ff', c.worldBackground, sx, sy);
     }
   }
 
@@ -308,16 +311,16 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     const gx = Math.round(g.x) - camera.x;
     const gy = Math.round(g.y) - camera.y;
     if (g.type === 'minor-item') {
-      renderer.drawEntityGlyph('✦', '#90f0d1', '#0b1016', gx, gy);
+      renderer.drawEntityGlyph('*', '#90f0d1', c.worldBackground, gx, gy);
       continue;
     }
-    renderer.drawEntityGlyph('$', palette.gold, '#0b1016', gx, gy);
+    renderer.drawEntityGlyph('$', palette.gold, c.worldBackground, gx, gy);
   }
 
   drawSprite(renderer, camera, player, palette.player);
   const px = Math.round(player.x) - camera.x;
   const py = Math.round(player.y) - camera.y;
-  renderer.drawEntityGlyph('!', palette.playerAccent, '#0b1016', px, py - 2);
+  renderer.drawEntityGlyph('!', palette.playerAccent, c.worldBackground, px, py - 2);
 
   drawDebugCursorOverlay(renderer, camera, mouse);
   combatTextSystem?.render(renderer, camera);

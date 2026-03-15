@@ -1,3 +1,5 @@
+import { visualTheme } from '../data/VisualTheme.js';
+
 const MAX_ACTIVE_TEXTS = 20;
 const MIN_LIFETIME = 0.9;
 const MAX_LIFETIME = 1.3;
@@ -7,11 +9,11 @@ const DEBUG_COMBAT_TEXT = false;
 // Toggle to true while diagnosing combat-text lifecycle issues without spamming normal gameplay logs.
 
 const COLOR_MAP = {
-  red: '#ff5a5a',
-  magenta: '#ff3df2',
-  green: '#69de79',
-  gold: '#e6c95a',
-  white: '#ffffff',
+  red: visualTheme.colors.damage,
+  magenta: '#ff8ef0',
+  green: visualTheme.colors.success,
+  gold: visualTheme.colors.gold,
+  white: visualTheme.colors.text,
 };
 
 const TEXT_STYLES = {
@@ -122,7 +124,7 @@ export class CombatTextSystem {
       }
 
       const drawStyle = this.#getAnimatedStyle(entry);
-      renderer.drawEffectText(entry.text, drawStyle.color, screenX, screenY, entry.opacity, '#06090d', drawStyle);
+      renderer.drawEffectText(entry.text, drawStyle.color, screenX, screenY, entry.opacity, '#09101a', drawStyle);
     }
   }
 
