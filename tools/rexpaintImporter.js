@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import { promises as fsp } from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import { fileURLToPath } from 'node:url';
+import { decodeCp437 } from '../world/Cp437.js';
 
 const ROOT_DIR = process.cwd();
 const IMPORT_DIR = path.join(ROOT_DIR, 'rexpaint_import', 'objects');
@@ -16,6 +18,8 @@ const DEFAULT_METADATA = {
   rarity: 'common',
 };
 
+const DEBUG_IMPORT = process.argv.includes('--debug');
+
 function readInt32LE(buffer, offset) {
   return buffer.readInt32LE(offset);
 }
@@ -24,32 +28,61 @@ function readUInt32LE(buffer, offset) {
   return buffer.readUInt32LE(offset);
 }
 
+function assertReadable(buffer, offset, bytes, context) {
+  if (offset + bytes > buffer.length) {
+    throw new Error(`Malformed XP (${context}): attempted to read ${bytes} bytes at offset ${offset}, length ${buffer.length}.`);
+  }
+}
+
 function isEmptyCell(cell) {
   return !cell || !cell.char || cell.char === ' ' || cell.char === '\0';
+}
+
+function normalizeRgb(color, fallback = [255, 255, 255]) {
+  if (!Array.isArray(color) || color.length < 3) return [...fallback];
+  return [
+    Math.max(0, Math.min(255, Number(color[0]) || 0)),
+    Math.max(0, Math.min(255, Number(color[1]) || 0)),
+    Math.max(0, Math.min(255, Number(color[2]) || 0)),
+  ];
 }
 
 function parseXP(fileBuffer) {
   const inflated = zlib.gunzipSync(fileBuffer);
   let offset = 0;
 
+  assertReadable(inflated, offset, 8, 'header');
   const version = readInt32LE(inflated, offset);
   offset += 4;
   const layerCount = readInt32LE(inflated, offset);
   offset += 4;
 
+  if (!Number.isInteger(layerCount) || layerCount < 0) {
+    throw new Error(`Malformed XP: invalid layer count ${layerCount}.`);
+  }
+
   const layers = [];
 
   for (let layerIndex = 0; layerIndex < layerCount; layerIndex += 1) {
+    assertReadable(inflated, offset, 8, `layer ${layerIndex} header`);
     const width = readInt32LE(inflated, offset);
     offset += 4;
     const height = readInt32LE(inflated, offset);
     offset += 4;
 
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 0 || height < 0) {
+      throw new Error(`Malformed XP: invalid dimensions for layer ${layerIndex} (${width}x${height}).`);
+    }
+
+    const expectedCellCount = width * height;
+    assertReadable(inflated, offset, expectedCellCount * 10, `layer ${layerIndex} cells`);
+
     const cells = [];
 
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const codepoint = readUInt32LE(inflated, offset);
+    // REXPaint XP files are stored in column-major order (x outer loop, y inner loop).
+    for (let x = 0; x < width; x += 1) {
+      for (let y = 0; y < height; y += 1) {
+        const cp437 = readUInt32LE(inflated, offset);
         offset += 4;
 
         const fg = [inflated[offset], inflated[offset + 1], inflated[offset + 2]];
@@ -57,12 +90,30 @@ function parseXP(fileBuffer) {
         const bg = [inflated[offset], inflated[offset + 1], inflated[offset + 2]];
         offset += 3;
 
-        const char = codepoint === 0 ? ' ' : String.fromCodePoint(codepoint);
-        cells.push({ x, y, char, fg, bg });
+        cells.push({
+          x,
+          y,
+          cp437,
+          char: decodeCp437(cp437),
+          fg: normalizeRgb(fg),
+          bg: normalizeRgb(bg, [0, 0, 0]),
+        });
       }
     }
 
+    if (cells.length !== expectedCellCount) {
+      throw new Error(`Malformed XP: layer ${layerIndex} cell count mismatch (${cells.length} != ${expectedCellCount}).`);
+    }
+
     layers.push({ width, height, cells });
+  }
+
+  if (offset > inflated.length) {
+    throw new Error(`Malformed XP: parser overread by ${offset - inflated.length} bytes.`);
+  }
+
+  if (DEBUG_IMPORT) {
+    console.log(`[rexpaintImporter] Parsed XP v${version} with ${layerCount} layer(s).`);
   }
 
   return { version, layers };
@@ -90,6 +141,26 @@ function normalizeCells(cells, bounds) {
   return cells.map((cell) => ({ ...cell, x: cell.x - bounds.minX, y: cell.y - bounds.minY }));
 }
 
+function mergeLayersTopDown(layers) {
+  const width = Math.max(0, ...layers.map((layer) => layer?.width ?? 0));
+  const height = Math.max(0, ...layers.map((layer) => layer?.height ?? 0));
+  const merged = new Map();
+
+  layers.forEach((layer, layerIndex) => {
+    for (const cell of layer?.cells ?? []) {
+      if (isEmptyCell(cell)) continue;
+      const key = `${cell.x},${cell.y}`;
+      merged.set(key, { ...cell, sourceLayer: layerIndex });
+    }
+  });
+
+  if (DEBUG_IMPORT) {
+    console.log(`[rexpaintImporter] Layer merge: ${layers.length} layers => ${merged.size} visible cells.`);
+  }
+
+  return { width, height, cells: [...merged.values()] };
+}
+
 function extractVisualLayer(layer, bounds) {
   const cropped = (layer?.cells ?? []).filter((cell) => {
     if (isEmptyCell(cell)) return false;
@@ -97,9 +168,10 @@ function extractVisualLayer(layer, bounds) {
   }).map((cell) => ({
     x: cell.x,
     y: cell.y,
+    cp437: cell.cp437,
     char: cell.char,
-    fg: cell.fg,
-    bg: cell.bg,
+    fg: normalizeRgb(cell.fg),
+    bg: normalizeRgb(cell.bg, [0, 0, 0]),
   }));
 
   return normalizeCells(cropped, bounds);
@@ -146,25 +218,49 @@ async function writeRegistry(prefabIds) {
   await fsp.writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`, 'utf8');
 }
 
+function debugPrintGrid(prefab) {
+  if (!DEBUG_IMPORT) return;
+
+  console.log(`[rexpaintImporter] ${prefab.id}: ${prefab.width}x${prefab.height}, visual=${prefab.visual.length}, collision=${prefab.collision.length}, interaction=${prefab.interaction.length}`);
+  const grid = Array.from({ length: prefab.height }, () => Array.from({ length: prefab.width }, () => ' '));
+  for (const cell of prefab.visual) {
+    if (cell.y >= 0 && cell.y < prefab.height && cell.x >= 0 && cell.x < prefab.width) {
+      grid[cell.y][cell.x] = cell.char;
+    }
+  }
+
+  grid.forEach((row, y) => {
+    const codes = row.map((_, x) => {
+      const match = prefab.visual.find((cell) => cell.x === x && cell.y === y);
+      return match ? String(match.cp437).padStart(3, ' ') : '  .';
+    }).join(' ');
+    console.log(`[grid ${String(y).padStart(2, '0')}] ${row.join('')}  | ${codes}`);
+  });
+}
+
 async function importXPFile(xpPath) {
   const id = path.basename(xpPath, '.xp');
   const source = path.basename(xpPath);
   const buffer = await fsp.readFile(xpPath);
   const parsed = parseXP(buffer);
 
-  const visualLayer = parsed.layers[0] ?? { cells: [] };
+  const visualLayer = mergeLayersTopDown(parsed.layers);
   const collisionLayer = parsed.layers[1] ?? { cells: [] };
   const interactionLayer = parsed.layers[2] ?? { cells: [] };
-  // layer 3 reserved/ignored for forward compatibility
+  // layer 3+ reserved/ignored for mask channels, but included in merged visuals.
   const bounds = getVisualBounds(visualLayer);
 
   const prefab = {
     id,
     source,
+    width: Math.max(0, bounds.maxX - bounds.minX + 1),
+    height: Math.max(0, bounds.maxY - bounds.minY + 1),
     visual: extractVisualLayer(visualLayer, bounds),
     collision: extractMaskLayer(collisionLayer, bounds),
     interaction: extractMaskLayer(interactionLayer, bounds),
   };
+
+  debugPrintGrid(prefab);
 
   const metaPath = path.join(path.dirname(xpPath), `${id}.meta.json`);
   const metadata = await readMetadata(metaPath);
@@ -231,10 +327,14 @@ async function main() {
   await runImport();
 }
 
-main().catch((error) => {
-  console.error('[rexpaintImporter] fatal error:', error);
-  process.exitCode = 1;
-});
+const isDirectExecution = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+
+if (isDirectExecution) {
+  main().catch((error) => {
+    console.error('[rexpaintImporter] fatal error:', error);
+    process.exitCode = 1;
+  });
+}
 
 export {
   parseXP,
@@ -243,4 +343,5 @@ export {
   normalizeCells,
   applyMetadata,
   writePrefab,
+  mergeLayersTopDown,
 };
