@@ -19,6 +19,7 @@ import { abilityDefinitions, defaultAbilitySlots } from './data/abilities.js';
 import { AbilitySystem } from './systems/AbilitySystem.js';
 import { AbilityBar } from './ui/AbilityBar.js';
 import { SkillTreeWindow } from './ui/SkillTreeWindow.js';
+import { PrefabEditorScreen } from './ui/PrefabEditorScreen.js';
 import { rollObjectLoot, tryInteractInFront } from './systems/ObjectInteractionSystem.js';
 import { loadObjectsFromFolder } from './world/ObjectLibrary.js';
 import {
@@ -129,6 +130,10 @@ const uiRoot = document.getElementById('uiPanels') ?? (() => {
 })();
 const abilityBar = new AbilityBar({ root: uiRoot, abilitySystem });
 const skillTree = new SkillTreeWindow({ root: uiRoot, abilitySystem, player });
+
+const prefabEditor = new PrefabEditorScreen();
+await prefabEditor.initialize();
+let prefabEditorToggleLatch = false;
 
 const BOOT_DEBUG_PREFIX = 'BOOT:';
 const DIAG_PREFIX = 'DIAG:';
@@ -509,6 +514,33 @@ function tick(now) {
 
   if (!startupCompleteLogged) {
     logDiag('game root _ready');
+  }
+
+  const prefabToggleDown = input.isDown('f8');
+  if (prefabToggleDown && !prefabEditorToggleLatch) prefabEditor.toggle();
+  prefabEditorToggleLatch = prefabToggleDown;
+
+  if (prefabEditor.isOpen) {
+    renderer.beginFrame();
+    renderWorld(
+      renderer,
+      camera,
+      map,
+      player,
+      enemies,
+      npcs,
+      worldObjects,
+      projectiles,
+      goldPiles,
+      combatTextSystem,
+      abilitySystem.getActiveEffects(),
+      input.mouse,
+    );
+    drawHUD(renderer, player, abilitySystem);
+    renderer.composite();
+    input.endFrame();
+    requestAnimationFrame(tick);
+    return;
   }
 
   if (!diagMinimalMode) {

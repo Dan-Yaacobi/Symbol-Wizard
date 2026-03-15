@@ -455,7 +455,23 @@ function definitionFromPrefab(prefab) {
     maxClusterSize: Number(prefab.clusterMax) || 1,
     clusterRadius: Number(prefab.clusterRadius) || 1,
     biomeRarity: typeof prefab.rarity === 'string' ? prefab.rarity : 'common',
+    destructible: Boolean(prefab.destructible),
+    hp: Number(prefab.hp) || null,
+    material: typeof prefab.material === 'string' ? prefab.material : 'wood',
+    drops: Array.isArray(prefab.dropTable)
+      ? prefab.dropTable
+      : (typeof prefab.dropTable === 'string' && prefab.dropTable !== 'none'
+        ? [{ type: prefab.dropTable, min: 1, max: 1 }]
+        : []),
+    breakFrames: Array.isArray(prefab.breakFrames) ? prefab.breakFrames : null,
   });
+}
+
+export function registerPrefabObject(prefab) {
+  const definition = definitionFromPrefab(prefab);
+  if (!definition?.id) return null;
+  objectLibrary[definition.id] = definition;
+  return definition;
 }
 
 export async function loadObjectsFromFolder(basePath = './assets/objects') {
@@ -470,7 +486,7 @@ export async function loadObjectsFromFolder(basePath = './assets/objects') {
       const response = await fetch(`${basePath}/${fileName}`, { cache: 'no-cache' });
       if (!response.ok) return;
       const prefab = await response.json();
-      const definition = definitionFromPrefab(prefab);
+      const definition = registerPrefabObject(prefab);
       if (definition?.id) {
         objectLibrary[definition.id] = definition;
       }
@@ -548,6 +564,8 @@ export function spawnObject(type, position, overrides = {}, rng = Math.random) {
     health: Number.isFinite(definition.hp) ? definition.hp : null,
     maxHealth: Number.isFinite(definition.hp) ? definition.hp : null,
     lootTable: definition.drops ?? [],
+    material: definition.material ?? 'wood',
+    breakFrames: Array.isArray(definition.breakFrames) ? definition.breakFrames : null,
     state: { ...(overrides.state ?? {}) },
     destroyed: false,
     radius,

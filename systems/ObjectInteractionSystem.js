@@ -24,6 +24,8 @@ export function applyAttackToObject(object, damage = 1) {
   object.collision = false;
   object.attackable = false;
   object.interactable = false;
+  object.breakDuration = Number.isFinite(object.breakDuration) ? object.breakDuration : 0.28;
+  object.breakTimer = object.breakDuration;
   return { destroyed: true, damaged: true };
 }
 

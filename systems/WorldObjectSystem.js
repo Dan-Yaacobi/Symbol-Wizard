@@ -95,6 +95,7 @@ export function cleanupDestroyedObjects(worldObjects) {
   for (let i = worldObjects.length - 1; i >= 0; i -= 1) {
     const object = worldObjects[i];
     if (!object.destroyed) continue;
+    if (Number.isFinite(object.breakTimer) && object.breakTimer > 0) continue;
     worldObjects.splice(i, 1);
   }
 }
