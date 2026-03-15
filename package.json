@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "lint:imports": "eslint . --ext .js",
-    "audit:modules": "node scripts/module-audit.mjs"
+    "audit:modules": "node scripts/module-audit.mjs",
+    "import:rexpaint": "node tools/rexpaintImporter.js",
+    "import:rexpaint:watch": "node tools/rexpaintImporter.js --watch"
   },
   "devDependencies": {
     "eslint": "^8.57.1",
