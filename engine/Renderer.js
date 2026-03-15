@@ -16,16 +16,22 @@ export class Renderer {
     this.lastCameraX = Number.NaN;
     this.lastCameraY = Number.NaN;
 
+    this.fontAtlas = new Image();
+    this.fontAtlas.src = 'assets/fonts/cp437_8x8.png';
+    this.fontReady = false;
+    this.fontAtlas.onload = () => {
+      this.fontReady = true;
+    };
+    this.fontCols = 16;
+    this.fontRows = 16;
+    this.glyphW = this.cellW;
+    this.glyphH = this.cellH;
+
     this.ctx.imageSmoothingEnabled = false;
     this.background.ctx.imageSmoothingEnabled = false;
     this.entities.ctx.imageSmoothingEnabled = false;
     this.effects.ctx.imageSmoothingEnabled = false;
     this.ui.ctx.imageSmoothingEnabled = false;
-
-    this.#setTextStyle(this.background.ctx);
-    this.#setTextStyle(this.entities.ctx);
-    this.#setTextStyle(this.effects.ctx);
-    this.#setTextStyle(this.ui.ctx);
   }
 
   #createLayer() {
@@ -36,13 +42,16 @@ export class Renderer {
     return { canvas, ctx };
   }
 
-  #setTextStyle(ctx) {
-    ctx.font = `${this.cellH}px monospace`;
-    ctx.textBaseline = 'top';
-  }
-
   #cacheKey(char, fg, bg) {
     return `${char}|${fg}|${bg}`;
+  }
+
+  #getGlyphCoords(char) {
+    const code = char.charCodeAt(0);
+    return {
+      sx: (code % this.fontCols) * this.glyphW,
+      sy: Math.floor(code / this.fontCols) * this.glyphH,
+    };
   }
 
   #getGlyph(char, fg, bg) {
@@ -55,13 +64,29 @@ export class Renderer {
     tile.height = this.cellH;
     const tctx = tile.getContext('2d', { alpha: true });
     tctx.imageSmoothingEnabled = false;
-    this.#setTextStyle(tctx);
 
     tctx.fillStyle = bg;
     tctx.fillRect(0, 0, this.cellW, this.cellH);
-    if (char !== ' ') {
+
+    if (this.fontReady && char !== ' ') {
+      const { sx, sy } = this.#getGlyphCoords(char);
+
+      tctx.drawImage(
+        this.fontAtlas,
+        sx,
+        sy,
+        this.glyphW,
+        this.glyphH,
+        0,
+        0,
+        this.cellW,
+        this.cellH,
+      );
+
       tctx.fillStyle = fg;
-      tctx.fillText(char, 0, 0);
+      tctx.globalCompositeOperation = 'source-atop';
+      tctx.fillRect(0, 0, this.cellW, this.cellH);
+      tctx.globalCompositeOperation = 'source-over';
     }
 
     this.glyphCache.set(key, tile);
@@ -133,7 +158,6 @@ export class Renderer {
     if (clampedAlpha <= 0) return;
 
     const fontScale = Number.isFinite(style?.fontScale) ? style.fontScale : 1;
-    const fontWeight = style?.fontWeight ?? '700';
 
     if (fontScale <= 1) {
       ctx.globalAlpha = clampedAlpha;
@@ -146,11 +170,18 @@ export class Renderer {
 
     ctx.save();
     ctx.globalAlpha = clampedAlpha;
-    ctx.textBaseline = 'top';
-    ctx.textAlign = 'left';
-    ctx.font = `${fontWeight} ${Math.round(this.cellH * fontScale)}px monospace`;
-    ctx.fillStyle = fg;
-    ctx.fillText(text, x * this.cellW, y * this.cellH);
+
+    if (this.fontReady) {
+      for (let i = 0; i < text.length; i += 1) {
+        const glyph = this.#getGlyph(text[i], fg, bg);
+        const pixelX = (x + i) * this.cellW;
+        const pixelY = y * this.cellH;
+        const glyphWidth = this.cellW * fontScale;
+        const glyphHeight = this.cellH * fontScale;
+        ctx.drawImage(glyph, pixelX, pixelY, glyphWidth, glyphHeight);
+      }
+    }
+
     ctx.restore();
   }
 
