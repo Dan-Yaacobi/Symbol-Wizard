@@ -54,6 +54,10 @@ export class Renderer {
   }
 
   static CP437_EXTENDED_MAP = {
+    '☺': 1, '☻': 2, '♥': 3, '♦': 4, '♣': 5, '♠': 6, '•': 7,
+    '◘': 8, '○': 9, '◙': 10, '♂': 11, '♀': 12, '♪': 13, '♫': 14, '☼': 15,
+    '►': 16, '◄': 17, '↕': 18, '‼': 19, '¶': 20, '§': 21, '▬': 22, '↨': 23,
+    '↑': 24, '↓': 25, '→': 26, '←': 27, '∟': 28, '↔': 29, '▲': 30, '▼': 31,
     'Ç': 128, 'ü': 129, 'é': 130, 'â': 131, 'ä': 132, 'à': 133, 'å': 134, 'ç': 135,
     'ê': 136, 'ë': 137, 'è': 138, 'ï': 139, 'î': 140, 'ì': 141, 'Ä': 142, 'Å': 143,
     'É': 144, 'æ': 145, 'Æ': 146, 'ô': 147, 'ö': 148, 'ò': 149, 'û': 150, 'ù': 151,
@@ -66,6 +70,10 @@ export class Renderer {
     '╚': 200, '╔': 201, '╩': 202, '╦': 203, '╠': 204, '═': 205, '╬': 206, '╧': 207,
     '╨': 208, '╤': 209, '╥': 210, '╙': 211, '╘': 212, '╒': 213, '╓': 214, '╫': 215,
     '╪': 216, '┘': 217, '┌': 218, '█': 219, '▄': 220, '▌': 221, '▐': 222, '▀': 223,
+    'α': 224, 'ß': 225, 'Γ': 226, 'π': 227, 'Σ': 228, 'σ': 229, 'µ': 230, 'τ': 231,
+    'Φ': 232, 'Θ': 233, 'Ω': 234, 'δ': 235, '∞': 236, 'φ': 237, 'ε': 238, '∩': 239,
+    '≡': 240, '±': 241, '≥': 242, '≤': 243, '⌠': 244, '⌡': 245, '÷': 246, '≈': 247,
+    '°': 248, '∙': 249, '·': 250, '√': 251, 'ⁿ': 252, '²': 253, '■': 254, ' ': 255,
   };
 
   #logFontAtlasState(stage) {
@@ -83,10 +91,27 @@ export class Renderer {
 
   #debugGlyphCoords() {
     if (!this.debugFontAtlas) return;
-    ['A', '#', '@', '█', '░', '│'].forEach((char) => {
+    ['.', '#', '~', '♣'].forEach((char) => {
       const coords = this.#getGlyphCoords(char);
       console.debug('[Renderer] glyph coords', { char, ...(coords ?? { valid: false }) });
     });
+  }
+
+  #parseHexColorToRgb(color, fallbackHex = '#ffffff') {
+    const source = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color ?? '') ? color : fallbackHex;
+    const value = source.slice(1);
+    if (value.length === 3) {
+      return {
+        r: Number.parseInt(value[0] + value[0], 16),
+        g: Number.parseInt(value[1] + value[1], 16),
+        b: Number.parseInt(value[2] + value[2], 16),
+      };
+    }
+    return {
+      r: Number.parseInt(value.slice(0, 2), 16),
+      g: Number.parseInt(value.slice(2, 4), 16),
+      b: Number.parseInt(value.slice(4, 6), 16),
+    };
   }
 
   #createLayer() {
@@ -167,11 +192,29 @@ export class Renderer {
         this.cellH,
       );
 
-      gctx.save();
-      gctx.globalCompositeOperation = 'source-in';
-      gctx.fillStyle = fg;
-      gctx.fillRect(0, 0, this.cellW, this.cellH);
-      gctx.restore();
+      if (this.debugFontAtlas && ['.', '#', '~', '♣'].includes(char)) {
+        console.debug('[Renderer] drawImage sample region', {
+          char,
+          sx,
+          sy,
+          sourceW: this.glyphW,
+          sourceH: this.glyphH,
+          destW: this.cellW,
+          destH: this.cellH,
+        });
+      }
+
+      const glyphData = gctx.getImageData(0, 0, this.cellW, this.cellH);
+      const pixels = glyphData.data;
+      const { r, g, b } = this.#parseHexColorToRgb(fg);
+      for (let i = 0; i < pixels.length; i += 4) {
+        const mask = Math.max(pixels[i], pixels[i + 1], pixels[i + 2]);
+        pixels[i] = r;
+        pixels[i + 1] = g;
+        pixels[i + 2] = b;
+        pixels[i + 3] = mask;
+      }
+      gctx.putImageData(glyphData, 0, 0);
 
       tctx.drawImage(glyphMask, 0, 0);
     } else if (char !== ' ') {
