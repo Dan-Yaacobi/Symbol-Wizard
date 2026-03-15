@@ -44,7 +44,13 @@ function isValidFootprint(footprint) {
     const [xString, yString] = current.split(',');
     const cx = Number(xString);
     const cy = Number(yString);
-    const neighbors = [`${cx + 1},${cy}`, `${cx - 1},${cy}`, `${cx},${cy + 1}`, `${cx},${cy - 1}`];
+
+    const neighbors = [
+      `${cx + 1},${cy}`,
+      `${cx - 1},${cy}`,
+      `${cx},${cy + 1}`,
+      `${cx},${cy - 1}`,
+    ];
 
     for (const neighbor of neighbors) {
       if (!keySet.has(neighbor) || visited.has(neighbor)) continue;
@@ -60,7 +66,7 @@ function buildCategoryPool(category) {
   const entries = [];
 
   for (const definition of Object.values(objectLibrary)) {
-    if (definition.category !== category) continue;
+    if (category && definition.category !== category) continue;
     if (!isValidFootprint(definition.footprint)) continue;
     entries.push(definition);
   }
@@ -72,23 +78,33 @@ function canPlaceObject(tiles, center, footprint, blockedMask, allowOverlap = fa
   for (const cell of normalizeFootprintCells(footprint)) {
     const x = center.x + cell.x;
     const y = center.y + cell.y;
+
     const tile = tiles[y]?.[x];
     if (!tile?.walkable) return false;
     if (tile.type === 'road') return false;
     if (!allowOverlap && blockedMask.has(`${x},${y}`)) return false;
   }
+
   return true;
 }
 
 function tileVariationScore(tiles, x, y) {
   const centerType = tiles[y]?.[x]?.type;
   if (!centerType) return 0;
+
   let differences = 0;
-  const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const neighbors = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+  ];
+
   for (const [dx, dy] of neighbors) {
     const neighborType = tiles[y + dy]?.[x + dx]?.type;
     if (neighborType && neighborType !== centerType) differences += 1;
   }
+
   return differences;
 }
 
@@ -103,6 +119,7 @@ function markObject(mask, center, footprint, padding = 1) {
   for (const cell of normalizeFootprintCells(footprint)) {
     const cx = center.x + cell.x;
     const cy = center.y + cell.y;
+
     for (let oy = -padding; oy <= padding; oy += 1) {
       for (let ox = -padding; ox <= padding; ox += 1) {
         mask.add(`${cx + ox},${cy + oy}`);
@@ -213,8 +230,9 @@ export class ObjectPlacementSystem {
 }
 
 export function listObjectDefinitions(category = null) {
-  const entries = buildCategoryPool(category ?? OBJECT_CATEGORY.ENVIRONMENT)
-    .map((def) => def.id);
-  if (category) return entries;
+  if (category) {
+    return buildCategoryPool(category).map((def) => def.id);
+  }
+
   return Object.values(objectLibrary).map((def) => def.id);
 }
