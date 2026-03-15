@@ -100,20 +100,35 @@ export class Renderer {
     });
   }
 
-  #parseHexColorToRgb(color, fallbackHex = '#ffffff') {
-    const source = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color ?? '') ? color : fallbackHex;
-    const value = source.slice(1);
-    if (value.length === 3) {
+#parseHexColorToRgb(color, fallbackHex = '#ffffff') {
+    // SUPPORT RGB ARRAY
+    if (Array.isArray(color) && color.length === 3) {
       return {
-        r: Number.parseInt(value[0] + value[0], 16),
-        g: Number.parseInt(value[1] + value[1], 16),
-        b: Number.parseInt(value[2] + value[2], 16),
+        r: color[0] | 0,
+        g: color[1] | 0,
+        b: color[2] | 0,
       };
     }
+  
+    // SUPPORT HEX STRING
+    const source = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color ?? '')
+      ? color
+      : fallbackHex;
+  
+    const value = source.slice(1);
+  
+    if (value.length === 3) {
+      return {
+        r: parseInt(value[0] + value[0], 16),
+        g: parseInt(value[1] + value[1], 16),
+        b: parseInt(value[2] + value[2], 16),
+      };
+    }
+  
     return {
-      r: Number.parseInt(value.slice(0, 2), 16),
-      g: Number.parseInt(value.slice(2, 4), 16),
-      b: Number.parseInt(value.slice(4, 6), 16),
+      r: parseInt(value.slice(0, 2), 16),
+      g: parseInt(value.slice(2, 4), 16),
+      b: parseInt(value.slice(4, 6), 16),
     };
   }
 
