@@ -17,11 +17,30 @@ export class Renderer {
     this.lastCameraY = Number.NaN;
 
     this.fontAtlas = new Image();
+    this.fontLoadFailed = false;
+    this.debugFontAtlas = Boolean(globalThis?.location?.search?.includes('debugFontAtlas=1'));
     this.fontAtlas.src = 'assets/fonts/cp437_8x8.png';
     this.fontReady = false;
     this.fontAtlas.onload = () => {
+      const width = this.fontAtlas.naturalWidth;
+      const height = this.fontAtlas.naturalHeight;
+
+      if (width > 0 && height > 0) {
+        this.glyphW = Math.max(1, Math.floor(width / this.fontCols));
+        this.glyphH = Math.max(1, Math.floor(height / this.fontRows));
+      }
+
       this.fontReady = true;
-      this.glyphCache.clear();};
+      this.glyphCache.clear();
+      this.#logFontAtlasState('onload');
+      this.#debugGlyphCoords();
+    };
+    this.fontAtlas.onerror = () => {
+      this.fontLoadFailed = true;
+      this.fontReady = false;
+      this.glyphCache.clear();
+      this.#logFontAtlasState('onerror');
+    };
     this.fontCols = 16;
     this.fontRows = 16;
     this.glyphW = this.cellW;
@@ -32,6 +51,42 @@ export class Renderer {
     this.entities.ctx.imageSmoothingEnabled = false;
     this.effects.ctx.imageSmoothingEnabled = false;
     this.ui.ctx.imageSmoothingEnabled = false;
+  }
+
+  static CP437_EXTENDED_MAP = {
+    'Ç': 128, 'ü': 129, 'é': 130, 'â': 131, 'ä': 132, 'à': 133, 'å': 134, 'ç': 135,
+    'ê': 136, 'ë': 137, 'è': 138, 'ï': 139, 'î': 140, 'ì': 141, 'Ä': 142, 'Å': 143,
+    'É': 144, 'æ': 145, 'Æ': 146, 'ô': 147, 'ö': 148, 'ò': 149, 'û': 150, 'ù': 151,
+    'ÿ': 152, 'Ö': 153, 'Ü': 154, '¢': 155, '£': 156, '¥': 157, '₧': 158, 'ƒ': 159,
+    'á': 160, 'í': 161, 'ó': 162, 'ú': 163, 'ñ': 164, 'Ñ': 165, 'ª': 166, 'º': 167,
+    '¿': 168, '⌐': 169, '¬': 170, '½': 171, '¼': 172, '¡': 173, '«': 174, '»': 175,
+    '░': 176, '▒': 177, '▓': 178, '│': 179, '┤': 180, '╡': 181, '╢': 182, '╖': 183,
+    '╕': 184, '╣': 185, '║': 186, '╗': 187, '╝': 188, '╜': 189, '╛': 190, '┐': 191,
+    '└': 192, '┴': 193, '┬': 194, '├': 195, '─': 196, '┼': 197, '╞': 198, '╟': 199,
+    '╚': 200, '╔': 201, '╩': 202, '╦': 203, '╠': 204, '═': 205, '╬': 206, '╧': 207,
+    '╨': 208, '╤': 209, '╥': 210, '╙': 211, '╘': 212, '╒': 213, '╓': 214, '╫': 215,
+    '╪': 216, '┘': 217, '┌': 218, '█': 219, '▄': 220, '▌': 221, '▐': 222, '▀': 223,
+  };
+
+  #logFontAtlasState(stage) {
+    if (!this.debugFontAtlas) return;
+    console.debug(`[Renderer] font atlas ${stage}`, {
+      src: this.fontAtlas.src,
+      complete: this.fontAtlas.complete,
+      naturalWidth: this.fontAtlas.naturalWidth,
+      naturalHeight: this.fontAtlas.naturalHeight,
+      fontReady: this.fontReady,
+      glyphW: this.glyphW,
+      glyphH: this.glyphH,
+    });
+  }
+
+  #debugGlyphCoords() {
+    if (!this.debugFontAtlas) return;
+    ['A', '#', '@', '█', '░', '│'].forEach((char) => {
+      const coords = this.#getGlyphCoords(char);
+      console.debug('[Renderer] glyph coords', { char, ...(coords ?? { valid: false }) });
+    });
   }
 
   #createLayer() {
@@ -47,11 +102,30 @@ export class Renderer {
   }
 
   #getGlyphCoords(char) {
-    const code = char.charCodeAt(0);
-    return {
-      sx: (code % this.fontCols) * this.glyphW,
-      sy: Math.floor(code / this.fontCols) * this.glyphH,
-    };
+    const code = this.#toCp437Code(char);
+    if (!Number.isInteger(code) || code < 0 || code >= this.fontCols * this.fontRows) {
+      return null;
+    }
+
+    const sx = (code % this.fontCols) * this.glyphW;
+    const sy = Math.floor(code / this.fontCols) * this.glyphH;
+
+    if (this.fontReady) {
+      if (sx + this.glyphW > this.fontAtlas.naturalWidth) return null;
+      if (sy + this.glyphH > this.fontAtlas.naturalHeight) return null;
+    }
+
+    return { code, sx, sy };
+  }
+
+  #toCp437Code(char) {
+    if (!char || typeof char !== 'string') return 32;
+    const ch = char[0];
+    const asciiCode = ch.charCodeAt(0);
+    if (asciiCode >= 0 && asciiCode <= 127) {
+      return asciiCode;
+    }
+    return Renderer.CP437_EXTENDED_MAP[ch] ?? 63;
   }
 
   #getGlyph(char, fg, bg) {
@@ -69,9 +143,19 @@ export class Renderer {
     tctx.fillRect(0, 0, this.cellW, this.cellH);
 
     if (this.fontReady && char !== ' ') {
-      const { sx, sy } = this.#getGlyphCoords(char);
+      const coords = this.#getGlyphCoords(char);
+      if (!coords) {
+        return tile;
+      }
+      const { sx, sy } = coords;
 
-      tctx.drawImage(
+      const glyphMask = document.createElement('canvas');
+      glyphMask.width = this.cellW;
+      glyphMask.height = this.cellH;
+      const gctx = glyphMask.getContext('2d', { alpha: true });
+      gctx.imageSmoothingEnabled = false;
+
+      gctx.drawImage(
         this.fontAtlas,
         sx,
         sy,
@@ -83,10 +167,22 @@ export class Renderer {
         this.cellH,
       );
 
+      gctx.save();
+      gctx.globalCompositeOperation = 'source-in';
+      gctx.fillStyle = fg;
+      gctx.fillRect(0, 0, this.cellW, this.cellH);
+      gctx.restore();
+
+      tctx.drawImage(glyphMask, 0, 0);
+    } else if (char !== ' ') {
+      tctx.font = `${this.cellH}px monospace`;
       tctx.fillStyle = fg;
-      tctx.globalCompositeOperation = 'source-atop';
-      tctx.fillRect(0, 0, this.cellW, this.cellH);
-      tctx.globalCompositeOperation = 'source-over';
+      tctx.textBaseline = 'top';
+      tctx.fillText(char, 0, 0);
+    }
+
+    if (!this.fontReady && !this.fontLoadFailed) {
+      return tile;
     }
 
     this.glyphCache.set(key, tile);
@@ -171,15 +267,13 @@ export class Renderer {
     ctx.save();
     ctx.globalAlpha = clampedAlpha;
 
-    if (this.fontReady) {
-      for (let i = 0; i < text.length; i += 1) {
-        const glyph = this.#getGlyph(text[i], fg, bg);
-        const pixelX = (x + i) * this.cellW;
-        const pixelY = y * this.cellH;
-        const glyphWidth = this.cellW * fontScale;
-        const glyphHeight = this.cellH * fontScale;
-        ctx.drawImage(glyph, pixelX, pixelY, glyphWidth, glyphHeight);
-      }
+    for (let i = 0; i < text.length; i += 1) {
+      const glyph = this.#getGlyph(text[i], fg, bg);
+      const pixelX = (x + i) * this.cellW;
+      const pixelY = y * this.cellH;
+      const glyphWidth = this.cellW * fontScale;
+      const glyphHeight = this.cellH * fontScale;
+      ctx.drawImage(glyph, pixelX, pixelY, glyphWidth, glyphHeight);
     }
 
     ctx.restore();
