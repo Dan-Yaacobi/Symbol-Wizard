@@ -56,8 +56,8 @@ export class PrefabEditorScreen {
     this.registryIds = new Set();
     this.fsRoot = null;
     this.renderer = null;
+    this.sessionEventsController = null;
     this.elements = this.#createUi();
-    this.#bindEvents();
   }
 
   async initialize() {
@@ -75,12 +75,16 @@ export class PrefabEditorScreen {
   }
 
   open() {
+    if (this.isOpen) return;
     this.isOpen = true;
+    this.#bindEvents();
     this.elements.root.hidden = false;
   }
 
   close() {
+    if (!this.isOpen) return;
     this.isOpen = false;
+    this.#unbindEvents();
     this.elements.root.hidden = true;
   }
 
@@ -90,28 +94,32 @@ export class PrefabEditorScreen {
   }
 
   #bindEvents() {
+    if (this.sessionEventsController) return;
+    this.sessionEventsController = new AbortController();
+    const { signal } = this.sessionEventsController;
+
     this.elements.importInput.addEventListener('change', async (event) => {
       const file = event.target.files?.[0];
       if (!file) return;
       await this.#loadXpFile(file);
-    });
+    }, { signal });
 
-    this.elements.importButton.addEventListener('click', () => this.elements.importInput.click());
+    this.elements.importButton.addEventListener('click', () => this.elements.importInput.click(), { signal });
 
     this.elements.saveButton.addEventListener('click', async () => {
       await this.#savePrefab();
-    });
+    }, { signal });
 
     this.elements.zoomInput.addEventListener('input', () => {
       this.zoom = clamp(Number(this.elements.zoomInput.value) || 2, 1, 6);
       this.elements.zoomValue.textContent = `${this.zoom}x`;
       this.#renderPreview();
-    });
+    }, { signal });
 
     this.elements.objectId.addEventListener('input', () => {
       this.#syncMetadata();
       this.#validateObjectId();
-    });
+    }, { signal });
 
     const syncFields = [
       this.elements.spawnWeight,
@@ -124,28 +132,35 @@ export class PrefabEditorScreen {
       this.elements.destructible,
       this.elements.autoCrop,
     ];
-    syncFields.forEach((element) => element.addEventListener('change', () => this.#syncMetadata()));
+    syncFields.forEach((element) => element.addEventListener('change', () => this.#syncMetadata(), { signal }));
 
     this.elements.tags.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
-      checkbox.addEventListener('change', () => this.#syncMetadata());
+      checkbox.addEventListener('change', () => this.#syncMetadata(), { signal });
     });
 
     this.elements.rarity.querySelectorAll('input[type="radio"]').forEach((radio) => {
-      radio.addEventListener('change', () => this.#syncMetadata());
+      radio.addEventListener('change', () => this.#syncMetadata(), { signal });
     });
 
     this.elements.overlayVisual.addEventListener('change', () => {
       this.overlayVisual = this.elements.overlayVisual.checked;
       this.#renderPreview();
-    });
+    }, { signal });
     this.elements.overlayCollision.addEventListener('change', () => {
       this.overlayCollision = this.elements.overlayCollision.checked;
       this.#renderPreview();
-    });
+    }, { signal });
     this.elements.overlayInteraction.addEventListener('change', () => {
       this.overlayInteraction = this.elements.overlayInteraction.checked;
       this.#renderPreview();
-    });
+    }, { signal });
+
+    this.elements.closeButton.addEventListener('click', () => this.close(), { signal });
+  }
+
+  #unbindEvents() {
+    this.sessionEventsController?.abort();
+    this.sessionEventsController = null;
   }
 
   #createUi() {
@@ -154,7 +169,7 @@ export class PrefabEditorScreen {
     root.hidden = true;
     root.innerHTML = `
       <div class="prefab-editor__panel">
-        <header><h2>Prefab Editor (F8)</h2><button type="button" data-close>Close</button></header>
+        <header><h2>Object Editor (F6)</h2><button type="button" data-close>Close</button></header>
         <section class="prefab-editor__preview">
           <div class="prefab-editor__preview-header">
             <strong>RexPaint Object Preview</strong>
@@ -212,7 +227,6 @@ export class PrefabEditorScreen {
       rarityRoot.appendChild(label);
     });
 
-    root.querySelector('[data-close]').addEventListener('click', () => this.close());
     document.body.appendChild(root);
 
     return {
@@ -240,6 +254,7 @@ export class PrefabEditorScreen {
       importButton: form.querySelector('[data-import]'),
       saveButton: form.querySelector('[data-save]'),
       importInput: form.querySelector('[data-import-input]'),
+      closeButton: root.querySelector('[data-close]'),
       status: form.querySelector('[data-status]'),
     };
   }

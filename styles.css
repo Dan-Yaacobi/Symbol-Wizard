@@ -286,6 +286,11 @@ body {
   }
 }
 
+
+.prefab-editor[hidden] {
+  display: none;
+}
+
 .prefab-editor {
   position: fixed;
   inset: 0;
@@ -353,4 +358,22 @@ body {
 
 .prefab-editor__status[data-error='1'] {
   color: #ff8c8c;
+}
+
+.object-editor-button {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 70;
+  border: 1px solid #6f8cc4;
+  background: #1a2537;
+  color: #d9e4ff;
+  font: inherit;
+  font-weight: 700;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.object-editor-button:hover {
+  background: #24344f;
 }
