@@ -1,9 +1,12 @@
 :root {
-  --bg: #0b0d10;
-  --panel: #121822;
-  --panel-border: #2d3b52;
-  --text: #d9e4ff;
-  --accent: #82a6ff;
+  --bg: #070b12;
+  --panel: #172334;
+  --panel-border: #35516f;
+  --panel-border-bright: #5f86b2;
+  --text: #d6e6ff;
+  --accent: #8ac3ff;
+  --muted: #94abc7;
+  --panel-elevated: #1d2d42;
   --canvas-base-width: 1280;
   --canvas-base-height: 720;
 }
@@ -20,10 +23,10 @@ body {
 .game-shell {
   height: 100vh;
   box-sizing: border-box;
-  padding: 8px;
+  padding: 10px;
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: 10px;
   overflow: hidden;
 }
 
@@ -44,7 +47,8 @@ body {
   height: auto !important;
   display: block;
   border: 2px solid var(--panel-border);
-  background: #000;
+  box-shadow: 0 0 0 1px rgba(95, 134, 178, 0.35), 0 16px 28px rgba(0, 0, 0, 0.35);
+  background: #04070d;
   image-rendering: pixelated;
 }
 
@@ -53,7 +57,7 @@ body {
   margin: 0 auto;
   display: grid;
   grid-template-columns: 1.45fr 1fr;
-  gap: 8px;
+  gap: 10px;
   align-items: stretch;
 }
 
@@ -61,8 +65,8 @@ body {
   width: 100%;
   min-height: 112px;
   max-height: 24vh;
-  border: 2px solid #3a4b67;
-  background: linear-gradient(180deg, #192131 0%, #111824 100%);
+  border: 2px solid var(--panel-border);
+  background: linear-gradient(180deg, var(--panel-elevated) 0%, var(--panel) 100%);
   box-shadow: inset 0 0 0 1px rgba(162, 189, 255, 0.08), 0 6px 12px rgba(0, 0, 0, 0.28);
   padding: 10px 12px;
   box-sizing: border-box;
@@ -182,16 +186,16 @@ body {
 .ability-slot,
 .ability-pool-item,
 .skill-card button {
-  background: #1a2230;
+  background: #1a2a3d;
   color: var(--text);
-  border: 1px solid #3d4f6e;
-  padding: 8px;
+  border: 1px solid var(--panel-border);
+  padding: 10px;
   cursor: pointer;
 }
 
 .ability-slot {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
   justify-content: flex-start;
 }
@@ -231,15 +235,15 @@ body {
 }
 
 .skill-detail-panel {
-  border: 1px solid #3d4f6e;
+  border: 1px solid var(--panel-border);
   padding: 10px;
-  background: #0f1724;
+  background: #122033;
   line-height: 1.4;
 }
 
 .skill-detail-panel h4 {
   margin: 0 0 8px;
-  color: #b5c8ef;
+  color: #bdd7ff;
 }
 
 .skill-detail-panel p {
@@ -248,12 +252,12 @@ body {
 .skill-tree-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .skill-card {
   border: 1px solid #3d4f6e;
-  padding: 8px;
+  padding: 10px;
   background: #111827;
   line-height: 1.35;
 }
@@ -272,7 +276,7 @@ body {
 }
 
 .meta {
-  color: #9eb3d9;
+  color: var(--muted);
 }
 
 @media (max-width: 1200px) {
@@ -305,8 +309,8 @@ body {
   width: min(1100px, 96vw);
   max-height: 92vh;
   overflow: auto;
-  background: #0f1624;
-  border: 1px solid #3d4f6e;
+  background: #111d2e;
+  border: 1px solid var(--panel-border);
   color: #e5ecfb;
   padding: 12px;
   display: grid;
@@ -331,7 +335,7 @@ body {
 
 .prefab-editor__form {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .prefab-editor__form label,
@@ -348,7 +352,7 @@ body {
 
 .prefab-editor__actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
 }
 
 .prefab-editor__warning {
@@ -365,8 +369,8 @@ body {
   top: 14px;
   right: 14px;
   z-index: 70;
-  border: 1px solid #6f8cc4;
-  background: #1a2537;
+  border: 1px solid var(--panel-border-bright, #5f86b2);
+  background: #1a2a3d;
   color: #d9e4ff;
   font: inherit;
   font-weight: 700;

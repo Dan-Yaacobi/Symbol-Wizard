@@ -1,22 +1,29 @@
 import { palette } from '../entities/SpriteLibrary.js';
+import { visualTheme } from '../data/VisualTheme.js';
+
+const c = visualTheme.colors;
 
 export const tiles = {
-  grass: { char: ' ', fg: '#255233', bg: '#123522', walkable: true },
-  grassDark: { char: ' ', fg: '#1f472c', bg: '#0f2e1d', walkable: true },
-  dirt: { char: '.', fg: '#d8b786', bg: '#5c4029', walkable: true },
-  dirtEdge: { char: ',', fg: '#c29b69', bg: '#4f3522', walkable: true },
-  pathPebble: { char: '.', fg: '#e2c99e', bg: '#63452d', walkable: true },
-  water: { char: '~', fg: '#65b8ff', bg: '#17304f', walkable: false },
-  fence: { char: '|', fg: '#cfa77a', bg: '#173823', walkable: false },
+  grass: { char: ' ', fg: c.grassFg, bg: c.grassBg, walkable: true },
+  grassDark: { char: ' ', fg: '#356949', bg: '#0f1f17', walkable: true },
+  dirt: { char: '.', fg: c.dirtFg, bg: c.dirtBg, walkable: true },
+  dirtEdge: { char: ',', fg: '#af8d69', bg: '#433126', walkable: true },
+  pathPebble: { char: '.', fg: '#d5bc98', bg: c.dirtBg, walkable: true },
+  water: { char: '~', fg: c.waterFg, bg: c.waterBg, walkable: false },
+  fence: { char: '|', fg: c.woodFg, bg: c.grassBg, walkable: false },
   wall: { char: '#', fg: palette.wallFg, bg: palette.wallBg, walkable: false },
-  denseTree: { char: '♣', fg: '#3f8f4d', bg: '#0a1a10', walkable: false },
-  denseTreeSpire: { char: '♠', fg: '#2d7a3e', bg: '#08160d', walkable: false },
-  denseTreeBloom: { char: '♧', fg: '#4a9c58', bg: '#0c1f13', walkable: false },
-  denseTreeCanopy: { char: '♤', fg: '#2f6f3b', bg: '#061008', walkable: false },
-  denseTreeShadow: { char: '♠', fg: '#245f33', bg: '#050d07', walkable: false },
-  rockCliff: { char: '▲', fg: '#8b8f96', bg: '#2a2f37', walkable: false },
-  deepWater: { char: '≈', fg: '#4ea4ff', bg: '#0e2741', walkable: false },
-  stoneWall: { char: '▓', fg: '#969696', bg: '#2f2f2f', walkable: false },
+  denseTree: { char: '♣', fg: c.treeFg, bg: '#0a1710', walkable: false },
+  denseTreeSpire: { char: '♠', fg: c.treeDarkFg, bg: '#09130d', walkable: false },
+  denseTreeBloom: { char: '♣', fg: '#70b573', bg: '#0f1a13', walkable: false },
+  denseTreeCanopy: { char: '♠', fg: '#427b4a', bg: '#09130d', walkable: false },
+  denseTreeShadow: { char: '♠', fg: '#345f3a', bg: '#060d09', walkable: false },
+  rockCliff: { char: '▲', fg: '#8b96a3', bg: '#2b3240', walkable: false },
+  deepWater: { char: '≈', fg: '#79bdf2', bg: '#10263b', walkable: false },
+  stoneWall: { char: '▓', fg: '#8f96a3', bg: '#333b49', walkable: false },
   floor: { char: '.', fg: palette.floorFg, bg: palette.floorBg, walkable: true },
-  wood: { char: '+', fg: '#9d7444', bg: palette.floorBg, walkable: false },
+  wood: { char: '+', fg: c.woodFg, bg: palette.floorBg, walkable: false },
 };
+
+export function tileFrom(base, overrides = {}) {
+  return { ...base, ...overrides };
+}

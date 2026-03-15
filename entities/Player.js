@@ -16,10 +16,12 @@ export class Player extends Entity {
       spriteKey: 'player',
       gold: 0,
       castCooldown: 0,
+      castTimer: 0,
       animationState: 'idle',
       frameDurations: {
         idle: 0.45,
-        walk: 0.11,
+        walk: 0.12,
+        cast: 0.08,
       },
     });
   }
