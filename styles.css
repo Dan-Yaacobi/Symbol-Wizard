@@ -285,3 +285,72 @@ body {
     max-height: 18vh;
   }
 }
+
+.prefab-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(4, 8, 14, 0.88);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.prefab-editor__panel {
+  width: min(1100px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  background: #0f1624;
+  border: 1px solid #3d4f6e;
+  color: #e5ecfb;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 1.1fr 1fr;
+}
+
+.prefab-editor__panel > header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.prefab-editor__preview canvas {
+  display: block;
+  background: #0b1016;
+  border: 1px solid #30415d;
+  width: 100%;
+  height: auto;
+}
+
+.prefab-editor__form {
+  display: grid;
+  gap: 8px;
+}
+
+.prefab-editor__form label,
+.prefab-editor__form fieldset {
+  display: grid;
+  gap: 4px;
+}
+
+.prefab-editor__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+
+.prefab-editor__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.prefab-editor__warning {
+  color: #f3c577;
+  min-height: 1.2em;
+}
+
+.prefab-editor__status[data-error='1'] {
+  color: #ff8c8c;
+}

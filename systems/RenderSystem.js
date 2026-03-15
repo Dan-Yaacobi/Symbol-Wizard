@@ -235,6 +235,17 @@ function drawAbilityEffect(renderer, camera, effect) {
 
 
 
+
+
+function drawWorldObject(renderer, camera, object, overrideTiles = null) {
+  const tiles = Array.isArray(overrideTiles) ? overrideTiles : (object.tileVariants ?? object.tiles ?? []);
+  for (const tile of tiles) {
+    const sx = Math.round(object.x + (tile.x ?? 0)) - camera.x;
+    const sy = Math.round(object.y + (tile.y ?? 0)) - camera.y;
+    renderer.drawEntityGlyph(tile.char ?? ' ', tile.fg ?? '#d8d2c4', tile.bg ?? '#0b1016', sx, sy);
+  }
+}
+
 function drawDebugCursorOverlay(renderer, camera, mouse) {
   if (!mouse) return;
 
@@ -247,16 +258,16 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   renderer.renderBackground(map, camera);
 
   for (const object of worldObjects) {
-    if (object.interaction === 'destroy' && object.destroyed && object.breakTimer > 0) {
-      const progress = 1 - object.breakTimer / object.breakDuration;
-      const index = Math.min(object.breakFrames.length - 1, Math.floor(progress * object.breakFrames.length));
-      const breakArt = sprites[object.breakFrames[index]];
-      if (breakArt) drawSprite(renderer, camera, object, colorForEntity(object), { art: breakArt, offsetY: 0 });
+    if (object.destroyed && Array.isArray(object.breakFrames) && object.breakTimer > 0) {
+      const duration = Math.max(0.001, object.breakDuration ?? 0.25);
+      const progress = 1 - (object.breakTimer / duration);
+      const index = Math.min(object.breakFrames.length - 1, Math.max(0, Math.floor(progress * object.breakFrames.length)));
+      drawWorldObject(renderer, camera, object, object.breakFrames[index]);
       continue;
     }
 
     if (object.destroyed) continue;
-    drawSprite(renderer, camera, object, colorForEntity(object));
+    drawWorldObject(renderer, camera, object);
   }
 
   for (const npc of npcs) {
