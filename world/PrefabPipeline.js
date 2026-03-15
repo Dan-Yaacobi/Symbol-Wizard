@@ -1,3 +1,5 @@
+import { decodeCp437 } from './Cp437.js';
+
 const DEFAULT_PREFAB_METADATA = {
   spawnWeight: 10,
   clusterMin: 1,
@@ -52,43 +54,90 @@ async function inflateGzip(buffer) {
   return new Uint8Array(decompressed);
 }
 
+function assertReadable(inflated, offset, bytes, context) {
+  if (offset + bytes > inflated.byteLength) {
+    throw new Error(`Malformed XP (${context}): attempted to read ${bytes} bytes at offset ${offset}, file length ${inflated.byteLength}.`);
+  }
+}
+
+function readCell(view, inflated, offset) {
+  assertReadable(inflated, offset, 10, 'cell');
+
+  const cp437 = view.getUint32(offset, true);
+  offset += 4;
+
+  const fg = [inflated[offset], inflated[offset + 1], inflated[offset + 2]];
+  offset += 3;
+  const bg = [inflated[offset], inflated[offset + 1], inflated[offset + 2]];
+  offset += 3;
+
+  return {
+    nextOffset: offset,
+    cell: {
+      cp437,
+      char: decodeCp437(cp437),
+      fg,
+      bg,
+    },
+  };
+}
+
 export async function parseXPFromArrayBuffer(buffer) {
   const inflated = await inflateGzip(buffer);
   const view = new DataView(inflated.buffer, inflated.byteOffset, inflated.byteLength);
 
   let offset = 0;
+  assertReadable(inflated, offset, 8, 'header');
   const version = view.getInt32(offset, true);
   offset += 4;
 
   const layerCount = view.getInt32(offset, true);
   offset += 4;
 
+  if (!Number.isInteger(layerCount) || layerCount < 0) {
+    throw new Error(`Malformed XP: invalid layer count ${layerCount}.`);
+  }
+
   const layers = [];
 
   for (let layerIndex = 0; layerIndex < layerCount; layerIndex += 1) {
+    assertReadable(inflated, offset, 8, `layer ${layerIndex} header`);
     const width = view.getInt32(offset, true);
     offset += 4;
     const height = view.getInt32(offset, true);
     offset += 4;
 
+    if (!Number.isInteger(width) || !Number.isInteger(height) || width < 0 || height < 0) {
+      throw new Error(`Malformed XP: invalid dimensions for layer ${layerIndex} (${width}x${height}).`);
+    }
+
+    const cellCount = width * height;
+    const requiredBytes = cellCount * 10;
+    assertReadable(inflated, offset, requiredBytes, `layer ${layerIndex} cells`);
+
     const cells = [];
 
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        const codepoint = view.getUint32(offset, true);
-        offset += 4;
-
-        const fg = [inflated[offset], inflated[offset + 1], inflated[offset + 2]];
-        offset += 3;
-        const bg = [inflated[offset], inflated[offset + 1], inflated[offset + 2]];
-        offset += 3;
-
-        const char = codepoint === 0 ? ' ' : String.fromCodePoint(codepoint);
-        cells.push({ x, y, char, fg, bg });
+    // REXPaint stores cells in column-major order: x outer loop, y inner loop.
+    for (let x = 0; x < width; x += 1) {
+      for (let y = 0; y < height; y += 1) {
+        const { nextOffset, cell } = readCell(view, inflated, offset);
+        offset = nextOffset;
+        cells.push({ x, y, ...cell });
       }
     }
 
+    if (cells.length !== cellCount) {
+      throw new Error(`Malformed XP: layer ${layerIndex} cell count mismatch (${cells.length} != ${cellCount}).`);
+    }
+
     layers.push({ width, height, cells });
+  }
+
+  if (offset !== inflated.byteLength) {
+    const trailingBytes = inflated.byteLength - offset;
+    if (trailingBytes < 0) {
+      throw new Error(`Malformed XP: parser overread by ${Math.abs(trailingBytes)} bytes.`);
+    }
   }
 
   return { version, layers };
@@ -116,6 +165,28 @@ function normalizeCells(cells, bounds) {
   return cells.map((cell) => ({ ...cell, x: cell.x - bounds.minX, y: cell.y - bounds.minY }));
 }
 
+function mergeLayers(layers, { includeEmpty = false } = {}) {
+  if (!Array.isArray(layers) || layers.length === 0) return { width: 0, height: 0, cells: [] };
+
+  const width = Math.max(0, ...layers.map((layer) => layer?.width ?? 0));
+  const height = Math.max(0, ...layers.map((layer) => layer?.height ?? 0));
+  const mergedByCoord = new Map();
+
+  for (const layer of layers) {
+    for (const cell of layer?.cells ?? []) {
+      const key = `${cell.x},${cell.y}`;
+      if (!includeEmpty && isEmptyCell(cell)) continue;
+      mergedByCoord.set(key, { ...cell });
+    }
+  }
+
+  return {
+    width,
+    height,
+    cells: [...mergedByCoord.values()],
+  };
+}
+
 function extractVisualLayer(layer, bounds) {
   const cropped = (layer?.cells ?? [])
     .filter((cell) => !isEmptyCell(cell) && cell.x >= bounds.minX && cell.x <= bounds.maxX && cell.y >= bounds.minY && cell.y <= bounds.maxY)
@@ -123,6 +194,7 @@ function extractVisualLayer(layer, bounds) {
       x: cell.x,
       y: cell.y,
       char: cell.char,
+      cp437: cell.cp437,
       fg: normalizeColor(cell.fg),
       bg: normalizeColor(cell.bg, [0, 0, 0]),
     }));
@@ -139,7 +211,11 @@ function extractMaskLayer(layer, bounds) {
 }
 
 export function buildPrefabFromXP(parsedXp, metadata = {}, options = {}) {
-  const visualLayer = parsedXp.layers[0] ?? { cells: [] };
+  const visualSourceLayers = options.mergeVisualLayers === false
+    ? [parsedXp.layers[0] ?? { cells: [], width: 0, height: 0 }]
+    : parsedXp.layers;
+
+  const visualLayer = mergeLayers(visualSourceLayers);
   const collisionLayer = parsedXp.layers[1] ?? { cells: [] };
   const interactionLayer = parsedXp.layers[2] ?? { cells: [] };
 
@@ -164,6 +240,8 @@ export function buildPrefabFromXP(parsedXp, metadata = {}, options = {}) {
     hp: Number(metadata.hp) || DEFAULT_PREFAB_METADATA.hp,
     material: metadata.material ?? DEFAULT_PREFAB_METADATA.material,
     dropTable: metadata.dropTable ?? DEFAULT_PREFAB_METADATA.dropTable,
+    width: Math.max(0, bounds.maxX - bounds.minX + 1),
+    height: Math.max(0, bounds.maxY - bounds.minY + 1),
     visual: extractVisualLayer(visualLayer, bounds),
     collision: extractMaskLayer(collisionLayer, bounds),
     interaction: extractMaskLayer(interactionLayer, bounds),
