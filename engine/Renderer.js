@@ -21,7 +21,7 @@ export class Renderer {
     this.fontReady = false;
     this.fontAtlas.onload = () => {
       this.fontReady = true;
-    };
+      this.glyphCache.clear();};
     this.fontCols = 16;
     this.fontRows = 16;
     this.glyphW = this.cellW;
