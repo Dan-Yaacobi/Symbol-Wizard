@@ -74,11 +74,11 @@ export class RoomGenerator {
     // 4) place objects
     const objectBlockedMask = new Set(protectedMask);
     const objects = this.objectPlacementSystem.placeObjects({
-      biomeConfig: effectiveBiomeConfig,
       tiles: grid,
       rng,
       blockedMask: objectBlockedMask,
       roomId: roomNode.id,
+      biomeType: roomNode.biomeType ?? 'forest',
     });
 
     // 5) place landmarks
@@ -87,6 +87,7 @@ export class RoomGenerator {
       rng,
       blockedMask: objectBlockedMask,
       roomId: roomNode.id,
+      biomeType: roomNode.biomeType ?? 'forest',
     });
 
     // 6) decorate

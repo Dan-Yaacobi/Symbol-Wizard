@@ -62,13 +62,18 @@ function isValidFootprint(footprint) {
   return visited.size === keySet.size;
 }
 
-function buildCategoryPool(category) {
+function buildBiomePool(biome, category) {
   const entries = [];
 
   for (const definition of Object.values(objectLibrary)) {
+    if (!definition) continue;
     if (category && definition.category !== category) continue;
     if (!isValidFootprint(definition.footprint)) continue;
-    entries.push(definition);
+
+    const tags = Array.isArray(definition.biomeTags) ? definition.biomeTags : [];
+    if (biome && !tags.includes(biome)) continue;
+
+    entries.push([definition, definition.spawnWeight ?? 1]);
   }
 
   return entries;
@@ -152,7 +157,124 @@ function stampObjectTiles(tiles, object) {
   }
 }
 
-function placeFromPool({ tiles, rng, blockedMask, roomId, pools, targetMin, targetMax, idPrefix, padding }) {
+function sanitizeClusterSize(definition) {
+  if (!Number.isFinite(definition.clusterMin)) return null;
+
+  const min = Math.max(1, Math.floor(definition.clusterMin));
+  const rawMax = Number.isFinite(definition.clusterMax) ? Math.floor(definition.clusterMax) : min;
+  const max = Math.max(min, rawMax);
+  return { min, max };
+}
+
+function spawnPlacedObject({ tiles, rng, blockedMask, roomId, idPrefix, padding, definition, center, idIndex }) {
+  if (!canPlaceObject(tiles, center, definition.footprint, blockedMask)) return null;
+
+  const placed = spawnObject(
+    definition.id,
+    center,
+    {
+      id: `${roomId}-${idPrefix}-${idIndex}`,
+      footprint: structuredClone(definition.footprint),
+      state: { spawned: true },
+    },
+    rng,
+  );
+
+  if (!placed) return null;
+
+  stampObjectTiles(tiles, placed);
+  markObject(blockedMask, center, definition.footprint, padding);
+  return placed;
+}
+
+function placeCluster(definition, center, options) {
+  const { tiles, rng, blockedMask, roomId, idPrefix, padding, startIndex } = options;
+  const limits = sanitizeClusterSize(definition);
+  if (!limits) return [];
+
+  const clusterRadius = Math.max(1, Math.floor(definition.clusterRadius ?? 4));
+  const clusterSize = randomInt(rng, limits.min, limits.max);
+  const placedObjects = [];
+
+  const first = spawnPlacedObject({
+    tiles,
+    rng,
+    blockedMask,
+    roomId,
+    idPrefix,
+    padding,
+    definition,
+    center,
+    idIndex: startIndex,
+  });
+
+  if (!first) return [];
+  placedObjects.push(first);
+
+  const maxAttempts = Math.max(20, clusterSize * 12);
+  let attempts = 0;
+
+  while (placedObjects.length < clusterSize && attempts < maxAttempts) {
+    attempts += 1;
+    const angle = rng() * Math.PI * 2;
+    const distance = rng() * clusterRadius;
+    const candidate = {
+      x: Math.round(center.x + Math.cos(angle) * distance),
+      y: Math.round(center.y + Math.sin(angle) * distance),
+    };
+
+    const placed = spawnPlacedObject({
+      tiles,
+      rng,
+      blockedMask,
+      roomId,
+      idPrefix,
+      padding,
+      definition,
+      center: candidate,
+      idIndex: startIndex + placedObjects.length,
+    });
+
+    if (placed) placedObjects.push(placed);
+  }
+
+  return placedObjects;
+}
+
+function selectBestCenter({ tiles, rng, blockedMask, definition, attempts = 45 }) {
+  let bestCenter = null;
+  let bestScore = -1;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const center = samplePlacementCenter(tiles, rng);
+    if (!canPlaceObject(tiles, center, definition.footprint, blockedMask)) continue;
+
+    const score = tileVariationScore(tiles, center.x, center.y);
+    if (score > bestScore) {
+      bestScore = score;
+      bestCenter = center;
+    }
+  }
+
+  return bestCenter;
+}
+
+function placeFromPool({
+  tiles,
+  rng,
+  blockedMask,
+  roomId,
+  biomeType,
+  category,
+  targetMin,
+  targetMax,
+  idPrefix,
+  padding,
+  allowClusters = true,
+}) {
+  const pools = buildBiomePool(biomeType, category);
+  if (pools.length === 0) return [];
+
   const objects = [];
   const targetCount = randomInt(rng, targetMin, targetMax);
 
@@ -160,79 +282,94 @@ function placeFromPool({ tiles, rng, blockedMask, roomId, pools, targetMin, targ
     const definition = weightedChoice(rng, pools);
     if (!definition) continue;
 
-    let best = null;
+    const bestCenter = selectBestCenter({ tiles, rng, blockedMask, definition });
+    if (!bestCenter) continue;
 
-    for (let attempt = 0; attempt < 45; attempt += 1) {
-      const center = samplePlacementCenter(tiles, rng);
-      const candidate = spawnObject(
-        definition.id,
-        center,
-        {
-          id: `${roomId}-${idPrefix}-${objects.length}`,
-          state: { spawned: true },
-        },
+    const canCluster = allowClusters && Number.isFinite(definition.clusterMin);
+    if (canCluster) {
+      const cluster = placeCluster(definition, bestCenter, {
+        tiles,
         rng,
-      );
-
-      if (!candidate) continue;
-      if (!canPlaceObject(tiles, center, candidate.footprint, blockedMask, definition.allowOverlap)) continue;
-
-      const score = tileVariationScore(tiles, center.x, center.y) + (rng() * 0.5);
-      if (!best || score > best.score) best = { candidate, center, score };
+        blockedMask,
+        roomId,
+        idPrefix,
+        padding,
+        startIndex: objects.length,
+      });
+      objects.push(...cluster);
+      continue;
     }
 
-    if (!best) continue;
+    const placed = spawnPlacedObject({
+      tiles,
+      rng,
+      blockedMask,
+      roomId,
+      idPrefix,
+      padding,
+      definition,
+      center: bestCenter,
+      idIndex: objects.length,
+    });
 
-    objects.push(best.candidate);
-    stampObjectTiles(tiles, best.candidate);
-    markObject(blockedMask, best.center, best.candidate.footprint, padding);
+    if (placed) objects.push(placed);
   }
 
   return objects;
 }
 
-const NON_LANDMARK_POOL = Object.values(objectLibrary)
-  .filter((definition) => definition && definition.category !== OBJECT_CATEGORY.LANDMARK)
-  .map((definition) => [definition, Math.max(0.01, Number(definition.spawnWeight) || 1)]);
-
-const LANDMARK_POOL = Object.values(objectLibrary)
-  .filter((definition) => definition && definition.category === OBJECT_CATEGORY.LANDMARK)
-  .map((definition) => [definition, Math.max(0.01, Number(definition.spawnWeight) || 1)]);
-
 export class ObjectPlacementSystem {
-  placeObjects({ tiles, rng, blockedMask, roomId }) {
-    return placeFromPool({
-      tiles,
-      rng,
-      blockedMask,
-      roomId,
-      pools: NON_LANDMARK_POOL,
-      targetMin: 28,
-      targetMax: 44,
-      idPrefix: 'object',
-      padding: 1,
-    });
+  placeObjects({ tiles, rng, blockedMask, roomId, biomeType = 'forest' }) {
+    const categories = [
+      OBJECT_CATEGORY.ENVIRONMENT,
+      OBJECT_CATEGORY.DESTRUCTIBLE,
+      OBJECT_CATEGORY.INTERACTABLE,
+    ];
+
+    const objects = [];
+    for (const category of categories) {
+      const placed = placeFromPool({
+        tiles,
+        rng,
+        blockedMask,
+        roomId,
+        biomeType,
+        category,
+        targetMin: 8,
+        targetMax: 16,
+        idPrefix: 'object',
+        padding: 1,
+        allowClusters: true,
+      });
+      objects.push(...placed);
+    }
+
+    return objects;
   }
 
-  placeLandmarks({ tiles, rng, blockedMask, roomId }) {
+  placeLandmarks({ tiles, rng, blockedMask, roomId, biomeType = 'forest' }) {
     return placeFromPool({
       tiles,
       rng,
       blockedMask,
       roomId,
-      pools: LANDMARK_POOL,
+      biomeType,
+      category: OBJECT_CATEGORY.LANDMARK,
       targetMin: 1,
       targetMax: 3,
       idPrefix: 'landmark',
       padding: 2,
+      allowClusters: false,
     });
   }
 }
 
 export function listObjectDefinitions(category = null) {
   if (category) {
-    return buildCategoryPool(category).map((def) => def.id);
+    return buildBiomePool(null, category).map(([definition]) => definition.id);
   }
 
   return Object.values(objectLibrary).map((def) => def.id);
 }
+
+export { buildBiomePool, placeCluster };
