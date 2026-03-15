@@ -2,6 +2,9 @@ import { TerrainGenerator } from './TerrainGenerator.js';
 import { ObjectPlacementSystem } from './ObjectPlacementSystem.js';
 import { buildCollisionMap, scanExitCorridors } from './RuntimeSystems.js';
 
+const FOREST_ROOM_WIDTH = 120;
+const FOREST_ROOM_HEIGHT = 120;
+
 function createRng(seed) {
   let state = seed >>> 0;
   return () => {
@@ -27,17 +30,25 @@ export class RoomGenerator {
 
   generate(roomNode) {
     const rng = createRng(roomNode.seed >>> 0);
-    const center = { x: Math.floor(this.roomWidth / 2), y: Math.floor(this.roomHeight / 2) };
+    const biomeType = roomNode.biomeType ?? 'forest';
+    const useForestSizing = biomeType === 'forest';
+    const roomWidth = useForestSizing ? Math.max(this.roomWidth, FOREST_ROOM_WIDTH) : this.roomWidth;
+    const roomHeight = useForestSizing ? Math.max(this.roomHeight, FOREST_ROOM_HEIGHT) : this.roomHeight;
+    const center = { x: Math.floor(roomWidth / 2), y: Math.floor(roomHeight / 2) };
 
     const effectiveBiomeConfig = roomNode.biomeConfig ?? this.biomeConfig;
-    const { grid } = this.terrainGenerator.initializeTiles(roomNode, rng, effectiveBiomeConfig);
+    const terrainGenerator = useForestSizing
+      ? new TerrainGenerator({ roomWidth, roomHeight })
+      : this.terrainGenerator;
+    const { grid } = terrainGenerator.initializeTiles(roomNode, rng, effectiveBiomeConfig);
 
     // 1) generate exits
     const {
       resolvedExits,
       resolvedEntrances,
       roadMask: exitRoadMask,
-    } = this.terrainGenerator.generateExits(grid, roomNode, rng);
+      roadWidth: exitRoadWidth,
+    } = terrainGenerator.generateExits(grid, roomNode, rng);
 
     const mainRoadMask = new Set(exitRoadMask);
     const branchRoadMask = new Set();
@@ -47,10 +58,10 @@ export class RoomGenerator {
     ];
 
     // 2) generate main road
-    this.terrainGenerator.generateMainRoad(grid, center, allAnchors, rng, mainRoadMask);
+    terrainGenerator.generateMainRoad(grid, center, allAnchors, rng, mainRoadMask, exitRoadWidth);
 
     // 3) generate branch roads
-    this.terrainGenerator.generateBranchRoads(grid, rng, allAnchors, mainRoadMask, branchRoadMask, center, effectiveBiomeConfig);
+    terrainGenerator.generateBranchRoads(grid, rng, allAnchors, mainRoadMask, branchRoadMask, center, effectiveBiomeConfig, exitRoadWidth);
 
     const roadMask = new Set();
     mergeMask(roadMask, mainRoadMask);
@@ -68,8 +79,11 @@ export class RoomGenerator {
       }
     }
 
+    const clearingMask = terrainGenerator.carveForestClearings(grid, rng, biomeType, roadMask);
+
     const protectedMask = new Set(roadMask);
     mergeMask(protectedMask, spawnMask);
+    mergeMask(protectedMask, clearingMask);
 
     // 4) place objects
     const objectBlockedMask = new Set(protectedMask);
@@ -78,7 +92,7 @@ export class RoomGenerator {
       rng,
       blockedMask: objectBlockedMask,
       roomId: roomNode.id,
-      biomeType: roomNode.biomeType ?? 'forest',
+      biomeType,
     });
 
     // 5) place landmarks
@@ -87,16 +101,16 @@ export class RoomGenerator {
       rng,
       blockedMask: objectBlockedMask,
       roomId: roomNode.id,
-      biomeType: roomNode.biomeType ?? 'forest',
+      biomeType,
     });
 
     // 6) decorate
-    this.terrainGenerator.decorate(grid, rng, objectBlockedMask);
+    terrainGenerator.decorate(grid, rng, objectBlockedMask);
 
     // 7) build collision map
     const placedObjects = [...objects, ...landmarks];
     const collisionMap = buildCollisionMap(grid, placedObjects);
-    const exitCorridors = scanExitCorridors(grid, resolvedExits, this.roomWidth, this.roomHeight);
+    const exitCorridors = scanExitCorridors(grid, resolvedExits, roomWidth, roomHeight);
 
     return {
       id: roomNode.id,

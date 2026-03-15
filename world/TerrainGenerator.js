@@ -30,6 +30,9 @@ const MAIN_ROAD_WIDTH = 3;
 const BRANCH_ROAD_WIDTH = 2;
 const ROAD_CLEAR_RADIUS = 1;
 const ROAD_MERGE_DISTANCE = 5;
+const FOREST_MAX_EXITS = 4;
+const FOREST_PATH_WIDTH_MIN = 3;
+const FOREST_PATH_WIDTH_MAX = 5;
 
 function pickBoundaryTileVariant(boundaryTiles, x, y, rng) {
   if (boundaryTiles.length === 1) return boundaryTiles[0];
@@ -123,11 +126,10 @@ function resolveRoomAnchors(exits, entrances, roomWidth, roomHeight) {
   return { exits: resolvedExits, entrances: resolvedEntrances };
 }
 
-function buildEdgePassage(anchor, roomWidth, roomHeight, rng) {
+function buildEdgePassage(anchor, roomWidth, roomHeight, rng, openingWidth = randomInt(rng, 8, 14), triggerDepth = 7) {
   const direction = anchor.direction;
-  const corridorWidth = randomInt(rng, 8, 14);
+  const corridorWidth = openingWidth;
   const halfWidth = Math.floor(corridorWidth / 2);
-  const triggerDepth = 7;
 
   if (direction === 'north' || direction === 'south') {
     const edgeY = direction === 'north' ? 0 : roomHeight - 1;
@@ -204,6 +206,41 @@ function pickExitSubset(exits, roomWidth, roomHeight, rng) {
   }
 
   return Object.fromEntries(selected.slice(0, targetCount));
+}
+
+
+function shuffleInPlace(values, rng) {
+  for (let i = values.length - 1; i > 0; i -= 1) {
+    const j = randomInt(rng, 0, i);
+    [values[i], values[j]] = [values[j], values[i]];
+  }
+}
+
+function pickForestExitSubset(exits, roomWidth, roomHeight, rng) {
+  const exitEntries = Object.entries(exits ?? {});
+  if (!exitEntries.length) return {};
+
+  const directions = ['north', 'south', 'east', 'west'];
+  const candidatesByDirection = new Map(directions.map((direction) => [direction, []]));
+  for (const [id, anchor] of exitEntries) {
+    const direction = anchorDirection(anchor, roomWidth, roomHeight);
+    if (!candidatesByDirection.has(direction)) continue;
+    candidatesByDirection.get(direction).push([id, anchor]);
+  }
+
+  const availableDirections = directions.filter((direction) => (candidatesByDirection.get(direction)?.length ?? 0) > 0);
+  if (!availableDirections.length) return {};
+
+  shuffleInPlace(availableDirections, rng);
+  const exitCount = randomInt(rng, 1, Math.min(FOREST_MAX_EXITS, availableDirections.length));
+  const selected = [];
+  for (const direction of availableDirections.slice(0, exitCount)) {
+    const candidates = candidatesByDirection.get(direction);
+    shuffleInPlace(candidates, rng);
+    selected.push(candidates[0]);
+  }
+
+  return Object.fromEntries(selected);
 }
 
 function carveRoadBrush(tileMap, x, y, width, marker = null) {
@@ -519,14 +556,19 @@ export class TerrainGenerator {
 
   generateExits(tileMap, roomNode, rng) {
     const roadMask = new Set();
-    const limitedExits = pickExitSubset(roomNode.exits, this.roomWidth, this.roomHeight, rng);
+    const biomeType = roomNode.biomeType ?? 'forest';
+    const isForest = biomeType === 'forest';
+    const roadWidth = isForest ? randomInt(rng, FOREST_PATH_WIDTH_MIN, FOREST_PATH_WIDTH_MAX) : MAIN_ROAD_WIDTH;
+    const limitedExits = isForest
+      ? pickForestExitSubset(roomNode.exits, this.roomWidth, this.roomHeight, rng)
+      : pickExitSubset(roomNode.exits, this.roomWidth, this.roomHeight, rng);
     if (Object.keys(limitedExits).length > MAX_EXITS_PER_ROOM) {
       console.warn('Exit overflow detected');
     }
 
     const resolvedAnchors = resolveRoomAnchors(limitedExits, roomNode.entrances, this.roomWidth, this.roomHeight);
-    const resolvedExits = Object.fromEntries(Object.entries(resolvedAnchors.exits).map(([id, anchor]) => [id, buildEdgePassage(anchor, this.roomWidth, this.roomHeight, rng)]));
-    const resolvedEntrances = Object.fromEntries(Object.entries(resolvedAnchors.entrances).map(([id, anchor]) => [id, buildEdgePassage(anchor, this.roomWidth, this.roomHeight, rng)]));
+    const resolvedExits = Object.fromEntries(Object.entries(resolvedAnchors.exits).map(([id, anchor]) => [id, buildEdgePassage(anchor, this.roomWidth, this.roomHeight, rng, isForest ? roadWidth : undefined)]));
+    const resolvedEntrances = Object.fromEntries(Object.entries(resolvedAnchors.entrances).map(([id, anchor]) => [id, buildEdgePassage(anchor, this.roomWidth, this.roomHeight, rng, isForest ? roadWidth : undefined)]));
 
     for (const passage of [...Object.values(resolvedExits), ...Object.values(resolvedEntrances)]) {
       const isVertical = passage.direction === 'north' || passage.direction === 'south';
@@ -534,36 +576,44 @@ export class TerrainGenerator {
       for (let depthStep = 0; depthStep < depth; depthStep += 1) {
         if (isVertical) {
           const y = (passage.direction === 'north' ? 0 : this.roomHeight - 1) + (passage.direction === 'north' ? depthStep : -depthStep);
-          for (let x = passage.edgeStart.x; x <= passage.edgeEnd.x; x += 1) carveRoadBrush(tileMap, x, y, MAIN_ROAD_WIDTH, roadMask);
+          for (let x = passage.edgeStart.x; x <= passage.edgeEnd.x; x += 1) carveRoadBrush(tileMap, x, y, roadWidth, roadMask);
         } else {
           const x = (passage.direction === 'west' ? 0 : this.roomWidth - 1) + (passage.direction === 'west' ? depthStep : -depthStep);
-          for (let y = passage.edgeStart.y; y <= passage.edgeEnd.y; y += 1) carveRoadBrush(tileMap, x, y, MAIN_ROAD_WIDTH, roadMask);
+          for (let y = passage.edgeStart.y; y <= passage.edgeEnd.y; y += 1) carveRoadBrush(tileMap, x, y, roadWidth, roadMask);
         }
       }
-      carveRoadBrush(tileMap, passage.roadAnchor.x, passage.roadAnchor.y, MAIN_ROAD_WIDTH, roadMask);
+      carveRoadBrush(tileMap, passage.roadAnchor.x, passage.roadAnchor.y, roadWidth, roadMask);
+    }
+
+    if (isForest) {
+      const center = { x: Math.floor(this.roomWidth / 2), y: Math.floor(this.roomHeight / 2) };
+      carveRoadBrush(tileMap, center.x, center.y, roadWidth, roadMask);
+      for (const passage of Object.values(resolvedExits)) {
+        carveRoadToAnchor(tileMap, center, passage.roadAnchor, rng, { roadWidth, roadMask });
+      }
     }
 
     clearRoadCorridor(tileMap, roadMask);
-    return { resolvedExits, resolvedEntrances, roadMask };
+    return { resolvedExits, resolvedEntrances, roadMask, roadWidth };
   }
 
-  generateMainRoad(tileMap, center, anchors, rng, roadMask) {
-    carveRoadBrush(tileMap, center.x, center.y, MAIN_ROAD_WIDTH, roadMask);
+  generateMainRoad(tileMap, center, anchors, rng, roadMask, roadWidth = MAIN_ROAD_WIDTH) {
+    carveRoadBrush(tileMap, center.x, center.y, roadWidth, roadMask);
     const ordered = [...anchors].sort((a, b) => Math.atan2(a.y - center.y, a.x - center.x) - Math.atan2(b.y - center.y, b.x - center.x));
     for (const anchor of ordered) {
-      carveRoadToAnchor(tileMap, center, anchor, rng, { roadWidth: MAIN_ROAD_WIDTH, roadMask });
+      carveRoadToAnchor(tileMap, center, anchor, rng, { roadWidth, roadMask });
     }
-    mergeNearbyRoads(tileMap, roadMask, rng, { roadWidth: MAIN_ROAD_WIDTH });
+    mergeNearbyRoads(tileMap, roadMask, rng, { roadWidth });
     clearRoadCorridor(tileMap, roadMask);
   }
 
-  generateBranchRoads(tileMap, rng, anchors, mainRoadMask, branchRoadMask, center, biomeConfig = null) {
+  generateBranchRoads(tileMap, rng, anchors, mainRoadMask, branchRoadMask, center, biomeConfig = null, roadWidth = BRANCH_ROAD_WIDTH) {
     const branchDensity = clamp(biomeConfig?.roadBranchDensity ?? 0.6, 0, 1);
     const mainRoadPoints = collectRoadPoints(mainRoadMask);
     for (const anchor of anchors) {
       if (rng() > branchDensity) continue;
       const target = nearestRoadPoint(anchor, mainRoadPoints) ?? center;
-      carveRoadToAnchor(tileMap, anchor, target, rng, { roadWidth: BRANCH_ROAD_WIDTH, roadMask: branchRoadMask });
+      carveRoadToAnchor(tileMap, anchor, target, rng, { roadWidth, roadMask: branchRoadMask });
     }
 
     const desiredBranches = randomInt(rng, 1, Math.max(1, Math.round(2 + (8 * branchDensity))));
@@ -575,11 +625,38 @@ export class TerrainGenerator {
         x: clamp(Math.round(branchStart.x + Math.cos(angle) * distance), 2, this.roomWidth - 3),
         y: clamp(Math.round(branchStart.y + Math.sin(angle) * distance), 2, this.roomHeight - 3),
       };
-      carveRoadToAnchor(tileMap, branchStart, target, rng, { roadWidth: BRANCH_ROAD_WIDTH, roadMask: branchRoadMask });
+      carveRoadToAnchor(tileMap, branchStart, target, rng, { roadWidth, roadMask: branchRoadMask });
     }
 
-    mergeNearbyRoads(tileMap, branchRoadMask, rng, { roadWidth: BRANCH_ROAD_WIDTH, maxMerges: 6 });
+    mergeNearbyRoads(tileMap, branchRoadMask, rng, { roadWidth, maxMerges: 6 });
     clearRoadCorridor(tileMap, branchRoadMask);
+  }
+
+
+  carveForestClearings(tileMap, rng, biomeType, roadMask) {
+    if (biomeType !== 'forest') return new Set();
+    const clearingMask = new Set();
+    const clearingCount = randomInt(rng, 3, 6);
+
+    for (let i = 0; i < clearingCount; i += 1) {
+      const cx = randomInt(rng, 8, this.roomWidth - 9);
+      const cy = randomInt(rng, 8, this.roomHeight - 9);
+      const radius = randomInt(rng, 4, 8);
+
+      for (let oy = -radius; oy <= radius; oy += 1) {
+        for (let ox = -radius; ox <= radius; ox += 1) {
+          if ((ox * ox) + (oy * oy) > radius * radius) continue;
+          const x = cx + ox;
+          const y = cy + oy;
+          if (!tileMap[y]?.[x]) continue;
+          if (roadMask.has(`${x},${y}`)) continue;
+          tileMap[y][x] = tileFrom(tiles.grass, { type: 'ground' });
+          clearingMask.add(`${x},${y}`);
+        }
+      }
+    }
+
+    return clearingMask;
   }
 
   generateTerrainPatches() {

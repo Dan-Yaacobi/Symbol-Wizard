@@ -19,13 +19,13 @@ const BIOME_CONFIGS = {
   forest: {
     minRooms: 6,
     maxRooms: 12,
-    minExitsPerRoom: 2,
+    minExitsPerRoom: 1,
     maxExitsPerRoom: 4,
     branchProbability: 0.6,
     roadBranchDensity: 0.7,
     landmarkFrequency: 0.75,
     objectDensity: 0.8,
-    roomSizeRange: [0.62, 0.92],
+    roomSizeRange: [0.78, 0.98],
     shapeIrregularity: 0.9,
   },
   cave: {
