@@ -1,0 +1,182 @@
+export class SpellbookWindow {
+  constructor({ root, abilitySystem, input }) {
+    this.root = root;
+    this.abilitySystem = abilitySystem;
+    this.input = input;
+    this.selectedSpellId = null;
+    this.visible = false;
+    this.pendingEquipSlot = 0;
+    this.dragPayload = null;
+
+    this.el = document.createElement('section');
+    this.el.className = 'spellbook-window hidden';
+    this.root.appendChild(this.el);
+
+    window.addEventListener('keydown', (event) => this.onWindowKeyDown(event));
+
+    this.render();
+  }
+
+  onWindowKeyDown(event) {
+    const key = event.key.toLowerCase();
+    if (key === 'b') {
+      this.toggle();
+      event.preventDefault();
+      return;
+    }
+
+    if (!this.visible) return;
+
+    if (key === 'escape') {
+      this.close();
+      event.preventDefault();
+      return;
+    }
+
+    if (key === 'arrowdown' || key === 'arrowright') {
+      this.moveSelection(1);
+      event.preventDefault();
+      return;
+    }
+
+    if (key === 'arrowup' || key === 'arrowleft') {
+      this.moveSelection(-1);
+      event.preventDefault();
+      return;
+    }
+
+    if (key === 'enter') {
+      this.equipSelectedSpell(this.pendingEquipSlot);
+      this.pendingEquipSlot = (this.pendingEquipSlot + 1) % 4;
+      event.preventDefault();
+      return;
+    }
+
+    if (['1', '2', '3', '4'].includes(key)) {
+      this.pendingEquipSlot = Number(key) - 1;
+      this.equipSelectedSpell(this.pendingEquipSlot);
+      event.preventDefault();
+    }
+  }
+
+  toggle() {
+    this.visible = !this.visible;
+    this.el.classList.toggle('hidden', !this.visible);
+    this.render();
+  }
+
+  close() {
+    this.visible = false;
+    this.el.classList.add('hidden');
+  }
+
+  isOpen() {
+    return this.visible;
+  }
+
+  moveSelection(direction) {
+    const spells = this.abilitySystem.getAbilities();
+    if (!spells.length) return;
+
+    const currentIndex = spells.findIndex((spell) => spell.id === this.selectedSpellId);
+    const nextIndex = currentIndex < 0 ? 0 : (currentIndex + direction + spells.length) % spells.length;
+    this.selectedSpellId = spells[nextIndex].id;
+    this.render();
+  }
+
+  equipSelectedSpell(slotIndex) {
+    if (!this.selectedSpellId) return;
+    this.abilitySystem.assignAbilityToSlot(slotIndex, this.selectedSpellId);
+    this.render();
+  }
+
+  render() {
+    const spells = this.abilitySystem.getAbilities();
+
+    if (!this.selectedSpellId || !spells.some((spell) => spell.id === this.selectedSpellId)) {
+      this.selectedSpellId = spells[0]?.id ?? null;
+    }
+
+    const selected = spells.find((spell) => spell.id === this.selectedSpellId) ?? null;
+
+    this.el.innerHTML = `
+      <header class="spellbook-header">
+        <h3>Spellbook</h3>
+        <p>B / Esc to close • Arrows to navigate • Enter to equip</p>
+      </header>
+      <div class="spellbook-layout">
+        <aside class="spellbook-page spellbook-page--left"></aside>
+        <section class="spellbook-divider"></section>
+        <article class="spellbook-page spellbook-page--right"></article>
+      </div>
+      <footer class="spellbook-slots"></footer>
+    `;
+
+    const left = this.el.querySelector('.spellbook-page--left');
+    const right = this.el.querySelector('.spellbook-page--right');
+    const slots = this.el.querySelector('.spellbook-slots');
+
+    for (const spell of spells) {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'spellbook-list-item';
+      if (spell.id === this.selectedSpellId) item.classList.add('selected');
+      item.innerHTML = `<span class="spell-icon">${spell.icon ?? '?'}</span><span>${spell.name}</span>`;
+      item.draggable = true;
+
+      item.addEventListener('click', () => {
+        this.selectedSpellId = spell.id;
+        this.render();
+      });
+
+      item.addEventListener('dragstart', (event) => {
+        event.dataTransfer?.setData('application/x-spell-id', spell.id);
+        event.dataTransfer?.setData('text/plain', spell.id);
+        this.dragPayload = spell.id;
+      });
+
+      left.appendChild(item);
+    }
+
+    if (!selected) {
+      right.innerHTML = '<p>No spells unlocked.</p>';
+    } else {
+      const stats = [];
+      if (Number.isFinite(selected.damage)) stats.push(`Damage: ${selected.damage}`);
+      if (Number.isFinite(selected.cooldown)) stats.push(`Cooldown: ${selected.cooldown}s`);
+      if (Number.isFinite(selected.range)) stats.push(`Range: ${selected.range}`);
+      right.innerHTML = `
+        <div class="spellbook-details-icon">${selected.icon ?? '?'}</div>
+        <h4>${selected.name}</h4>
+        <p>${selected.description ?? ''}</p>
+        <ul>${stats.map((s) => `<li>${s}</li>`).join('')}</ul>
+      `;
+    }
+
+    for (let i = 0; i < 4; i += 1) {
+      const equipped = this.abilitySystem.getAbilityBySlot(i);
+      const slot = document.createElement('button');
+      slot.type = 'button';
+      slot.className = 'spellbook-slot';
+      if (this.pendingEquipSlot === i) slot.classList.add('active');
+      slot.innerHTML = `<span>[Slot ${i + 1}]</span><strong>${equipped?.name ?? 'Empty'}</strong>`;
+
+      slot.addEventListener('click', () => {
+        this.pendingEquipSlot = i;
+        this.equipSelectedSpell(i);
+      });
+
+      slot.addEventListener('dragover', (event) => event.preventDefault());
+      slot.addEventListener('drop', (event) => {
+        event.preventDefault();
+        const spellId = event.dataTransfer?.getData('application/x-spell-id') || this.dragPayload;
+        if (!spellId) return;
+        this.abilitySystem.assignAbilityToSlot(i, spellId);
+        this.pendingEquipSlot = i;
+        this.render();
+      });
+
+      slots.appendChild(slot);
+    }
+  }
+}

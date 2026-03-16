@@ -25,10 +25,9 @@ import { RuntimeConfigRegistry } from './devtools/RuntimeConfig.js';
 import { DevToolsPanel } from './devtools/DevToolsPanel.js';
 import { dialogueTree } from './systems/DialogueSystem.js';
 import { DialogueManager } from './systems/DialogueManager.js';
-import { abilityDefinitions, defaultAbilitySlots } from './data/abilities.js';
+import { SpellRegistry, defaultSpellSlots } from './data/spells.js';
 import { AbilitySystem } from './systems/AbilitySystem.js';
-import { AbilityBar } from './ui/AbilityBar.js';
-import { SkillTreeWindow } from './ui/SkillTreeWindow.js';
+import { SpellbookWindow } from './ui/SpellbookWindow.js';
 import { PrefabEditorScreen } from './ui/PrefabEditorScreen.js';
 import { palette } from './entities/SpriteLibrary.js';
 import { visualTheme } from './data/VisualTheme.js';
@@ -139,17 +138,12 @@ let goldPiles = [];
 const combatTextSystem = new CombatTextSystem(runtimeConfig);
 
 const abilitySystem = new AbilitySystem({
-  definitions: abilityDefinitions,
+  definitions: Object.values(SpellRegistry),
   player,
   enemies,
   map,
   camera,
   spawnProjectile: (projectile) => projectiles.push(projectile),
-  spendGold: (cost) => {
-    if (player.gold < cost) return false;
-    player.gold -= cost;
-    return true;
-  },
   reportDamage: (enemy, damage, isCritical) => combatTextSystem.spawnDamageText(enemy, damage, isCritical),
   onEnemySlain: (enemy) => {
     const drop = LootSystem.spawnGold(enemy);
@@ -157,8 +151,8 @@ const abilitySystem = new AbilitySystem({
   },
 });
 
-defaultAbilitySlots.forEach((abilityId, slotIndex) => {
-  abilitySystem.assignAbilityToSlot(slotIndex, abilityId);
+defaultSpellSlots.forEach((spellId, slotIndex) => {
+  abilitySystem.assignAbilityToSlot(slotIndex, spellId);
 });
 
 const uiRoot = document.getElementById('uiPanels') ?? (() => {
@@ -169,8 +163,7 @@ const uiRoot = document.getElementById('uiPanels') ?? (() => {
   console.warn('BOOT: #uiPanels missing in startup scene. Created fallback root to prevent startup crash.');
   return fallback;
 })();
-const abilityBar = new AbilityBar({ root: uiRoot, abilitySystem });
-const skillTree = new SkillTreeWindow({ root: uiRoot, abilitySystem, player });
+const spellbook = new SpellbookWindow({ root: uiRoot, abilitySystem, input });
 
 const prefabEditor = new PrefabEditorScreen();
 await prefabEditor.initialize();
@@ -817,7 +810,9 @@ function tick(now) {
   }
 
   const devCapturing = devToolsPanel.isCapturingInput();
-  if (!dialogueManager.isOpen && !diagMinimalMode && !devCapturing) {
+  const spellbookOpen = spellbook.isOpen();
+
+  if (!dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
     handlePlayer(dt);
     if (enemyAiEnabled) {
       updateEnemies(enemies, player, dt, projectiles, runtimeConfig);
