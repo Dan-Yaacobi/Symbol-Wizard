@@ -296,7 +296,7 @@ devToolsPanel.setMapTools({
   },
   spawnEnemyGroup: () => {
     const center = { x: Math.round(player.x + player.facing.x * 5), y: Math.round(player.y + player.facing.y * 5) };
-    const group = spawnEnemyGroup('swarm', center.x, center.y, {
+    const group = spawnEnemyGroup('swarm_bug', center.x, center.y, {
       room: activeRoom,
       groupSize: 4,
     });
