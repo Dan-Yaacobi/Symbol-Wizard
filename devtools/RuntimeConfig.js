@@ -99,6 +99,15 @@ export const DEFAULT_CONFIG = {
     showReservedCorridors: false,
     showLandingTiles: false,
   },
+  pathGeneration: {
+    baseTrailRadius: 2,
+    turnTrailRadius: 3,
+    exitTrailRadius: 3,
+    wanderChance: 0.25,
+    exitClearingRadius: 3,
+    minDistanceFromPath: 2,
+    minDistanceFromExit: 3,
+  },
 };
 
 export const CONFIG_FIELDS = [
@@ -168,6 +177,13 @@ export const CONFIG_FIELDS = [
   { path: 'debug.showLandingTiles', label: 'Show Landing Tiles', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.overlaysEnabled', label: 'Master Overlay Toggle', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.showStatsHud', label: 'Compact Stats HUD', section: 'Performance', type: 'boolean' },
+  { path: 'pathGeneration.baseTrailRadius', label: 'Base Trail Radius', section: 'Path Generation', type: 'number', min: 1, max: 8, step: 1 },
+  { path: 'pathGeneration.turnTrailRadius', label: 'Turn Trail Radius', section: 'Path Generation', type: 'number', min: 1, max: 10, step: 1 },
+  { path: 'pathGeneration.exitTrailRadius', label: 'Exit Trail Radius', section: 'Path Generation', type: 'number', min: 1, max: 12, step: 1 },
+  { path: 'pathGeneration.wanderChance', label: 'Wander Chance', section: 'Path Generation', type: 'number', min: 0, max: 0.9, step: 0.01 },
+  { path: 'pathGeneration.exitClearingRadius', label: 'Exit Clearing Radius', section: 'Path Generation', type: 'number', min: 1, max: 12, step: 1 },
+  { path: 'pathGeneration.minDistanceFromPath', label: 'Min Distance From Path', section: 'Path Generation', type: 'number', min: 0, max: 12, step: 1 },
+  { path: 'pathGeneration.minDistanceFromExit', label: 'Min Distance From Exit', section: 'Path Generation', type: 'number', min: 0, max: 16, step: 1 },
 ];
 
 function deepClone(v) { return JSON.parse(JSON.stringify(v)); }

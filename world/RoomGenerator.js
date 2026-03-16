@@ -7,6 +7,7 @@ import { PathGenerator } from './PathGenerator.js';
 import { ExitTriggerSystem } from './ExitTriggerSystem.js';
 import { RoomValidationSystem } from './RoomValidationSystem.js';
 import { RoomRepairSystem } from './RoomRepairSystem.js';
+import { resolvePathGenerationConfig } from './PathGenerationConfig.js';
 
 const FOREST_ROOM_WIDTH = 120;
 const FOREST_ROOM_HEIGHT = 120;
@@ -26,10 +27,11 @@ function mergeMask(target, source) {
 }
 
 export class RoomGenerator {
-  constructor({ roomWidth = 240, roomHeight = 160, biomeConfig = null } = {}) {
+  constructor({ roomWidth = 240, roomHeight = 160, biomeConfig = null, runtimeConfig = null } = {}) {
     this.roomWidth = roomWidth;
     this.roomHeight = roomHeight;
     this.biomeConfig = biomeConfig;
+    this.runtimeConfig = runtimeConfig;
     this.objectPlacementSystem = new ObjectPlacementSystem();
     this.roomPlanner = new RoomPlanner();
     this.exitAnchorSystem = new ExitAnchorSystem();
@@ -50,6 +52,7 @@ export class RoomGenerator {
     const terrainGenerator = new TerrainGenerator({ roomWidth, roomHeight });
     const plan = this.roomPlanner.createPlan({ roomNode, width: roomWidth, height: roomHeight, biomeType });
     const reservations = this.exitAnchorSystem.reserve(plan);
+    const pathConfig = resolvePathGenerationConfig(this.runtimeConfig);
 
     const { grid } = terrainGenerator.initializeTiles(roomNode, rng, effectiveBiomeConfig);
 
@@ -57,6 +60,8 @@ export class RoomGenerator {
       grid,
       plan,
       reservations,
+      rng,
+      pathConfig,
     });
 
     const clearingMask = terrainGenerator.carveForestClearings(grid, rng, biomeType, roadMask);
@@ -66,6 +71,13 @@ export class RoomGenerator {
     mergeMask(protectedMask, reservations.noDecorMask);
     mergeMask(protectedMask, clearingMask);
 
+    const safetyConfig = {
+      pathTiles: roadMask,
+      exitAnchors: [...Object.values(plan.exitAnchors), ...Object.values(plan.entranceAnchors)],
+      minDistanceFromPath: pathConfig.minDistanceFromPath,
+      minDistanceFromExit: pathConfig.minDistanceFromExit,
+    };
+
     const objectBlockedMask = new Set(protectedMask);
     const objects = this.objectPlacementSystem.placeObjects({
       tiles: grid,
@@ -73,6 +85,7 @@ export class RoomGenerator {
       blockedMask: objectBlockedMask,
       roomId: roomNode.id,
       biomeType,
+      safetyConfig,
     });
 
     const landmarks = this.objectPlacementSystem.placeLandmarks({
@@ -81,6 +94,7 @@ export class RoomGenerator {
       blockedMask: objectBlockedMask,
       roomId: roomNode.id,
       biomeType,
+      safetyConfig,
     });
 
     terrainGenerator.decorate(grid, rng, objectBlockedMask);

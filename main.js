@@ -52,7 +52,7 @@ runtimeConfig.setLogger((message) => logDev(message));
 
 await loadObjectsFromFolder('./assets/objects');
 
-const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H });
+const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
 const { biome, startRoom } = biomeGenerator.enterBiome('starting-biome');
 let activeRoom = startRoom;
 let map = activeRoom.tiles;
