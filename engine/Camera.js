@@ -12,6 +12,8 @@ export class Camera {
     this.shakeX = 0;
     this.shakeY = 0;
     this.smoothingFactor = 0.14;
+    this.zoom = 1;
+    this.pixelSnapping = true;
     this.baseX = 0;
     this.baseY = 0;
     this.hasFollowTarget = false;
@@ -78,7 +80,9 @@ export class Camera {
   }
 
   worldToScreen(wx, wy) {
-    return { x: Math.round(wx - this.x), y: Math.round(wy - this.y) };
+    const rawX = (wx - this.x) * this.zoom;
+    const rawY = (wy - this.y) * this.zoom;
+    return this.pixelSnapping ? { x: Math.round(rawX), y: Math.round(rawY) } : { x: rawX, y: rawY };
   }
 
   screenToWorld(sx, sy) {

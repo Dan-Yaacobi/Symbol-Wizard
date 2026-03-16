@@ -381,3 +381,50 @@ body {
 .object-editor-button:hover {
   background: #24344f;
 }
+
+.devtools-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: min(460px, 44vw);
+  height: 100vh;
+  overflow: auto;
+  z-index: 90;
+  background: rgba(10, 18, 29, 0.94);
+  border-left: 2px solid #466182;
+  padding: 10px;
+  box-sizing: border-box;
+  font-size: 12px;
+}
+
+.devtools-panel.hidden,
+.devtools-stats.hidden { display: none; }
+.devtools-panel.compact .devtools-field { gap: 4px; padding: 2px 0; }
+
+.devtools-section { margin-bottom: 8px; border: 1px solid #2f4460; padding: 6px; background: rgba(14, 27, 42, 0.84); }
+.devtools-section > summary,
+.devtools-section > h3 { cursor: pointer; margin: 0 0 6px; font-size: 12px; color: #9fcbff; }
+.devtools-search { width: 100%; background: #08121f; color: #cfe8ff; border: 1px solid #385372; padding: 6px; }
+.devtools-field { display: grid; grid-template-columns: 1.4fr 1fr auto auto auto; gap: 6px; align-items: center; padding: 4px 0; border-bottom: 1px dashed rgba(122, 165, 210, 0.2); }
+.devtools-field label { color: #e1efff; }
+.devtools-field input,
+.devtools-field select,
+.devtools-field button,
+.devtools-action { background: #13253a; color: #cfe8ff; border: 1px solid #3d5573; font: inherit; padding: 3px 5px; }
+.devtools-field.dirty { background: rgba(107, 88, 22, 0.2); }
+.devtools-field small { color: #88a8c8; }
+.devtools-swatch { width: 16px; height: 16px; border: 1px solid #fff; display: inline-block; }
+.dirty-pill { color: #f7d57d; }
+.devtools-inspector { margin: 0; white-space: pre-wrap; color: #c4dcf3; max-height: 220px; overflow: auto; }
+
+.devtools-stats {
+  position: fixed;
+  left: 10px;
+  top: 10px;
+  z-index: 85;
+  background: rgba(6, 16, 25, 0.84);
+  border: 1px solid #486a8f;
+  color: #ccedff;
+  padding: 6px 8px;
+  font-size: 11px;
+}

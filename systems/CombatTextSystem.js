@@ -35,7 +35,8 @@ function isFiniteNumber(value) {
 }
 
 export class CombatTextSystem {
-  constructor() {
+  constructor(configRegistry = null) {
+    this.configRegistry = configRegistry;
     this.combatTexts = [];
     this.nextId = 1;
   }
@@ -49,7 +50,7 @@ export class CombatTextSystem {
 
     const amount = Math.max(0, Math.round(damage));
     const text = isCritical ? `*${amount}*` : `-${amount}`;
-    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, text, isCritical ? TEXT_STYLES.critical : TEXT_STYLES.damage);
+    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), text, isCritical ? this.#criticalStyle() : this.#damageStyle());
   }
 
   spawnGoldText(entity, amount) {
@@ -60,7 +61,7 @@ export class CombatTextSystem {
     }
 
     const value = Math.max(0, Math.round(amount));
-    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, `+${value}$`, TEXT_STYLES.gold);
+    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), `+${value}$`, this.#goldStyle());
   }
 
   spawnHealText(entity, amount) {
@@ -71,7 +72,7 @@ export class CombatTextSystem {
     }
 
     const value = Math.max(0, Math.round(amount));
-    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, `+${value}`, TEXT_STYLES.heal);
+    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), `+${value}`, this.#healStyle());
   }
 
   spawnInfoText(entity, text) {
@@ -81,7 +82,7 @@ export class CombatTextSystem {
       return;
     }
 
-    this.#spawnText(entity.x, entity.y - VERTICAL_OFFSET, text, TEXT_STYLES.info);
+    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), text, TEXT_STYLES.info);
   }
 
   update(dt, nowSeconds = performance.now() / 1000) {
@@ -146,6 +147,28 @@ export class CombatTextSystem {
     };
   }
 
+
+  #getConfig(path, fallback) {
+    const value = this.configRegistry?.get?.(path);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  #damageStyle() {
+    return { ...TEXT_STYLES.damage, color: this.configRegistry?.get?.('palette.damageColor') ?? TEXT_STYLES.damage.color };
+  }
+
+  #criticalStyle() {
+    return {
+      ...TEXT_STYLES.critical,
+      color: this.configRegistry?.get?.('palette.critColor') ?? TEXT_STYLES.critical.color,
+      fontScale: this.#getConfig('combat.critTextScale', TEXT_STYLES.critical.fontScale),
+      popDuration: this.#getConfig('combat.critPopDuration', TEXT_STYLES.critical.popDuration),
+    };
+  }
+
+  #goldStyle() { return { ...TEXT_STYLES.gold }; }
+  #healStyle() { return { ...TEXT_STYLES.heal, color: this.configRegistry?.get?.('palette.healColor') ?? TEXT_STYLES.heal.color }; }
+
   #hasValidEntityPosition(entity) {
     return Boolean(entity) && isFiniteNumber(entity.x) && isFiniteNumber(entity.y);
   }
@@ -175,7 +198,9 @@ export class CombatTextSystem {
       popDuration: Number.isFinite(style?.popDuration) ? style.popDuration : 0,
     };
 
-    const lifetime = MIN_LIFETIME + Math.random() * (MAX_LIFETIME - MIN_LIFETIME);
+    const minLifetime = this.#getConfig('combat.damageTextLifetimeMin', MIN_LIFETIME);
+    const maxLifetime = Math.max(minLifetime, this.#getConfig('combat.damageTextLifetimeMax', MAX_LIFETIME));
+    const lifetime = minLifetime + Math.random() * (maxLifetime - minLifetime);
     const entry = {
       id: `ct_${this.nextId}`,
       x,
@@ -184,7 +209,7 @@ export class CombatTextSystem {
       style: resolvedStyle,
       createdAt: nowSeconds,
       lifetime,
-      velocityY: DEFAULT_UPWARD_SPEED,
+      velocityY: this.#getConfig('combat.damageTextSpeed', DEFAULT_UPWARD_SPEED),
       opacity: 1,
       age: 0,
     };

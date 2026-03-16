@@ -258,6 +258,48 @@ function drawWorldObject(renderer, camera, object, overrideTiles = null) {
   }
 }
 
+
+function drawDebugOverlays(renderer, camera, player, enemies, projectiles, debugOptions = {}) {
+  if (!debugOptions?.overlaysEnabled) return;
+
+  if (debugOptions.grid) {
+    const w = camera.viewW;
+    const h = camera.viewH;
+    for (let x = 0; x < w; x += 4) drawCell(renderer, { glyph: '|', fg: '#223142' }, x, 0);
+    for (let y = 0; y < h; y += 4) drawCell(renderer, { glyph: '-', fg: '#223142' }, 0, y);
+  }
+
+  const drawCircle = (cx, cy, radius, glyph, fg) => {
+    const points = Math.max(12, Math.round(radius * 7));
+    for (let i = 0; i < points; i += 1) {
+      const a = (Math.PI * 2 * i) / points;
+      drawCell(renderer, { glyph, fg }, Math.round(cx + Math.cos(a) * radius) - camera.x, Math.round(cy + Math.sin(a) * radius) - camera.y);
+    }
+  };
+
+  if (debugOptions.attackRanges) enemies.forEach((enemy) => enemy.alive && drawCircle(enemy.x, enemy.y, enemy.attackRange ?? 3, '.', '#ff9f84'));
+  if (debugOptions.aggroRanges) enemies.forEach((enemy) => enemy.alive && drawCircle(enemy.x, enemy.y, 26, '.', '#84d8ff'));
+  if (debugOptions.projectileCollision) projectiles.forEach((p) => drawCircle(p.x, p.y, p.radius ?? 1, '·', '#90f0d1'));
+
+  if (debugOptions.entityFootprints) {
+    const entities = [player, ...enemies.filter((e) => e.alive)];
+    for (const entity of entities) {
+      drawCell(renderer, { glyph: '□', fg: '#f5e3a8' }, Math.round(entity.x) - camera.x, Math.round(entity.y) - camera.y);
+    }
+  }
+
+  if (debugOptions.facingMarker && player?.facing) {
+    drawCell(renderer, { glyph: '→', fg: '#7ce6ff' }, Math.round(player.x + player.facing.x * 2) - camera.x, Math.round(player.y + player.facing.y * 2) - camera.y);
+  }
+
+  if (debugOptions.cameraCenter) {
+    drawCell(renderer, { glyph: '+', fg: '#f9dd7b' }, Math.floor(camera.viewW / 2), Math.floor(camera.viewH / 2));
+  }
+
+  if (debugOptions.selectedEntity && debugOptions.selectedEntityRef) drawCircle(debugOptions.selectedEntityRef.x, debugOptions.selectedEntityRef.y, 2.2, '*', '#fff091');
+  if (debugOptions.selectedTile && debugOptions.selectedTileRef) drawCell(renderer, { glyph: '▣', fg: '#9effaa' }, debugOptions.selectedTileRef.x - camera.x, debugOptions.selectedTileRef.y - camera.y);
+}
+
 function drawDebugCursorOverlay(renderer, camera, mouse) {
   if (!mouse) return;
 
@@ -266,7 +308,7 @@ function drawDebugCursorOverlay(renderer, camera, mouse) {
 
   renderer.drawCell(toRenderCell({ glyph: '+', fg: '#53f7ff', layer: renderLayers.ui }), mouse.canvasCellX, mouse.canvasCellY);
 }
-export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, combatTextSystem = null, abilityEffects = [], mouse = null) {
+export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, combatTextSystem = null, abilityEffects = [], mouse = null, debugOptions = {}) {
   renderer.renderBackground(map, camera);
 
   for (const object of worldObjects) {
@@ -331,6 +373,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   const py = Math.round(player.y) - camera.y;
   drawCell(renderer, { glyph: '!', fg: palette.playerAccent }, px, py - 2);
 
+  drawDebugOverlays(renderer, camera, player, enemies, projectiles, debugOptions);
   drawDebugCursorOverlay(renderer, camera, mouse);
   combatTextSystem?.render(renderer, camera);
 }
