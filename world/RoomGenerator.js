@@ -9,6 +9,7 @@ import { RoomValidationSystem } from './RoomValidationSystem.js';
 import { RoomRepairSystem } from './RoomRepairSystem.js';
 import { resolvePathGenerationConfig } from './PathGenerationConfig.js';
 import { resolveWorldGenerationConfig } from './WorldGenerationConfig.js';
+import { resolveObjectGenerationConfig } from './ObjectGenerationConfig.js';
 
 function createRng(seed) {
   let state = seed >>> 0;
@@ -22,6 +23,41 @@ function createRng(seed) {
 
 function mergeMask(target, source) {
   for (const key of source) target.add(key);
+}
+
+function expandCircularMask(targetMask, points, radius) {
+  if (!Array.isArray(points) || radius <= 0) return;
+  for (const point of points) {
+    for (let oy = -radius; oy <= radius; oy += 1) {
+      for (let ox = -radius; ox <= radius; ox += 1) {
+        if ((ox * ox) + (oy * oy) > radius * radius) continue;
+        targetMask.add(`${point.x + ox},${point.y + oy}`);
+      }
+    }
+  }
+}
+
+function buildPathAnchors(pathMask) {
+  const anchors = [];
+  for (const key of pathMask) {
+    const [x, y] = key.split(',').map(Number);
+    anchors.push({ x, y });
+  }
+  return anchors;
+}
+
+function buildPathIntersections(pathMask) {
+  const intersections = [];
+  const neighbors = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  for (const key of pathMask) {
+    const [x, y] = key.split(',').map(Number);
+    let connected = 0;
+    for (const [dx, dy] of neighbors) {
+      if (pathMask.has(`${x + dx},${y + dy}`)) connected += 1;
+    }
+    if (connected >= 3) intersections.push({ x, y });
+  }
+  return intersections;
 }
 
 export class RoomGenerator {
@@ -52,6 +88,7 @@ export class RoomGenerator {
     const plan = this.roomPlanner.createPlan({ roomNode, width: roomWidth, height: roomHeight, biomeType });
     const reservations = this.exitAnchorSystem.reserve(plan);
     const pathConfig = resolvePathGenerationConfig(this.runtimeConfig);
+    const objectConfig = resolveObjectGenerationConfig(this.runtimeConfig);
 
     const { grid } = terrainGenerator.initializeTiles(roomNode, rng, effectiveBiomeConfig);
 
@@ -70,26 +107,47 @@ export class RoomGenerator {
     mergeMask(protectedMask, reservations.noDecorMask);
     mergeMask(protectedMask, clearingMask);
 
+    const allAnchors = [...Object.values(plan.exitAnchors), ...Object.values(plan.entranceAnchors)];
+    const pathIntersections = buildPathIntersections(roadMask);
+    expandCircularMask(protectedMask, allAnchors.map((anchor) => ({ x: anchor.x, y: anchor.y })), objectConfig.minDistanceFromExit);
+    expandCircularMask(protectedMask, pathIntersections, objectConfig.intersectionClearingRadius);
+
     const safetyConfig = {
       pathTiles: roadMask,
-      exitAnchors: [...Object.values(plan.exitAnchors), ...Object.values(plan.entranceAnchors)],
-      minDistanceFromPath: pathConfig.minDistanceFromPath,
-      minDistanceFromExit: pathConfig.minDistanceFromExit,
+      pathAnchors: buildPathAnchors(roadMask),
+      exitAnchors: Object.values(plan.exitAnchors),
+      entranceAnchors: Object.values(plan.entranceAnchors),
+      minDistanceFromPath: objectConfig.minDistanceFromPath ?? pathConfig.minDistanceFromPath,
+      minDistanceFromExit: objectConfig.minDistanceFromExit ?? pathConfig.minDistanceFromExit,
+      minDistanceFromMapEdge: objectConfig.minDistanceFromMapEdge,
+      objectDensity: objectConfig.objectDensity,
+      clusterDensity: objectConfig.clusterDensity,
+      clusterRadiusMultiplier: objectConfig.clusterRadiusMultiplier,
+      maxAttemptsPerObjectType: objectConfig.maxAttemptsPerObjectType,
     };
 
+    const occupiedTiles = new Set();
     const objectBlockedMask = new Set(protectedMask);
-    const objects = this.objectPlacementSystem.placeObjects({
+    const landmarks = this.objectPlacementSystem.placeLandmarks({
       tiles: grid,
       rng,
+      occupiedTiles,
       blockedMask: objectBlockedMask,
       roomId: roomNode.id,
       biomeType,
       safetyConfig,
     });
 
-    const landmarks = this.objectPlacementSystem.placeLandmarks({
+    expandCircularMask(
+      objectBlockedMask,
+      landmarks.map((landmark) => ({ x: landmark.x, y: landmark.y })),
+      objectConfig.landmarkClearingRadius,
+    );
+
+    const objects = this.objectPlacementSystem.placeObjects({
       tiles: grid,
       rng,
+      occupiedTiles,
       blockedMask: objectBlockedMask,
       roomId: roomNode.id,
       biomeType,
@@ -133,6 +191,7 @@ export class RoomGenerator {
     }
 
     const placedObjects = [...objects, ...landmarks];
+    const objectDebug = this.objectPlacementSystem.getDebugInfo();
     const collisionMap = buildCollisionMap(grid, placedObjects);
 
     return {
@@ -148,6 +207,9 @@ export class RoomGenerator {
         exitAnchors: Object.values(plan.exitAnchors).map((anchor) => ({ x: anchor.x, y: anchor.y })),
         landingTiles: [...Object.values(plan.exitAnchors), ...Object.values(plan.entranceAnchors)].map((anchor) => ({ x: anchor.landingX, y: anchor.landingY })),
         reservedCorridorTiles: Object.values(plan.reservedCorridors).flat(),
+        objectClusterCenters: objectDebug.clusterCenters,
+        objectBlockedPlacementTiles: objectDebug.blockedPlacementTiles,
+        objectOccupiedFootprintTiles: objectDebug.occupiedFootprintTiles,
       },
       generationDebug: {
         roomGraph: roomGraph?.[roomNode.id] ?? {},
