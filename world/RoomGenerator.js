@@ -10,6 +10,7 @@ import { RoomRepairSystem } from './RoomRepairSystem.js';
 import { resolvePathGenerationConfig } from './PathGenerationConfig.js';
 import { resolveWorldGenerationConfig } from './WorldGenerationConfig.js';
 import { resolveObjectGenerationConfig } from './ObjectGenerationConfig.js';
+import { spawnEnemiesForRoom } from './EnemySpawnSystem.js';
 
 function createRng(seed) {
   let state = seed >>> 0;
@@ -194,11 +195,29 @@ export class RoomGenerator {
     const objectDebug = this.objectPlacementSystem.getDebugInfo();
     const collisionMap = buildCollisionMap(grid, placedObjects);
 
+    const roomBase = {
+      id: roomNode.id,
+      tiles: grid,
+      collisionMap,
+      objects: placedObjects,
+      entrances: structuredClone(plan.entranceAnchors),
+      exits: structuredClone(triggers.exits),
+    };
+
+    const spawnedEnemies = spawnEnemiesForRoom(roomBase, {
+      biomeType,
+      runtimeConfig: this.runtimeConfig,
+      rng,
+      pathMask: roadMask,
+      entranceAnchors: Object.values(plan.entranceAnchors),
+      exitAnchors: Object.values(plan.exitAnchors),
+    });
+
     return {
       id: roomNode.id,
       tiles: grid,
       collisionMap,
-      entities: [],
+      entities: spawnedEnemies.enemies,
       objects: placedObjects,
       entrances: structuredClone(plan.entranceAnchors),
       exits: structuredClone(triggers.exits),
@@ -210,6 +229,12 @@ export class RoomGenerator {
         objectClusterCenters: objectDebug.clusterCenters,
         objectBlockedPlacementTiles: objectDebug.blockedPlacementTiles,
         objectOccupiedFootprintTiles: objectDebug.occupiedFootprintTiles,
+        enemySpawnPoints: spawnedEnemies.debug.enemySpawnPoints,
+        enemyGroupCenters: spawnedEnemies.debug.enemyGroupCenters,
+        entranceSafetyAnchors: spawnedEnemies.debug.entranceSafetyAnchors,
+        exitSafetyAnchors: spawnedEnemies.debug.exitSafetyAnchors,
+        pathSafetyTiles: spawnedEnemies.debug.pathSafetyTiles,
+        enemySafetySettings: spawnedEnemies.debug.safetySettings,
       },
       generationDebug: {
         roomGraph: roomGraph?.[roomNode.id] ?? {},

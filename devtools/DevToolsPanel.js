@@ -12,6 +12,8 @@ const SECTION_ORDER = [
   'Palette / Colors',
   'Sprites / Animation',
   'World / Generation',
+  'Object Generation',
+  'Enemy Generation',
   'Debug / Overlays',
   'Selected Entity Inspector',
   'Selected Tile / Cell Inspector',
@@ -32,6 +34,9 @@ export class DevToolsPanel {
       getSeed: () => '',
       setSeed: () => {},
       regenerate: () => {},
+      spawnEnemyGroup: () => {},
+      killAllEnemies: () => {},
+      toggleEnemyAi: () => false,
     };
 
     this.root = document.createElement('aside');
@@ -67,10 +72,13 @@ export class DevToolsPanel {
     this.render();
   }
 
-  setMapTools({ getSeed, setSeed, regenerate } = {}) {
+  setMapTools({ getSeed, setSeed, regenerate, spawnEnemyGroup, killAllEnemies, toggleEnemyAi } = {}) {
     if (typeof getSeed === 'function') this.mapTools.getSeed = getSeed;
     if (typeof setSeed === 'function') this.mapTools.setSeed = setSeed;
     if (typeof regenerate === 'function') this.mapTools.regenerate = regenerate;
+    if (typeof spawnEnemyGroup === 'function') this.mapTools.spawnEnemyGroup = spawnEnemyGroup;
+    if (typeof killAllEnemies === 'function') this.mapTools.killAllEnemies = killAllEnemies;
+    if (typeof toggleEnemyAi === 'function') this.mapTools.toggleEnemyAi = toggleEnemyAi;
     this.render();
   }
 
@@ -100,6 +108,7 @@ export class DevToolsPanel {
       showExitAnchors: enabled('debug.showExitAnchors'),
       showReservedCorridors: enabled('debug.showReservedCorridors'),
       showLandingTiles: enabled('debug.showLandingTiles'),
+      showEnemySpawnZones: enabled('debug.showEnemySpawnZones'),
       selectedEntityRef: this.selectedEntity,
       selectedTileRef: this.selectedTile,
       aggroRange: this.config.get('enemies.aggroRange'),
@@ -128,7 +137,7 @@ export class DevToolsPanel {
     this.root.innerHTML = '';
     this.root.appendChild(this.#searchSection());
 
-    for (const section of SECTION_ORDER.slice(1, 11)) {
+    for (const section of SECTION_ORDER.slice(1, 13)) {
       this.root.appendChild(this.#sectionBlock(section, grouped.get(section) ?? []));
     }
     this.root.appendChild(this.#sectionBlock('Debug / Overlays', grouped.get('Debug / Overlays') ?? []));
@@ -161,11 +170,20 @@ export class DevToolsPanel {
     seedRow.appendChild(seedMeta);
     details.appendChild(seedRow);
 
-    const regenerateButton = document.createElement('button');
-    regenerateButton.className = 'devtools-action';
-    regenerateButton.textContent = 'Regenerate Map';
-    regenerateButton.addEventListener('click', () => this.mapTools.regenerate());
-    details.appendChild(regenerateButton);
+    const actions = [
+      ['Regenerate Map', () => this.mapTools.regenerate()],
+      ['Spawn Enemy Group', () => this.mapTools.spawnEnemyGroup()],
+      ['Kill All Enemies', () => this.mapTools.killAllEnemies()],
+      ['Toggle Enemy AI', () => this.mapTools.toggleEnemyAi()],
+    ];
+
+    for (const [label, callback] of actions) {
+      const button = document.createElement('button');
+      button.className = 'devtools-action';
+      button.textContent = label;
+      button.addEventListener('click', callback);
+      details.appendChild(button);
+    }
 
     return details;
   }

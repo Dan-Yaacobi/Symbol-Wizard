@@ -5,6 +5,7 @@ import { Viewport } from './engine/Viewport.js';
 import { Player } from './entities/Player.js';
 import { BiomeGenerator } from './world/BiomeGenerator.js';
 import { RoomTransitionSystem } from './world/RoomTransitionSystem.js';
+import { spawnEnemyGroup } from './world/EnemySpawnSystem.js';
 import { updateEnemies } from './systems/AISystem.js';
 import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/CombatSystem.js';
 import * as LootSystem from './systems/LootSystem.js';
@@ -62,6 +63,7 @@ let map = activeRoom.tiles;
 const player = new Player(Math.floor(ROOM_W / 2), Math.floor(ROOM_H / 2));
 player.facing = { x: 0, y: 1 };
 const enemies = [];
+let enemyAiEnabled = true;
 const npcs = [];
 let worldObjects = activeRoom.objects ?? [];
 const roomTransitionSystem = new RoomTransitionSystem({ biomeGenerator, fadeDurationMs: 150 });
@@ -96,6 +98,15 @@ function resolveValidRoomSpawn(room, preferred) {
   return { x: Math.floor(ROOM_W / 2), y: Math.floor(ROOM_H / 2) };
 }
 
+
+function syncRoomEnemies(room) {
+  enemies.length = 0;
+  for (const enemy of room?.entities ?? []) {
+    enemy.alive = enemy.alive ?? true;
+    enemies.push(enemy);
+  }
+}
+
 function resolveInitialSpawn(room) {
   const startEntrance = room?.entrances?.['initial-spawn'];
   const spawnBase = {
@@ -105,6 +116,7 @@ function resolveInitialSpawn(room) {
   return resolveValidRoomSpawn(room, spawnBase);
 }
 
+syncRoomEnemies(activeRoom);
 const initialSpawn = resolveInitialSpawn(activeRoom);
 player.x = initialSpawn.x;
 player.y = initialSpawn.y;
@@ -245,7 +257,7 @@ function regenerateWorld(seed = null) {
   map = activeRoom.tiles;
   worldObjects = activeRoom.objects ?? [];
 
-  enemies.length = 0;
+  syncRoomEnemies(activeRoom);
   npcs.length = 0;
   projectiles = [];
   goldPiles = [];
@@ -281,6 +293,25 @@ devToolsPanel.setMapTools({
     const trimmed = pendingDevSeed.trim();
     const parsedSeed = trimmed.length > 0 && Number.isFinite(Number(trimmed)) ? Number(trimmed) : null;
     regenerateWorld(parsedSeed);
+  },
+  spawnEnemyGroup: () => {
+    const center = { x: Math.round(player.x + player.facing.x * 5), y: Math.round(player.y + player.facing.y * 5) };
+    const group = spawnEnemyGroup('swarm', center.x, center.y, {
+      room: activeRoom,
+      groupSize: 4,
+    });
+    enemies.push(...group.enemies);
+    activeRoom.entities = [...enemies];
+    logDev('Spawned enemy group', { count: group.enemies.length, center });
+  },
+  killAllEnemies: () => {
+    for (const enemy of enemies) enemy.alive = false;
+    logDev('All enemies killed');
+  },
+  toggleEnemyAi: () => {
+    enemyAiEnabled = !enemyAiEnabled;
+    logDev('Enemy AI toggled', { enabled: enemyAiEnabled });
+    return enemyAiEnabled;
   },
 });
 
@@ -749,9 +780,15 @@ function tick(now) {
   const devCapturing = devToolsPanel.isCapturingInput();
   if (!dialogueManager.isOpen && !diagMinimalMode && !devCapturing) {
     handlePlayer(dt);
-    updateEnemies(enemies, player, dt, runtimeConfig);
-
-    updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem, runtimeConfig);
+    if (enemyAiEnabled) {
+      updateEnemies(enemies, player, dt, runtimeConfig);
+      updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem, runtimeConfig);
+    } else {
+      for (const enemy of enemies) {
+        enemy.vx = 0;
+        enemy.vy = 0;
+      }
+    }
 
     updateProjectileAnimation(projectiles, dt, runtimeConfig);
     const combat = updateProjectiles(
@@ -801,6 +838,7 @@ function tick(now) {
     camera.hasFollowTarget = false;
     renderer.lastCameraX = Number.NaN;
     renderer.lastCameraY = Number.NaN;
+    syncRoomEnemies(activeRoom);
   }
 
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1, runtimeConfig);

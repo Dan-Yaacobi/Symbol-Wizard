@@ -353,7 +353,34 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, activ
       drawCell(renderer, { glyph: '■', fg: '#ffdf55' }, tile.x - camera.x, tile.y - camera.y);
     }
   }
+
+  if (debugOptions.showEnemySpawnZones) {
+    const enemyOverlay = activeRoom?.debugOverlay;
+    const safety = enemyOverlay?.enemySafetySettings ?? {};
+
+    for (const tile of enemyOverlay?.enemySpawnPoints ?? []) {
+      drawCell(renderer, { glyph: '✦', fg: '#ff7ee2' }, tile.x - camera.x, tile.y - camera.y);
+    }
+
+    for (const center of enemyOverlay?.enemyGroupCenters ?? []) {
+      drawCell(renderer, { glyph: '◎', fg: '#ff3cbf' }, center.x - camera.x, center.y - camera.y);
+    }
+
+    const drawSafetyRing = (anchors, radius, color) => {
+      const dist = Math.max(1, Number(radius) || 1);
+      for (const anchor of anchors ?? []) drawCircle(anchor.x, anchor.y, dist, '·', color);
+    };
+
+    drawSafetyRing(enemyOverlay?.entranceSafetyAnchors, safety.minDistanceFromEntrance, '#7ec7ff');
+    drawSafetyRing(enemyOverlay?.exitSafetyAnchors, safety.minDistanceFromExit, '#ffe38a');
+
+    const pathDist = Math.max(1, Number(safety.minDistanceFromPath) || 1);
+    for (const tile of enemyOverlay?.pathSafetyTiles ?? []) {
+      drawCircle(tile.x, tile.y, pathDist, '·', '#7effb4');
+    }
+  }
 }
+
 
 function drawDebugCursorOverlay(renderer, camera, mouse) {
   if (!mouse) return;
