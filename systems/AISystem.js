@@ -1,4 +1,4 @@
-export function updateEnemies(enemies, player, dt) {
+export function updateEnemies(enemies, player, dt, config = null) {
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
 
@@ -32,8 +32,16 @@ export function updateEnemies(enemies, player, dt) {
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy);
     const len = distance || 1;
-    const attackRange = enemy.attackRange ?? 3;
+    const attackRangeMult = config?.get?.('enemies.attackRangeMultiplier') ?? 1;
+    const aggroRange = config?.get?.('enemies.aggroRange') ?? 26;
+    const disengageRange = config?.get?.('enemies.disengageRange') ?? 40;
+    const attackRange = (enemy.attackRange ?? 3) * attackRangeMult;
     const inAttackRange = distance <= attackRange;
+    if (distance > disengageRange || distance > aggroRange) {
+      enemy.vx = 0;
+      enemy.vy = 0;
+      continue;
+    }
 
     if (!inAttackRange) {
       enemy.isWindingUp = false;
@@ -42,8 +50,9 @@ export function updateEnemies(enemies, player, dt) {
       enemy.attackDamageApplied = false;
 
       const jitter = enemy.kind === 'slime' ? Math.sin(performance.now() * 0.01 + enemy.x) * 0.3 : 0;
-      enemy.vx = (dx / len) * enemy.speed + jitter;
-      enemy.vy = (dy / len) * enemy.speed;
+      const speedMult = config?.get?.('enemies.moveSpeedMultiplier') ?? 1;
+      enemy.vx = (dx / len) * enemy.speed * speedMult + jitter;
+      enemy.vy = (dy / len) * enemy.speed * speedMult;
       enemy.x += enemy.vx * dt;
       enemy.y += enemy.vy * dt;
       continue;
@@ -72,7 +81,8 @@ export function updateEnemies(enemies, player, dt) {
         enemy.isAttacking = false;
         enemy.attackElapsed = 0;
         enemy.attackDamageApplied = false;
-        enemy.attackTimer = enemy.attackCooldown ?? 0.8;
+        const cooldownMult = config?.get?.('enemies.attackCooldownMultiplier') ?? 1;
+        enemy.attackTimer = (enemy.attackCooldown ?? 0.8) * cooldownMult;
       }
       continue;
     }

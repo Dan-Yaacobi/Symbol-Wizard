@@ -51,15 +51,19 @@ export function updateProjectiles(
   abilitySystem = null,
   worldObjects = [],
   onDestructibleDestroyed = null,
+  config = null,
 ) {
   const deadProjectiles = new Set();
   const slain = [];
 
   for (const p of projectiles) {
     updateProjectileTrail(p, dt);
-    p.ttl -= dt;
-    p.x += p.dx * p.speed * dt;
-    p.y += p.dy * p.speed * dt;
+    const speedMult = config?.get?.('combat.projectileSpeedMultiplier') ?? 1;
+    const ttlMult = config?.get?.('combat.projectileLifetimeMultiplier') ?? 1;
+    p.ttl -= dt / Math.max(0.01, ttlMult);
+    p.x += p.dx * p.speed * speedMult * dt;
+    p.y += p.dy * p.speed * speedMult * dt;
+    p.radius = config?.get?.('combat.projectileCollisionRadius') ?? p.radius;
 
     if (p.ttl <= 0) deadProjectiles.add(p);
 

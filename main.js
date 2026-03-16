@@ -13,6 +13,8 @@ import { renderWorld } from './systems/RenderSystem.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
 import { ChatBox } from './ui/ChatBox.js';
 import { drawHUD } from './ui/HUD.js';
+import { RuntimeConfigRegistry } from './devtools/RuntimeConfig.js';
+import { DevToolsPanel } from './devtools/DevToolsPanel.js';
 import { dialogueTree } from './systems/DialogueSystem.js';
 import { DialogueManager } from './systems/DialogueManager.js';
 import { abilityDefinitions, defaultAbilitySlots } from './data/abilities.js';
@@ -20,6 +22,8 @@ import { AbilitySystem } from './systems/AbilitySystem.js';
 import { AbilityBar } from './ui/AbilityBar.js';
 import { SkillTreeWindow } from './ui/SkillTreeWindow.js';
 import { PrefabEditorScreen } from './ui/PrefabEditorScreen.js';
+import { palette } from './entities/SpriteLibrary.js';
+import { visualTheme } from './data/VisualTheme.js';
 import { rollObjectLoot, tryInteractInFront } from './systems/ObjectInteractionSystem.js';
 import { loadObjectsFromFolder } from './world/ObjectLibrary.js';
 import {
@@ -42,6 +46,8 @@ const camera = new Camera(VIEW_W, VIEW_H, ROOM_W, ROOM_H);
 const viewport = new Viewport(canvas);
 const input = new Input(canvas, viewport, camera, renderer.cellW, renderer.cellH);
 const chat = new ChatBox();
+const runtimeConfig = new RuntimeConfigRegistry();
+const devToolsPanel = new DevToolsPanel(runtimeConfig);
 
 await loadObjectsFromFolder('./assets/objects');
 
@@ -95,7 +101,7 @@ if (activeRoom.entrances['initial-spawn']) {
 camera.follow(player);
 let projectiles = [];
 let goldPiles = [];
-const combatTextSystem = new CombatTextSystem();
+const combatTextSystem = new CombatTextSystem(runtimeConfig);
 
 const abilitySystem = new AbilitySystem({
   definitions: abilityDefinitions,
@@ -134,6 +140,13 @@ const skillTree = new SkillTreeWindow({ root: uiRoot, abilitySystem, player });
 const prefabEditor = new PrefabEditorScreen();
 await prefabEditor.initialize();
 let prefabEditorToggleLatch = false;
+let f1Latch = false;
+let f2Latch = false;
+let f3Latch = false;
+let f5Latch = false;
+let f6Latch = false;
+let f8Latch = false;
+let f9Latch = false;
 
 const objectEditorButton = document.createElement('button');
 objectEditorButton.type = 'button';
@@ -443,8 +456,14 @@ function handlePlayer(dt) {
   moveX /= magnitude;
   moveY /= magnitude;
 
-  player.vx = moveX * player.speed;
-  player.vy = moveY * player.speed;
+  const targetSpeed = runtimeConfig.get('player.speed');
+  const accel = runtimeConfig.get('player.acceleration');
+  const decel = runtimeConfig.get('player.deceleration');
+  const targetVx = moveX * targetSpeed;
+  const targetVy = moveY * targetSpeed;
+  const blend = Math.min(1, ((Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01) ? accel : decel) * dt);
+  player.vx += (targetVx - player.vx) * blend;
+  player.vy += (targetVy - player.vy) * blend;
   if (Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01) {
     player.facing = { x: Math.round(moveX), y: Math.round(moveY) };
   }
@@ -466,6 +485,7 @@ function handlePlayer(dt) {
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
   player.castTimer = Math.max(0, (player.castTimer ?? 0) - dt);
+  player.castCooldown = runtimeConfig.get('player.castDuration');
 
   if (!dialogueManager.isOpen) {
     const interactDown = input.isDown('e');
@@ -527,9 +547,48 @@ function tick(now) {
     logDiag('game root _ready');
   }
 
-  const prefabToggleDown = input.isDown('f6');
+  player.speed = runtimeConfig.get('player.speed');
+  player.frameDurations.walk = runtimeConfig.get('sprites.playerWalkFrameDuration');
+  player.frameDurations.idle = runtimeConfig.get('sprites.playerIdleFrameDuration');
+  palette.player = runtimeConfig.get('palette.playerPrimary');
+  palette.playerAccent = runtimeConfig.get('palette.playerAccent');
+  palette.slime = runtimeConfig.get('palette.enemySlime');
+  palette.skeleton = runtimeConfig.get('palette.enemySkeleton');
+  palette.floorFg = runtimeConfig.get('palette.worldFloorFg');
+  palette.wallFg = runtimeConfig.get('palette.worldWallFg');
+  visualTheme.colors.text = runtimeConfig.get('palette.uiText');
+  visualTheme.colors.worldBackground = runtimeConfig.get('palette.worldBackground');
+
+  const prefabToggleDown = input.isDown('f7');
   if (prefabToggleDown && !prefabEditorToggleLatch) prefabEditor.toggle();
   prefabEditorToggleLatch = prefabToggleDown;
+
+  const f1Down = input.isDown('f1');
+  if (f1Down && !f1Latch) devToolsPanel.toggleOpen();
+  f1Latch = f1Down;
+
+  const f2Down = input.isDown('f2');
+  if (f2Down && !f2Latch) runtimeConfig.set('debug.overlaysEnabled', !runtimeConfig.get('debug.overlaysEnabled'));
+  f2Latch = f2Down;
+
+  const f3Down = input.isDown('f3');
+  if (f3Down && !f3Latch) runtimeConfig.set('debug.showStatsHud', !runtimeConfig.get('debug.showStatsHud'));
+  f3Latch = f3Down;
+
+  const f5Down = input.isDown('f5');
+  if (f5Down && !f5Latch) runtimeConfig.saveCurrentConfig();
+  f5Latch = f5Down;
+
+  const f6Down = input.isDown('f6');
+  if (f6Down && !f6Latch) runtimeConfig.savePreset(`quick-${new Date().toISOString().slice(11, 19)}`);
+  f6Latch = f6Down;
+
+  const f9Down = input.isDown('f9');
+  if (f9Down && !f9Latch) {
+    if (input.isDown('shift')) runtimeConfig.resetAll();
+    else runtimeConfig.loadSavedConfig();
+  }
+  f9Latch = f9Down;
 
   if (prefabEditor.isOpen) {
     renderer.beginFrame();
@@ -546,28 +605,46 @@ function tick(now) {
       combatTextSystem,
       abilitySystem.getActiveEffects(),
       input.mouse,
+      devToolsPanel.getRenderDebugOptions(),
     );
     drawHUD(renderer, player, abilitySystem);
     renderer.composite();
-    input.endFrame();
+    if (devToolsPanel.open && input.mouse.clicked) {
+    const wx = Math.round(input.mouse.worldX);
+    const wy = Math.round(input.mouse.worldY);
+    const selectedEntity = [player, ...enemies, ...npcs, ...worldObjects].find((entity) => Math.round(entity.x) === wx && Math.round(entity.y) === wy) ?? null;
+    const tile = map?.[wy]?.[wx] ? { x: wx, y: wy, ...map[wy][wx] } : null;
+    devToolsPanel.setInspectorData({ selectedEntity, selectedTile: tile });
+  }
+
+  devToolsPanel.updateStats(`FPS ${Math.round(1 / Math.max(0.001, dt))} | Frame ${(dt * 1000).toFixed(1)}ms | E:${enemies.length + npcs.length + 1} P:${projectiles.length} FX:${abilitySystem.getActiveEffects().length} | Cam ${camera.x.toFixed(1)},${camera.y.toFixed(1)} | Player ${player.x.toFixed(1)},${player.y.toFixed(1)} | Preset ${runtimeConfig.lastPresetName ?? 'default'}`);
+
+  input.endFrame();
     requestAnimationFrame(tick);
     return;
+  }
+
+  for (const enemy of enemies) {
+    enemy.frameDurations.walk = runtimeConfig.get('sprites.enemyWalkFrameDuration');
+    enemy.frameDurations.idle = runtimeConfig.get('sprites.enemyIdleFrameDuration');
+    enemy.hitFlashDuration = runtimeConfig.get('enemies.hitFlashDuration');
   }
 
   if (!diagMinimalMode) {
     updateTownNpcs(npcs, map, dt);
     for (const npc of npcs) {
-      updateEntityAnimation(npc, dt, Math.hypot(npc.vx, npc.vy) > 0.1);
+      updateEntityAnimation(npc, dt, Math.hypot(npc.vx, npc.vy) > 0.1, runtimeConfig);
     }
   }
 
-  if (!dialogueManager.isOpen && !diagMinimalMode) {
+  const devCapturing = devToolsPanel.isCapturingInput();
+  if (!dialogueManager.isOpen && !diagMinimalMode && !devCapturing) {
     handlePlayer(dt);
-    updateEnemies(enemies, player, dt);
+    updateEnemies(enemies, player, dt, runtimeConfig);
 
     updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem);
 
-    updateProjectileAnimation(projectiles, dt);
+    updateProjectileAnimation(projectiles, dt, runtimeConfig);
     const combat = updateProjectiles(
       projectiles,
       map,
@@ -584,6 +661,7 @@ function tick(now) {
         if (drop.type === 'gold' && drop.amount <= 0) return;
         goldPiles.push(drop);
       },
+      runtimeConfig,
     );
     projectiles = combat.projectiles;
     for (const dead of combat.slain) {
@@ -616,10 +694,13 @@ function tick(now) {
     renderer.lastCameraY = Number.NaN;
   }
 
-  updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1);
+  updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1, runtimeConfig);
 
   if (!diagMinimalMode) {
     dialogueManager.update(dt);
+    camera.smoothingFactor = runtimeConfig.get('camera.smoothing');
+    camera.pixelSnapping = runtimeConfig.get('camera.pixelSnapping');
+    camera.zoom = runtimeConfig.get('camera.zoom');
     camera.update(dt);
     camera.follow(player);
   }
@@ -654,6 +735,7 @@ function tick(now) {
     combatTextSystem,
     abilitySystem.getActiveEffects(),
     input.mouse,
+    devToolsPanel.getRenderDebugOptions(),
   );
   drawHUD(renderer, player, abilitySystem);
   if (roomTransitionSystem.fadeAlpha > 0) {
@@ -664,6 +746,16 @@ function tick(now) {
     renderer.ui.ctx.restore();
   }
   renderer.composite();
+
+  if (devToolsPanel.open && input.mouse.clicked) {
+    const wx = Math.round(input.mouse.worldX);
+    const wy = Math.round(input.mouse.worldY);
+    const selectedEntity = [player, ...enemies, ...npcs, ...worldObjects].find((entity) => Math.round(entity.x) === wx && Math.round(entity.y) === wy) ?? null;
+    const tile = map?.[wy]?.[wx] ? { x: wx, y: wy, ...map[wy][wx] } : null;
+    devToolsPanel.setInspectorData({ selectedEntity, selectedTile: tile });
+  }
+
+  devToolsPanel.updateStats(`FPS ${Math.round(1 / Math.max(0.001, dt))} | Frame ${(dt * 1000).toFixed(1)}ms | E:${enemies.length + npcs.length + 1} P:${projectiles.length} FX:${abilitySystem.getActiveEffects().length} | Cam ${camera.x.toFixed(1)},${camera.y.toFixed(1)} | Player ${player.x.toFixed(1)},${player.y.toFixed(1)} | Preset ${runtimeConfig.lastPresetName ?? 'default'}`);
 
   input.endFrame();
 

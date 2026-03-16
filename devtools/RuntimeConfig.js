@@ -1,0 +1,306 @@
+const STORAGE_KEY = 'symbolWizard.devtools.runtimeConfig.v1';
+const PRESETS_KEY = 'symbolWizard.devtools.runtimePresets.v1';
+const PINNED_KEY = 'symbolWizard.devtools.pinnedFields.v1';
+
+export const DEFAULT_CONFIG = {
+  gameplay: {
+    compactMode: false,
+    showOnlyDirty: false,
+  },
+  player: {
+    speed: 20,
+    acceleration: 90,
+    deceleration: 110,
+    collisionSlide: true,
+    castDuration: 0.2,
+    animationSpeedMultiplier: 1,
+    spriteBobAmount: 0,
+    glyphOffsetX: 0,
+    glyphOffsetY: 0,
+  },
+  enemies: {
+    aggroRange: 26,
+    disengageRange: 40,
+    moveSpeedMultiplier: 1,
+    attackRangeMultiplier: 1,
+    attackCooldownMultiplier: 1,
+    chaseStopDistance: 0.1,
+    hitFlashDuration: 0.12,
+    animationSpeedMultiplier: 1,
+  },
+  combat: {
+    projectileSpeedMultiplier: 1,
+    projectileLifetimeMultiplier: 1,
+    projectileCollisionRadius: 1.1,
+    damageTextSpeed: 13,
+    damageTextLifetimeMin: 0.9,
+    damageTextLifetimeMax: 1.3,
+    damageTextVerticalDrift: 3.8,
+    critTextScale: 3.05,
+    critPopDuration: 0.14,
+  },
+  camera: {
+    smoothing: 0.14,
+    zoom: 1,
+    pixelSnapping: true,
+    lookAhead: 0,
+    deadzone: 0,
+    shakeIntensityMultiplier: 1,
+  },
+  visual: {
+    uiScale: 1,
+    effectDurationMultiplier: 1,
+    hitFlashDuration: 0.12,
+    globalGlyphOffsetX: 0,
+    globalGlyphOffsetY: 0,
+    layerOpacityEntities: 1,
+    layerOpacityEffects: 1,
+  },
+  palette: {
+    playerPrimary: '#e6d6ff',
+    playerAccent: '#ffd67a',
+    enemySlime: '#8ee2a8',
+    enemySkeleton: '#dbe6f6',
+    worldFloorFg: '#516078',
+    worldWallFg: '#8f9bb0',
+    damageColor: '#ff7f87',
+    critColor: '#ff8ef0',
+    healColor: '#84d79a',
+    uiText: '#d6e6ff',
+    worldBackground: '#0b1016',
+  },
+  sprites: {
+    playerWalkFrameDuration: 0.12,
+    playerIdleFrameDuration: 0.45,
+    enemyWalkFrameDuration: 0.14,
+    enemyIdleFrameDuration: 0.32,
+    projectileFrameDuration: 0.06,
+    animationPlaybackSpeed: 1,
+    previewState: 'none',
+    pauseOnFrame: -1,
+    manualFrame: 0,
+  },
+  debug: {
+    overlaysEnabled: false,
+    showStatsHud: false,
+    collisionBounds: false,
+    entityFootprints: false,
+    attackRanges: false,
+    aggroRanges: false,
+    projectileCollision: false,
+    chaseLines: false,
+    cameraCenter: false,
+    grid: false,
+    selectedEntity: false,
+    selectedTile: false,
+    layerLabels: false,
+    facingMarker: false,
+  },
+};
+
+export const CONFIG_FIELDS = [
+  { path: 'gameplay.compactMode', label: 'Compact Panel Mode', section: 'Gameplay', type: 'boolean', tooltip: 'Reduce spacing in the dev panel.' },
+  { path: 'gameplay.showOnlyDirty', label: 'Show only changed values', section: 'Gameplay', type: 'boolean' },
+  { path: 'player.speed', label: 'Move Speed', section: 'Player', type: 'number', min: 1, max: 60, step: 0.5 },
+  { path: 'player.acceleration', label: 'Acceleration', section: 'Player', type: 'number', min: 10, max: 300, step: 1 },
+  { path: 'player.deceleration', label: 'Deceleration', section: 'Player', type: 'number', min: 10, max: 300, step: 1 },
+  { path: 'player.castDuration', label: 'Cast Duration', section: 'Player', type: 'number', min: 0.05, max: 2, step: 0.01 },
+  { path: 'player.animationSpeedMultiplier', label: 'Animation Speed Mult', section: 'Player', type: 'number', min: 0.25, max: 4, step: 0.05 },
+  { path: 'enemies.aggroRange', label: 'Aggro Range', section: 'Enemies', type: 'number', min: 2, max: 80, step: 0.5 },
+  { path: 'enemies.disengageRange', label: 'Disengage Range', section: 'Enemies', type: 'number', min: 2, max: 120, step: 0.5 },
+  { path: 'enemies.moveSpeedMultiplier', label: 'Move Speed Mult', section: 'Enemies', type: 'number', min: 0.2, max: 3, step: 0.05 },
+  { path: 'enemies.attackRangeMultiplier', label: 'Attack Range Mult', section: 'Enemies', type: 'number', min: 0.3, max: 3, step: 0.05 },
+  { path: 'enemies.attackCooldownMultiplier', label: 'Attack Cooldown Mult', section: 'Enemies', type: 'number', min: 0.2, max: 3, step: 0.05 },
+  { path: 'enemies.hitFlashDuration', label: 'Hit Flash Duration', section: 'Enemies', type: 'number', min: 0.01, max: 1, step: 0.01 },
+  { path: 'combat.projectileSpeedMultiplier', label: 'Projectile Speed Mult', section: 'Combat', type: 'number', min: 0.2, max: 4, step: 0.05 },
+  { path: 'combat.projectileLifetimeMultiplier', label: 'Projectile Lifetime Mult', section: 'Combat', type: 'number', min: 0.2, max: 4, step: 0.05 },
+  { path: 'combat.projectileCollisionRadius', label: 'Projectile Collision Radius', section: 'Combat', type: 'number', min: 0.2, max: 4, step: 0.05 },
+  { path: 'combat.damageTextSpeed', label: 'Damage Text Speed', section: 'Combat', type: 'number', min: 2, max: 40, step: 0.5 },
+  { path: 'combat.damageTextLifetimeMin', label: 'Damage Text Lifetime Min', section: 'Combat', type: 'number', min: 0.1, max: 5, step: 0.05 },
+  { path: 'combat.damageTextLifetimeMax', label: 'Damage Text Lifetime Max', section: 'Combat', type: 'number', min: 0.1, max: 5, step: 0.05 },
+  { path: 'combat.damageTextVerticalDrift', label: 'Damage Text Vertical Offset', section: 'Combat', type: 'number', min: 0, max: 20, step: 0.1 },
+  { path: 'combat.critTextScale', label: 'Crit Text Scale', section: 'Combat', type: 'number', min: 1, max: 6, step: 0.05 },
+  { path: 'combat.critPopDuration', label: 'Crit Pop Duration', section: 'Combat', type: 'number', min: 0.01, max: 1, step: 0.01 },
+  { path: 'camera.smoothing', label: 'Smoothing', section: 'Camera', type: 'number', min: 0, max: 1, step: 0.01 },
+  { path: 'camera.zoom', label: 'Zoom', section: 'Camera', type: 'number', min: 0.5, max: 3, step: 0.05 },
+  { path: 'camera.pixelSnapping', label: 'Pixel Snapping', section: 'Camera', type: 'boolean' },
+  { path: 'camera.shakeIntensityMultiplier', label: 'Shake Intensity Mult', section: 'Camera', type: 'number', min: 0, max: 4, step: 0.05 },
+  { path: 'visual.uiScale', label: 'UI Scale', section: 'Visual', type: 'number', min: 0.7, max: 1.8, step: 0.05 },
+  { path: 'visual.effectDurationMultiplier', label: 'Effect Duration Mult', section: 'Visual', type: 'number', min: 0.25, max: 3, step: 0.05 },
+  { path: 'visual.globalGlyphOffsetX', label: 'Glyph Offset X', section: 'Visual', type: 'number', min: -4, max: 4, step: 0.25 },
+  { path: 'visual.globalGlyphOffsetY', label: 'Glyph Offset Y', section: 'Visual', type: 'number', min: -4, max: 4, step: 0.25 },
+  { path: 'palette.playerPrimary', label: 'Player Primary', section: 'Palette / Colors', type: 'color' },
+  { path: 'palette.playerAccent', label: 'Player Accent', section: 'Palette / Colors', type: 'color' },
+  { path: 'palette.enemySlime', label: 'Enemy Slime', section: 'Palette / Colors', type: 'color' },
+  { path: 'palette.enemySkeleton', label: 'Enemy Skeleton', section: 'Palette / Colors', type: 'color' },
+  { path: 'palette.worldFloorFg', label: 'Floor FG', section: 'Palette / Colors', type: 'color' },
+  { path: 'palette.worldWallFg', label: 'Wall FG', section: 'Palette / Colors', type: 'color' },
+  { path: 'palette.damageColor', label: 'Damage Color', section: 'Palette / Colors', type: 'color' },
+  { path: 'palette.critColor', label: 'Crit Color', section: 'Palette / Colors', type: 'color' },
+  { path: 'palette.healColor', label: 'Heal Color', section: 'Palette / Colors', type: 'color' },
+  { path: 'palette.uiText', label: 'UI Text', section: 'Palette / Colors', type: 'color' },
+  { path: 'palette.worldBackground', label: 'World Background', section: 'Palette / Colors', type: 'color' },
+  { path: 'sprites.playerWalkFrameDuration', label: 'Player Walk Frame Duration', section: 'Sprites / Animation', type: 'number', min: 0.01, max: 1, step: 0.01 },
+  { path: 'sprites.playerIdleFrameDuration', label: 'Player Idle Frame Duration', section: 'Sprites / Animation', type: 'number', min: 0.01, max: 2, step: 0.01 },
+  { path: 'sprites.enemyWalkFrameDuration', label: 'Enemy Walk Frame Duration', section: 'Sprites / Animation', type: 'number', min: 0.01, max: 1, step: 0.01 },
+  { path: 'sprites.enemyIdleFrameDuration', label: 'Enemy Idle Frame Duration', section: 'Sprites / Animation', type: 'number', min: 0.01, max: 2, step: 0.01 },
+  { path: 'sprites.projectileFrameDuration', label: 'Projectile Frame Duration', section: 'Sprites / Animation', type: 'number', min: 0.01, max: 1, step: 0.01 },
+  { path: 'sprites.animationPlaybackSpeed', label: 'Animation Playback Speed', section: 'Sprites / Animation', type: 'number', min: 0.1, max: 4, step: 0.05 },
+  { path: 'sprites.previewState', label: 'Preview State', section: 'Sprites / Animation', type: 'enum', options: ['none', 'idle', 'walk', 'cast', 'attack'] },
+  { path: 'sprites.pauseOnFrame', label: 'Pause on Frame', section: 'Sprites / Animation', type: 'number', min: -1, max: 10, step: 1, tooltip: '-1 disables frame lock.' },
+  { path: 'debug.collisionBounds', label: 'Collision Bounds', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.entityFootprints', label: 'Entity Footprints', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.attackRanges', label: 'Attack Ranges', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.aggroRanges', label: 'Aggro Ranges', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.projectileCollision', label: 'Projectile Collision', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.chaseLines', label: 'Chase Lines', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.cameraCenter', label: 'Camera Center / Deadzone', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.grid', label: 'Grid Overlay', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.selectedEntity', label: 'Selected Entity Highlight', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.selectedTile', label: 'Selected Tile Highlight', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.layerLabels', label: 'Render Layer Labels', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.facingMarker', label: 'Facing Marker', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.overlaysEnabled', label: 'Master Overlay Toggle', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.showStatsHud', label: 'Compact Stats HUD', section: 'Performance', type: 'boolean' },
+];
+
+function deepClone(v) { return JSON.parse(JSON.stringify(v)); }
+function getByPath(obj, path) { return path.split('.').reduce((acc, key) => acc?.[key], obj); }
+function setByPath(obj, path, value) {
+  const keys = path.split('.');
+  let ptr = obj;
+  for (let i = 0; i < keys.length - 1; i += 1) {
+    ptr[keys[i]] ??= {};
+    ptr = ptr[keys[i]];
+  }
+  ptr[keys[keys.length - 1]] = value;
+}
+
+export class RuntimeConfigRegistry {
+  constructor() {
+    this.defaults = deepClone(DEFAULT_CONFIG);
+    this.current = deepClone(DEFAULT_CONFIG);
+    this.fields = CONFIG_FIELDS;
+    this.fieldMap = new Map(this.fields.map((field) => [field.path, field]));
+    this.listeners = new Set();
+    this.undoStack = [];
+    this.redoStack = [];
+    this.maxHistory = 120;
+    this.pinned = this.#readStorage(PINNED_KEY, []);
+    this.presets = this.#readStorage(PRESETS_KEY, {});
+    this.lastPresetName = null;
+    this.loadSavedConfig();
+  }
+
+  subscribe(listener) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+  get(path) { return getByPath(this.current, path); }
+  getDefault(path) { return getByPath(this.defaults, path); }
+  isDirty(path) { return JSON.stringify(this.get(path)) !== JSON.stringify(this.getDefault(path)); }
+
+  set(path, value, options = {}) {
+    const field = this.fieldMap.get(path);
+    if (!field) return;
+    const previous = this.get(path);
+    const next = this.#coerce(field, value);
+    if (JSON.stringify(previous) === JSON.stringify(next)) return;
+    setByPath(this.current, path, next);
+
+    if (!options.skipHistory) {
+      this.undoStack.push({ path, previous, next });
+      if (this.undoStack.length > this.maxHistory) this.undoStack.shift();
+      this.redoStack.length = 0;
+    }
+    this.#emit(path, previous, next);
+  }
+
+  resetField(path) { this.set(path, this.getDefault(path)); }
+  resetSection(sectionName) {
+    for (const field of this.fields) {
+      if (field.section === sectionName) this.resetField(field.path);
+    }
+  }
+  resetAll() {
+    this.current = deepClone(this.defaults);
+    this.#emit('*', null, null);
+  }
+
+  undo() {
+    const change = this.undoStack.pop();
+    if (!change) return;
+    setByPath(this.current, change.path, change.previous);
+    this.redoStack.push(change);
+    this.#emit(change.path, change.next, change.previous);
+  }
+
+  redo() {
+    const change = this.redoStack.pop();
+    if (!change) return;
+    setByPath(this.current, change.path, change.next);
+    this.undoStack.push(change);
+    this.#emit(change.path, change.previous, change.next);
+  }
+
+  saveCurrentConfig() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.current));
+  }
+
+  loadSavedConfig() {
+    const saved = this.#readStorage(STORAGE_KEY, null);
+    if (!saved) return;
+    this.current = { ...deepClone(this.defaults), ...saved };
+    this.#emit('*', null, null);
+  }
+
+  savePreset(name) {
+    if (!name) return;
+    this.presets[name] = deepClone(this.current);
+    this.lastPresetName = name;
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(this.presets));
+  }
+
+  loadPreset(name) {
+    if (!name || !this.presets[name]) return;
+    this.current = deepClone(this.presets[name]);
+    this.lastPresetName = name;
+    this.#emit('*', null, null);
+  }
+
+  togglePin(path) {
+    if (this.pinned.includes(path)) {
+      this.pinned = this.pinned.filter((entry) => entry !== path);
+    } else {
+      this.pinned.push(path);
+    }
+    localStorage.setItem(PINNED_KEY, JSON.stringify(this.pinned));
+  }
+
+  serialize() { return deepClone(this.current); }
+
+  #coerce(field, value) {
+    if (field.type === 'number') {
+      const raw = Number(value);
+      const safe = Number.isFinite(raw) ? raw : this.get(field.path);
+      const min = Number.isFinite(field.min) ? field.min : -Infinity;
+      const max = Number.isFinite(field.max) ? field.max : Infinity;
+      return Math.max(min, Math.min(max, safe));
+    }
+    if (field.type === 'boolean') return Boolean(value);
+    if (field.type === 'enum') return field.options.includes(value) ? value : field.options[0];
+    if (field.type === 'color') return /^#([\da-fA-F]{6}|[\da-fA-F]{3})$/.test(String(value)) ? String(value) : this.get(field.path);
+    return value;
+  }
+
+  #emit(path, previous, value) {
+    for (const listener of this.listeners) listener({ path, previous, value, current: this.current });
+  }
+
+  #readStorage(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallback;
+      return JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
+  }
+}
