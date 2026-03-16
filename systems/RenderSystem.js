@@ -277,8 +277,26 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, debug
     }
   };
 
+  const drawLine = (x0, y0, x1, y1, glyph, fg) => {
+    const dx = x1 - x0;
+    const dy = y1 - y0;
+    const steps = Math.max(1, Math.ceil(Math.max(Math.abs(dx), Math.abs(dy))));
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const x = Math.round(x0 + dx * t) - camera.x;
+      const y = Math.round(y0 + dy * t) - camera.y;
+      drawCell(renderer, { glyph, fg }, x, y);
+    }
+  };
+
+  const drawBounds = (entity, color = '#ffc2c2') => {
+    if (!entity) return;
+    const radius = Math.max(0.5, entity.radius ?? 1);
+    drawCircle(entity.x, entity.y, radius, '·', color);
+  };
+
   if (debugOptions.attackRanges) enemies.forEach((enemy) => enemy.alive && drawCircle(enemy.x, enemy.y, enemy.attackRange ?? 3, '.', '#ff9f84'));
-  if (debugOptions.aggroRanges) enemies.forEach((enemy) => enemy.alive && drawCircle(enemy.x, enemy.y, 26, '.', '#84d8ff'));
+  if (debugOptions.aggroRanges) enemies.forEach((enemy) => enemy.alive && drawCircle(enemy.x, enemy.y, enemy.aggroRange ?? debugOptions.aggroRange ?? 26, '.', '#84d8ff'));
   if (debugOptions.projectileCollision) projectiles.forEach((p) => drawCircle(p.x, p.y, p.radius ?? 1, '·', '#90f0d1'));
 
   if (debugOptions.entityFootprints) {
@@ -294,6 +312,26 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, debug
 
   if (debugOptions.cameraCenter) {
     drawCell(renderer, { glyph: '+', fg: '#f9dd7b' }, Math.floor(camera.viewW / 2), Math.floor(camera.viewH / 2));
+  }
+
+
+  if (debugOptions.collisionBounds) {
+    drawBounds(player, '#ffe08a');
+    enemies.forEach((enemy) => enemy.alive && drawBounds(enemy, '#ff9e9e'));
+    projectiles.forEach((projectile) => drawBounds(projectile, '#8fd8ff'));
+  }
+
+  if (debugOptions.chaseLines && player) {
+    enemies.forEach((enemy) => {
+      if (!enemy.alive) return;
+      drawLine(enemy.x, enemy.y, player.x, player.y, '·', '#8ec5ff');
+    });
+  }
+
+  if (debugOptions.layerLabels) {
+    drawCell(renderer, { glyph: 'W', fg: '#88c1ff' }, 1, 1);
+    drawCell(renderer, { glyph: 'E', fg: '#c8ff88' }, 3, 1);
+    drawCell(renderer, { glyph: 'U', fg: '#ffcc88' }, 5, 1);
   }
 
   if (debugOptions.selectedEntity && debugOptions.selectedEntityRef) drawCircle(debugOptions.selectedEntityRef.x, debugOptions.selectedEntityRef.y, 2.2, '*', '#fff091');
