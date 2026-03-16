@@ -14,6 +14,13 @@ import { renderWorld } from './systems/RenderSystem.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
 import { ChatBox } from './ui/ChatBox.js';
 import { drawHUD } from './ui/HUD.js';
+import {
+  EnemyTuningOverrides,
+  applyEnemyTuningToEnemy,
+  clearEnemyTuningOverrides,
+  getEnemyTuningValue,
+  setEnemyTuningOverride,
+} from './entities/Enemy.js';
 import { RuntimeConfigRegistry } from './devtools/RuntimeConfig.js';
 import { DevToolsPanel } from './devtools/DevToolsPanel.js';
 import { dialogueTree } from './systems/DialogueSystem.js';
@@ -64,6 +71,7 @@ const player = new Player(Math.floor(ROOM_W / 2), Math.floor(ROOM_H / 2));
 player.facing = { x: 0, y: 1 };
 const enemies = [];
 let enemyAiEnabled = true;
+let applyEnemyTuningToExistingEnemies = false;
 const npcs = [];
 let worldObjects = activeRoom.objects ?? [];
 const roomTransitionSystem = new RoomTransitionSystem({ biomeGenerator, fadeDurationMs: 150 });
@@ -107,6 +115,10 @@ function syncRoomEnemies(room) {
   }
 }
 
+function applyEnemyTuningToAllCurrentEnemies() {
+  for (const enemy of enemies) applyEnemyTuningToEnemy(enemy);
+}
+
 function resolveInitialSpawn(room) {
   const startEntrance = room?.entrances?.['initial-spawn'];
   const spawnBase = {
@@ -117,6 +129,7 @@ function resolveInitialSpawn(room) {
 }
 
 syncRoomEnemies(activeRoom);
+if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
 const initialSpawn = resolveInitialSpawn(activeRoom);
 player.x = initialSpawn.x;
 player.y = initialSpawn.y;
@@ -258,6 +271,7 @@ function regenerateWorld(seed = null) {
   worldObjects = activeRoom.objects ?? [];
 
   syncRoomEnemies(activeRoom);
+  if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
   npcs.length = 0;
   projectiles = [];
   goldPiles = [];
@@ -284,6 +298,28 @@ function regenerateWorld(seed = null) {
   logDev('Map regenerated', { seed: currentBiomeSeed, biomeId: currentBiomeId });
 }
 
+devToolsPanel.setEnemyTuningTools({
+  getValue: (type, parameter) => getEnemyTuningValue(type, parameter),
+  isOverridden: (type, parameter) => Number.isFinite(EnemyTuningOverrides[type]?.[parameter]),
+  setOverride: (type, parameter, value) => {
+    setEnemyTuningOverride(type, parameter, value);
+    if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
+    devToolsPanel.render();
+  },
+  clearAllOverrides: () => {
+    clearEnemyTuningOverrides();
+    if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
+    devToolsPanel.render();
+    logDev('Enemy tuning overrides reset');
+  },
+  getApplyToExistingEnemies: () => applyEnemyTuningToExistingEnemies,
+  setApplyToExistingEnemies: (enabled) => {
+    applyEnemyTuningToExistingEnemies = Boolean(enabled);
+    if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
+    devToolsPanel.render();
+  },
+});
+
 devToolsPanel.setMapTools({
   getSeed: () => pendingDevSeed,
   setSeed: (seedValue) => {
@@ -300,6 +336,9 @@ devToolsPanel.setMapTools({
       room: activeRoom,
       groupSize: 4,
     });
+    if (applyEnemyTuningToExistingEnemies) {
+      for (const enemy of group.enemies) applyEnemyTuningToEnemy(enemy);
+    }
     enemies.push(...group.enemies);
     activeRoom.entities = [...enemies];
     logDev('Spawned enemy group', { count: group.enemies.length, center });
@@ -840,6 +879,7 @@ function tick(now) {
     renderer.lastCameraX = Number.NaN;
     renderer.lastCameraY = Number.NaN;
     syncRoomEnemies(activeRoom);
+    if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
   }
 
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1, runtimeConfig);

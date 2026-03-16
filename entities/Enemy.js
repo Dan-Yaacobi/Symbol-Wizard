@@ -8,7 +8,7 @@ export const ENEMY_BEHAVIOR = {
   FLANKER: 'flanker',
 };
 
-const ENEMY_TYPE_DEFS = {
+export const ENEMY_TYPE_DEFS = {
   spider: {
     spriteKey: 'spider',
     behavior: ENEMY_BEHAVIOR.CHASER,
@@ -22,6 +22,7 @@ const ENEMY_TYPE_DEFS = {
     attackHitTime: 0.08,
     hitKnockback: 7,
     radius: 1.6,
+    aggroRadius: 10,
   },
   wasp: {
     spriteKey: 'wasp',
@@ -32,8 +33,12 @@ const ENEMY_TYPE_DEFS = {
     attackRange: 10,
     retreatDistance: 4,
     attackCooldown: 1.2,
+    attackWindup: 0.4,
+    attackDuration: 0.3,
+    attackHitTime: 0.08,
     hitKnockback: 6,
     radius: 1.4,
+    aggroRadius: 12,
     projectileType: 'stingerProjectile',
   },
   forest_beetle: {
@@ -49,6 +54,7 @@ const ENEMY_TYPE_DEFS = {
     attackHitTime: 0.14,
     hitKnockback: 12,
     radius: 2.2,
+    aggroRadius: 9,
   },
   swarm_bug: {
     spriteKey: 'swarm_bug',
@@ -63,6 +69,7 @@ const ENEMY_TYPE_DEFS = {
     attackHitTime: 0.06,
     hitKnockback: 5,
     radius: 1.3,
+    aggroRadius: 8,
   },
   forest_mantis: {
     spriteKey: 'forest_mantis',
@@ -78,8 +85,29 @@ const ENEMY_TYPE_DEFS = {
     hitKnockback: 8,
     radius: 1.6,
     flankOrbitSpeed: 1.6,
+    aggroRadius: 11,
   },
 };
+
+export const ENEMY_TUNABLE_PARAMS = [
+  'hp',
+  'speed',
+  'attackDamage',
+  'attackRange',
+  'attackCooldown',
+  'attackWindup',
+  'attackDuration',
+  'attackHitTime',
+  'hitKnockback',
+  'radius',
+  'aggroRadius',
+  'retreatDistance',
+  'flankOrbitSpeed',
+];
+
+export const EnemyTuningOverrides = Object.fromEntries(
+  Object.keys(ENEMY_TYPE_DEFS).map((type) => [type, {}]),
+);
 
 const LEGACY_KIND_ALIASES = {
   slime: 'spider',
@@ -100,10 +128,65 @@ function resolveEnemyType(type) {
   return 'spider';
 }
 
+function getResolvedEnemyDef(type) {
+  const enemyType = resolveEnemyType(type);
+  return {
+    ...ENEMY_TYPE_DEFS[enemyType],
+    ...(EnemyTuningOverrides[enemyType] ?? {}),
+  };
+}
+
+export function setEnemyTuningOverride(type, parameter, value) {
+  const enemyType = resolveEnemyType(type);
+  if (!ENEMY_TUNABLE_PARAMS.includes(parameter)) return;
+  EnemyTuningOverrides[enemyType] ??= {};
+  if (value === null || value === undefined || !Number.isFinite(value)) {
+    delete EnemyTuningOverrides[enemyType][parameter];
+    return;
+  }
+  EnemyTuningOverrides[enemyType][parameter] = value;
+}
+
+export function clearEnemyTuningOverrides() {
+  for (const type of Object.keys(EnemyTuningOverrides)) {
+    EnemyTuningOverrides[type] = {};
+  }
+}
+
+export function getEnemyTuningValue(type, parameter) {
+  const resolved = getResolvedEnemyDef(type);
+  return resolved[parameter];
+}
+
+export function applyEnemyTuningToEnemy(enemy) {
+  if (!enemy) return;
+  const enemyType = resolveEnemyType(enemy.enemyType ?? enemy.kind);
+  const def = getResolvedEnemyDef(enemyType);
+
+  enemy.radius = def.radius ?? enemy.radius;
+  enemy.speed = def.speed ?? enemy.speed;
+  enemy.attackDamage = def.attackDamage ?? enemy.attackDamage;
+  enemy.attackRange = def.attackRange ?? enemy.attackRange;
+  enemy.retreatDistance = def.retreatDistance ?? 4;
+  enemy.attackCooldown = def.attackCooldown ?? enemy.attackCooldown;
+  enemy.attackWindup = def.attackWindup ?? 0.4;
+  enemy.attackDuration = def.attackDuration ?? 0.3;
+  enemy.attackHitTime = def.attackHitTime ?? 0.08;
+  enemy.hitKnockback = def.hitKnockback ?? 8;
+  enemy.flankOrbitSpeed = def.flankOrbitSpeed ?? 1.2;
+  enemy.aggroRadius = def.aggroRadius ?? 8;
+
+  if (Number.isFinite(def.hp)) {
+    const previousHp = Number.isFinite(enemy.hp) ? enemy.hp : def.hp;
+    enemy.maxHp = def.hp;
+    enemy.hp = Math.min(previousHp, def.hp);
+  }
+}
+
 export class Enemy extends Entity {
   constructor(type, x, y) {
     const enemyType = resolveEnemyType(type);
-    const def = ENEMY_TYPE_DEFS[enemyType];
+    const def = getResolvedEnemyDef(enemyType);
 
     super({
       type: 'enemy',
@@ -141,6 +224,7 @@ export class Enemy extends Entity {
       hitKnockbackTimer: 0,
       aggroMemoryTimer: 0,
       isAggroed: false,
+      aggroRadius: def.aggroRadius ?? 8,
       flankAngleOffset: Math.random() * Math.PI * 2,
       flankDirection: Math.random() < 0.5 ? -1 : 1,
       flankOrbitSpeed: def.flankOrbitSpeed ?? 1.2,
