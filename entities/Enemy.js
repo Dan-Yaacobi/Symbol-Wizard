@@ -12,8 +12,8 @@ const ENEMY_TYPE_DEFS = {
   spider: {
     spriteKey: 'spider',
     behavior: ENEMY_BEHAVIOR.CHASER,
-    hp: 5,
-    speed: 10,
+    hp: 7,
+    speed: 10.5,
     attackDamage: 2,
     attackRange: 3.2,
     attackCooldown: 0.7,
@@ -23,37 +23,24 @@ const ENEMY_TYPE_DEFS = {
     hitKnockback: 7,
     radius: 1.6,
   },
-  green_enemy: {
-    spriteKey: 'wasp',
-    behavior: ENEMY_BEHAVIOR.CHASER,
-    hp: 7,
-    speed: 13,
-    attackDamage: 3,
-    attackRange: 3.6,
-    attackCooldown: 0.9,
-    attackWindup: 0.45,
-    attackDuration: 0.36,
-    attackHitTime: 0.1,
-    hitKnockback: 9,
-    radius: 1.6,
-  },
-  forest_shooter: {
+  wasp: {
     spriteKey: 'wasp',
     behavior: ENEMY_BEHAVIOR.RANGED,
-    hp: 4,
-    speed: 9,
+    hp: 3,
+    speed: 13,
     attackDamage: 2,
     attackRange: 10,
     retreatDistance: 4,
-    attackCooldown: 1.5,
+    attackCooldown: 1.2,
     hitKnockback: 6,
-    radius: 1.5,
+    radius: 1.4,
+    projectileType: 'stingerProjectile',
   },
-  forest_brute: {
+  forest_beetle: {
     spriteKey: 'forest_beetle',
     behavior: ENEMY_BEHAVIOR.TANK,
-    hp: 18,
-    speed: 5,
+    hp: 28,
+    speed: 4,
     attackDamage: 6,
     attackRange: 3.8,
     attackCooldown: 1.2,
@@ -61,13 +48,13 @@ const ENEMY_TYPE_DEFS = {
     attackDuration: 0.4,
     attackHitTime: 0.14,
     hitKnockback: 12,
-    radius: 2,
+    radius: 2.2,
   },
-  forest_swarm_bug: {
+  swarm_bug: {
     spriteKey: 'swarm_bug',
     behavior: ENEMY_BEHAVIOR.SWARM,
-    hp: 3,
-    speed: 16,
+    hp: 2,
+    speed: 16.5,
     attackDamage: 1,
     attackRange: 2.8,
     attackCooldown: 0.45,
@@ -77,7 +64,7 @@ const ENEMY_TYPE_DEFS = {
     hitKnockback: 5,
     radius: 1.3,
   },
-  forest_flanker: {
+  forest_mantis: {
     spriteKey: 'forest_mantis',
     behavior: ENEMY_BEHAVIOR.FLANKER,
     hp: 8,
@@ -96,11 +83,15 @@ const ENEMY_TYPE_DEFS = {
 
 const LEGACY_KIND_ALIASES = {
   slime: 'spider',
-  skeleton: 'green_enemy',
-  wasp: 'green_enemy',
-  swarm_bug: 'forest_swarm_bug',
-  forest_beetle: 'forest_brute',
-  forest_mantis: 'forest_flanker',
+  skeleton: 'spider',
+  green_enemy: 'spider',
+
+  forest_shooter: 'wasp',
+  forest_brute: 'forest_beetle',
+  forest_swarm_bug: 'swarm_bug',
+  forest_flanker: 'forest_mantis',
+
+  swarm: 'swarm_bug',
 };
 
 function resolveEnemyType(type) {
@@ -149,6 +140,7 @@ export class Enemy extends Entity {
       hitKnockbackY: 0,
       hitKnockbackTimer: 0,
       aggroMemoryTimer: 0,
+      isAggroed: false,
       flankAngleOffset: Math.random() * Math.PI * 2,
       flankDirection: Math.random() < 0.5 ? -1 : 1,
       flankOrbitSpeed: def.flankOrbitSpeed ?? 1.2,
