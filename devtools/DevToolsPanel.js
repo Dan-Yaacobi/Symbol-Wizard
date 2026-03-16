@@ -59,6 +59,7 @@ export class DevToolsPanel {
   setInspectorData({ selectedEntity, selectedTile }) {
     this.selectedEntity = selectedEntity;
     this.selectedTile = selectedTile;
+    this.render();
   }
 
   updateStats(text) {
@@ -89,6 +90,7 @@ export class DevToolsPanel {
       showLandingTiles: enabled('debug.showLandingTiles'),
       selectedEntityRef: this.selectedEntity,
       selectedTileRef: this.selectedTile,
+      aggroRange: this.config.get('enemies.aggroRange'),
     };
   }
 
@@ -186,7 +188,7 @@ export class DevToolsPanel {
         optionElement.selected = option === current;
         editor.appendChild(optionElement);
       }
-      editor.addEventListener('change', () => this.config.set(field.path, editor.value));
+      editor.addEventListener('input', () => this.config.set(field.path, editor.value));
     } else {
       editor = document.createElement('input');
       editor.value = current;
@@ -196,7 +198,7 @@ export class DevToolsPanel {
         if (Number.isFinite(field.max)) editor.max = field.max;
         if (Number.isFinite(field.step)) editor.step = field.step;
       }
-      editor.addEventListener('change', () => this.config.set(field.path, editor.value));
+      editor.addEventListener('input', () => this.config.set(field.path, editor.value));
     }
 
     editor.title = `${field.path}\nDefault: ${def}`;

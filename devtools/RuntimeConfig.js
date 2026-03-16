@@ -172,6 +172,22 @@ export const CONFIG_FIELDS = [
 
 function deepClone(v) { return JSON.parse(JSON.stringify(v)); }
 function getByPath(obj, path) { return path.split('.').reduce((acc, key) => acc?.[key], obj); }
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+function deepMerge(base, patch) {
+  if (!isPlainObject(base)) return deepClone(patch ?? base);
+  const merged = deepClone(base);
+  if (!isPlainObject(patch)) return merged;
+  for (const [key, value] of Object.entries(patch)) {
+    if (isPlainObject(value) && isPlainObject(merged[key])) {
+      merged[key] = deepMerge(merged[key], value);
+      continue;
+    }
+    merged[key] = deepClone(value);
+  }
+  return merged;
+}
 function setByPath(obj, path, value) {
   const keys = path.split('.');
   let ptr = obj;
@@ -195,6 +211,7 @@ export class RuntimeConfigRegistry {
     this.pinned = this.#readStorage(PINNED_KEY, []);
     this.presets = this.#readStorage(PRESETS_KEY, {});
     this.lastPresetName = null;
+    this.logger = null;
     this.loadSavedConfig();
   }
 
@@ -202,6 +219,7 @@ export class RuntimeConfigRegistry {
   get(path) { return getByPath(this.current, path); }
   getDefault(path) { return getByPath(this.defaults, path); }
   isDirty(path) { return JSON.stringify(this.get(path)) !== JSON.stringify(this.getDefault(path)); }
+  setLogger(logger) { this.logger = typeof logger === 'function' ? logger : null; }
 
   set(path, value, options = {}) {
     const field = this.fieldMap.get(path);
@@ -217,6 +235,7 @@ export class RuntimeConfigRegistry {
       this.redoStack.length = 0;
     }
     this.#emit(path, previous, next);
+    this.#log(`Config changed: ${path} = ${JSON.stringify(next)}`);
   }
 
   resetField(path) { this.set(path, this.getDefault(path)); }
@@ -227,7 +246,10 @@ export class RuntimeConfigRegistry {
   }
   resetAll() {
     this.current = deepClone(this.defaults);
+    this.undoStack.length = 0;
+    this.redoStack.length = 0;
     this.#emit('*', null, null);
+    this.#log('Config reset to defaults');
   }
 
   undo() {
@@ -247,28 +269,40 @@ export class RuntimeConfigRegistry {
   }
 
   saveCurrentConfig() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(this.current));
+    const saved = this.#writeStorage(STORAGE_KEY, this.current);
+    if (saved) this.#log('Saved runtime config');
+    return saved;
   }
 
   loadSavedConfig() {
     const saved = this.#readStorage(STORAGE_KEY, null);
-    if (!saved) return;
-    this.current = { ...deepClone(this.defaults), ...saved };
+    if (!saved) return false;
+    this.current = this.#sanitizeConfig(deepMerge(this.defaults, saved));
+    this.undoStack.length = 0;
+    this.redoStack.length = 0;
     this.#emit('*', null, null);
+    this.#log('Loaded saved runtime config');
+    return true;
   }
 
   savePreset(name) {
-    if (!name) return;
+    if (!name) return false;
     this.presets[name] = deepClone(this.current);
     this.lastPresetName = name;
-    localStorage.setItem(PRESETS_KEY, JSON.stringify(this.presets));
+    const saved = this.#writeStorage(PRESETS_KEY, this.presets);
+    if (saved) this.#log(`Saved preset: ${name}`);
+    return saved;
   }
 
   loadPreset(name) {
-    if (!name || !this.presets[name]) return;
-    this.current = deepClone(this.presets[name]);
+    if (!name || !this.presets[name]) return false;
+    this.current = this.#sanitizeConfig(deepMerge(this.defaults, this.presets[name]));
     this.lastPresetName = name;
+    this.undoStack.length = 0;
+    this.redoStack.length = 0;
     this.#emit('*', null, null);
+    this.#log(`Loaded preset: ${name}`);
+    return true;
   }
 
   togglePin(path) {
@@ -277,7 +311,7 @@ export class RuntimeConfigRegistry {
     } else {
       this.pinned.push(path);
     }
-    localStorage.setItem(PINNED_KEY, JSON.stringify(this.pinned));
+    this.#writeStorage(PINNED_KEY, this.pinned);
   }
 
   serialize() { return deepClone(this.current); }
@@ -298,6 +332,30 @@ export class RuntimeConfigRegistry {
 
   #emit(path, previous, value) {
     for (const listener of this.listeners) listener({ path, previous, value, current: this.current });
+  }
+
+  #sanitizeConfig(config) {
+    const safe = deepClone(this.defaults);
+    for (const field of this.fields) {
+      const raw = getByPath(config, field.path);
+      const fallback = this.getDefault(field.path);
+      const candidate = raw === undefined ? fallback : raw;
+      setByPath(safe, field.path, this.#coerce(field, candidate));
+    }
+    return safe;
+  }
+
+  #writeStorage(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  #log(message) {
+    this.logger?.(message);
   }
 
   #readStorage(key, fallback) {

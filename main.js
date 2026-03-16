@@ -48,6 +48,7 @@ const input = new Input(canvas, viewport, camera, renderer.cellW, renderer.cellH
 const chat = new ChatBox();
 const runtimeConfig = new RuntimeConfigRegistry();
 const devToolsPanel = new DevToolsPanel(runtimeConfig);
+runtimeConfig.setLogger((message) => logDev(message));
 
 await loadObjectsFromFolder('./assets/objects');
 
@@ -143,8 +144,10 @@ let prefabEditorToggleLatch = false;
 let f1Latch = false;
 let f2Latch = false;
 let f3Latch = false;
+let f4Latch = false;
 let f5Latch = false;
 let f6Latch = false;
+let f7Latch = false;
 let f8Latch = false;
 let f9Latch = false;
 
@@ -186,6 +189,37 @@ function logDiag(message, details = undefined) {
     return;
   }
   console.info(`${DIAG_PREFIX} ${message}`, details);
+}
+
+
+function logDev(message, details = undefined) {
+  if (details === undefined) {
+    console.info(`[DEV] ${message}`);
+    return;
+  }
+  console.info(`[DEV] ${message}`, details);
+}
+
+function toggleOverlayFlag(path) {
+  const next = !runtimeConfig.get(path);
+  runtimeConfig.set(path, next);
+  if (next && !runtimeConfig.get('debug.overlaysEnabled')) {
+    runtimeConfig.set('debug.overlaysEnabled', true);
+  }
+}
+
+function resetEncounterState() {
+  enemies.length = 0;
+  projectiles = [];
+  goldPiles = [];
+  combatTextSystem.combatTexts.length = 0;
+  player.hp = player.maxHp;
+  const spawn = resolveValidRoomSpawn(activeRoom, { x: player.x, y: player.y });
+  player.x = spawn.x;
+  player.y = spawn.y;
+  player.vx = 0;
+  player.vy = 0;
+  logDev('Encounter reset');
 }
 
 logBoot('main scene entered');
@@ -559,7 +593,7 @@ function tick(now) {
   visualTheme.colors.text = runtimeConfig.get('palette.uiText');
   visualTheme.colors.worldBackground = runtimeConfig.get('palette.worldBackground');
 
-  const prefabToggleDown = input.isDown('f7');
+  const prefabToggleDown = input.isDown('f7') && (input.isDown('control') || input.isDown('meta'));
   if (prefabToggleDown && !prefabEditorToggleLatch) prefabEditor.toggle();
   prefabEditorToggleLatch = prefabToggleDown;
 
@@ -575,6 +609,10 @@ function tick(now) {
   if (f3Down && !f3Latch) runtimeConfig.set('debug.showStatsHud', !runtimeConfig.get('debug.showStatsHud'));
   f3Latch = f3Down;
 
+  const f4Down = input.isDown('f4');
+  if (f4Down && !f4Latch) toggleOverlayFlag('debug.collisionBounds');
+  f4Latch = f4Down;
+
   const f5Down = input.isDown('f5');
   if (f5Down && !f5Latch) runtimeConfig.saveCurrentConfig();
   f5Latch = f5Down;
@@ -582,6 +620,14 @@ function tick(now) {
   const f6Down = input.isDown('f6');
   if (f6Down && !f6Latch) runtimeConfig.savePreset(`quick-${new Date().toISOString().slice(11, 19)}`);
   f6Latch = f6Down;
+
+  const f7Down = input.isDown('f7') && !input.isDown('control') && !input.isDown('meta');
+  if (f7Down && !f7Latch) toggleOverlayFlag('debug.grid');
+  f7Latch = f7Down;
+
+  const f8Down = input.isDown('f8');
+  if (f8Down && !f8Latch && !devToolsPanel.isCapturingInput()) resetEncounterState();
+  f8Latch = f8Down;
 
   const f9Down = input.isDown('f9');
   if (f9Down && !f9Latch) {
@@ -643,7 +689,7 @@ function tick(now) {
     handlePlayer(dt);
     updateEnemies(enemies, player, dt, runtimeConfig);
 
-    updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem);
+    updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem, runtimeConfig);
 
     updateProjectileAnimation(projectiles, dt, runtimeConfig);
     const combat = updateProjectiles(

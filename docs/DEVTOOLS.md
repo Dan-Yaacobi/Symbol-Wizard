@@ -9,11 +9,14 @@
 - Live updates happen because gameplay/render systems read `runtimeConfig.get(path)` during each tick.
 - Hotkeys:
   - F1 panel
-  - F2 debug overlays
+  - F2 debug overlays master
   - F3 stats HUD
+  - F4 collision overlay
   - F5 save config
   - F6 quick-save preset
-  - F8 reset focused field (panel)
+  - F7 grid overlay
+  - Ctrl/Cmd+F7 object/prefab editor
+  - F8 reset encounter (in-world); reset focused field (when panel field row is focused)
   - F9 load saved config
   - Shift+F9 restore defaults
   - Ctrl+Z / Ctrl+Y undo-redo

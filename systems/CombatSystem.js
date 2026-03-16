@@ -110,7 +110,7 @@ export function updateProjectiles(
   };
 }
 
-export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem = null) {
+export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem = null, config = null) {
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
     if (!enemy.isAttacking || enemy.attackDamageApplied) continue;
@@ -119,7 +119,7 @@ export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSys
     if ((enemy.attackElapsed ?? 0) < hitTime) continue;
 
     const distance = Math.hypot(player.x - enemy.x, player.y - enemy.y);
-    const attackRange = enemy.attackRange ?? 3;
+    const attackRange = (enemy.attackRange ?? 3) * (config?.get?.('enemies.attackRangeMultiplier') ?? 1);
     if (distance > attackRange + player.radius * 0.5) {
       enemy.attackDamageApplied = true;
       continue;
