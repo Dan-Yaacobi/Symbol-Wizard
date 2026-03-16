@@ -47,6 +47,10 @@ function normalizeRgb(color, fallback = [255, 255, 255]) {
   ];
 }
 
+function rgbToHex(r, g, b) {
+  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
 function parseXP(fileBuffer) {
   const inflated = zlib.gunzipSync(fileBuffer);
   let offset = 0;
@@ -90,11 +94,12 @@ function parseXP(fileBuffer) {
         const bg = [inflated[offset], inflated[offset + 1], inflated[offset + 2]];
         offset += 3;
 
+        const char = cp437 === 0 ? ' ' : decodeCp437(cp437);
         cells.push({
           x,
           y,
           cp437,
-          char: decodeCp437(cp437),
+          char,
           fg: normalizeRgb(fg),
           bg: normalizeRgb(bg, [0, 0, 0]),
         });
@@ -165,14 +170,20 @@ function extractVisualLayer(layer, bounds) {
   const cropped = (layer?.cells ?? []).filter((cell) => {
     if (isEmptyCell(cell)) return false;
     return cell.x >= bounds.minX && cell.x <= bounds.maxX && cell.y >= bounds.minY && cell.y <= bounds.maxY;
-  }).map((cell) => ({
-    x: cell.x,
-    y: cell.y,
-    cp437: cell.cp437,
-    char: cell.char,
-    fg: normalizeRgb(cell.fg),
-    bg: normalizeRgb(cell.bg, [0, 0, 0]),
-  }));
+  }).map((cell) => {
+    const char = cell.char === '\0' ? ' ' : (cell.char || ' ');
+    const [fgR, fgG, fgB] = normalizeRgb(cell.fg);
+    const [bgR, bgG, bgB] = normalizeRgb(cell.bg, [0, 0, 0]);
+
+    return {
+      x: cell.x,
+      y: cell.y,
+      char,
+      cp437: char.charCodeAt(0),
+      fg: rgbToHex(fgR, fgG, fgB),
+      bg: rgbToHex(bgR, bgG, bgB),
+    };
+  });
 
   return normalizeCells(cropped, bounds);
 }
