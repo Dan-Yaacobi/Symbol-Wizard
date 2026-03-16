@@ -3,32 +3,31 @@ import { Enemy } from '../entities/Enemy.js';
 const DEFAULT_ENEMY_SPAWN_TABLE = {
   forest: [
     { type: 'spider', weight: 4 },
-    { type: 'green_enemy', weight: 3 },
-    { type: 'forest_shooter', weight: 2 },
-    { type: 'forest_brute', weight: 1 },
-    { type: 'forest_swarm_bug', weight: 3 },
-    { type: 'forest_flanker', weight: 2 },
+    { type: 'wasp', weight: 3 },
+    { type: 'swarm_bug', weight: 3 },
+    { type: 'forest_beetle', weight: 1 },
+    { type: 'forest_mantis', weight: 2 },
   ],
   cave: [
-    { type: 'green_enemy', weight: 3 },
-    { type: 'forest_shooter', weight: 4 },
-    { type: 'forest_brute', weight: 4 },
-    { type: 'forest_swarm_bug', weight: 2 },
-    { type: 'forest_flanker', weight: 2 },
+    { type: 'spider', weight: 3 },
+    { type: 'wasp', weight: 4 },
+    { type: 'forest_beetle', weight: 4 },
+    { type: 'swarm_bug', weight: 2 },
+    { type: 'forest_mantis', weight: 2 },
   ],
   river: [
     { type: 'spider', weight: 4 },
-    { type: 'forest_shooter', weight: 4 },
-    { type: 'forest_brute', weight: 2 },
-    { type: 'forest_swarm_bug', weight: 3 },
-    { type: 'forest_flanker', weight: 3 },
+    { type: 'wasp', weight: 4 },
+    { type: 'forest_beetle', weight: 2 },
+    { type: 'swarm_bug', weight: 3 },
+    { type: 'forest_mantis', weight: 3 },
   ],
   mountain: [
-    { type: 'green_enemy', weight: 4 },
-    { type: 'forest_shooter', weight: 2 },
-    { type: 'forest_brute', weight: 5 },
-    { type: 'forest_swarm_bug', weight: 2 },
-    { type: 'forest_flanker', weight: 2 },
+    { type: 'spider', weight: 4 },
+    { type: 'wasp', weight: 2 },
+    { type: 'forest_beetle', weight: 5 },
+    { type: 'swarm_bug', weight: 2 },
+    { type: 'forest_mantis', weight: 2 },
   ],
 };
 
@@ -38,7 +37,7 @@ const DEFAULT_SETTINGS = {
   maxEnemies: 25,
   groupSpawnChance: 0.25,
   swarmGroupMin: 4,
-  swarmGroupMax: 6,
+  swarmGroupMax: 7,
   minDistanceFromEntrance: 6,
   minDistanceFromExit: 5,
   minDistanceFromPath: 2,
@@ -148,7 +147,7 @@ function findValidPoint(room, context, center = null) {
 }
 
 function isSwarmType(type) {
-  return type === 'forest_swarm_bug';
+  return type === 'swarm_bug';
 }
 
 function resolveGroupSize(type, remaining, settings, rng) {
