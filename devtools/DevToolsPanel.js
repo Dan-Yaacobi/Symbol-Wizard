@@ -120,6 +120,11 @@ export class DevToolsPanel {
     this.selectedEntity = null;
     this.selectedTile = null;
     this.fieldElements = new Map();
+    this.sectionOpenState = new Map();
+    this.interactionLocks = new Set();
+    this.pendingRender = false;
+    this.fieldDraftValues = new Map();
+    this.enemyDraftValues = new Map();
     this.mapTools = {
       getSeed: () => '',
       setSeed: () => {},
@@ -147,7 +152,13 @@ export class DevToolsPanel {
     document.body.appendChild(this.statsHud);
 
     this.root.addEventListener('keydown', (event) => this.#handlePanelKeys(event));
-    this.config.subscribe(() => this.render());
+    this.config.subscribe(() => {
+      if (this.interactionLocks.size > 0) {
+        this.pendingRender = true;
+        return;
+      }
+      this.render();
+    });
     this.render();
   }
 
@@ -232,6 +243,7 @@ export class DevToolsPanel {
   }
 
   render() {
+    this.#captureSectionState();
     this.root.classList.toggle('compact', this.config.get('gameplay.compactMode'));
     const showOnlyDirty = this.config.get('gameplay.showOnlyDirty');
 
@@ -265,11 +277,37 @@ export class DevToolsPanel {
     this.root.appendChild(this.#presetsBlock());
   }
 
+  #captureSectionState() {
+    for (const details of this.root.querySelectorAll('details[data-section-key]')) {
+      this.sectionOpenState.set(details.dataset.sectionKey, details.open);
+    }
+  }
+
+  #rememberSectionState(details, key, defaultOpen = true) {
+    details.dataset.sectionKey = key;
+    details.open = this.sectionOpenState.get(key) ?? defaultOpen;
+    details.addEventListener('toggle', () => {
+      this.sectionOpenState.set(key, details.open);
+    });
+  }
+
+  #startInteraction(lockKey) {
+    this.interactionLocks.add(lockKey);
+  }
+
+  #endInteraction(lockKey) {
+    this.interactionLocks.delete(lockKey);
+    if (this.interactionLocks.size === 0 && this.pendingRender) {
+      this.pendingRender = false;
+      this.render();
+    }
+  }
+
 
   #enemyTuningBlock() {
     const details = document.createElement('details');
     details.className = 'devtools-section';
-    details.open = true;
+    this.#rememberSectionState(details, 'enemy-tuning', true);
     details.innerHTML = '<summary>Enemy Tuning</summary>';
 
     const applyRow = document.createElement('div');
@@ -294,7 +332,7 @@ export class DevToolsPanel {
     for (const enemy of ENEMY_TUNING_LAYOUT) {
       const enemyDetails = document.createElement('details');
       enemyDetails.className = 'devtools-section';
-      enemyDetails.open = false;
+      this.#rememberSectionState(enemyDetails, `enemy-tuning:${enemy.type}`, false);
       enemyDetails.innerHTML = `<summary>${enemy.label}</summary>`;
 
       for (const field of enemy.fields) {
@@ -329,6 +367,9 @@ export class DevToolsPanel {
     input.step = String(field.step);
     input.value = String(value);
 
+    const draftKey = `${enemyType}:${field.key}`;
+    const interactionKey = `enemy:${draftKey}`;
+
     const applyValue = (raw) => {
       const parsed = Number(raw);
       if (!Number.isFinite(parsed)) return;
@@ -336,14 +377,68 @@ export class DevToolsPanel {
       this.enemyTuningTools.setOverride(enemyType, field.key, clamped);
     };
 
-    slider.addEventListener('input', () => applyValue(slider.value));
-    input.addEventListener('input', () => applyValue(input.value));
+    const stopToggle = (event) => event.stopPropagation();
+    for (const type of ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'input', 'change']) {
+      slider.addEventListener(type, stopToggle);
+    }
+
+    slider.addEventListener('pointerdown', () => this.#startInteraction(interactionKey));
+    slider.addEventListener('pointerup', () => this.#endInteraction(interactionKey));
+    slider.addEventListener('blur', () => this.#endInteraction(interactionKey));
+
+    slider.addEventListener('input', () => {
+      const nextValue = Number(slider.value);
+      input.value = slider.value;
+      this.enemyDraftValues.set(draftKey, slider.value);
+      if (Number.isFinite(nextValue)) applyValue(nextValue);
+    });
+    slider.addEventListener('change', () => {
+      this.enemyDraftValues.delete(draftKey);
+      applyValue(slider.value);
+    });
+
+    const commitInput = () => {
+      this.enemyDraftValues.delete(draftKey);
+      applyValue(input.value);
+      slider.value = input.value;
+    };
+    const cancelInput = () => {
+      const committedValue = this.enemyTuningTools.getValue(enemyType, field.key);
+      const normalized = String(committedValue);
+      this.enemyDraftValues.delete(draftKey);
+      input.value = normalized;
+      slider.value = normalized;
+      input.blur();
+    };
+
+    input.addEventListener('focus', () => {
+      this.#startInteraction(interactionKey);
+      input.select();
+    });
+    input.addEventListener('click', () => input.select());
+    input.addEventListener('input', () => this.enemyDraftValues.set(draftKey, input.value));
+    input.addEventListener('blur', () => {
+      commitInput();
+      this.#endInteraction(interactionKey);
+    });
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        commitInput();
+        input.blur();
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        cancelInput();
+      }
+    });
 
     row.appendChild(slider);
     row.appendChild(input);
 
     const meta = document.createElement('small');
-    meta.textContent = overridden ? 'overridden' : 'default';
+    meta.textContent = `${overridden ? 'overridden' : 'default'} (${Number(value).toFixed(2)})`;
     row.appendChild(meta);
 
     const reset = document.createElement('button');
@@ -358,7 +453,7 @@ export class DevToolsPanel {
   #mapToolsBlock() {
     const details = document.createElement('details');
     details.className = 'devtools-section';
-    details.open = true;
+    this.#rememberSectionState(details, 'map-tools', true);
     details.innerHTML = '<summary>Map Tools</summary>';
 
     const seedRow = document.createElement('div');
@@ -415,7 +510,7 @@ export class DevToolsPanel {
   #sectionBlock(sectionName, fields) {
     const details = document.createElement('details');
     details.className = 'devtools-section';
-    details.open = true;
+    this.#rememberSectionState(details, `section:${sectionName}`, true);
 
     const dirtyCount = fields.filter((field) => this.config.isDirty(field.path)).length;
     details.innerHTML = `<summary>${sectionName}${dirtyCount > 0 ? ` <span class="dirty-pill">${dirtyCount}*</span>` : ''}</summary>`;
@@ -467,7 +562,55 @@ export class DevToolsPanel {
         if (Number.isFinite(field.max)) editor.max = field.max;
         if (Number.isFinite(field.step)) editor.step = field.step;
       }
-      editor.addEventListener('input', () => this.config.set(field.path, editor.value));
+      const interactionKey = `field:${field.path}`;
+      const commit = () => {
+        if (!this.fieldDraftValues.has(field.path)) return;
+        this.config.set(field.path, editor.value);
+        this.fieldDraftValues.delete(field.path);
+      };
+      const cancel = () => {
+        const committedValue = this.config.get(field.path);
+        editor.value = committedValue;
+        this.fieldDraftValues.delete(field.path);
+      };
+
+      editor.addEventListener('focus', () => {
+        this.#startInteraction(interactionKey);
+        if (field.type === 'number') editor.select();
+      });
+      editor.addEventListener('click', () => {
+        if (field.type === 'number') editor.select();
+      });
+      editor.addEventListener('input', () => this.fieldDraftValues.set(field.path, editor.value));
+      editor.addEventListener('blur', () => {
+        commit();
+        this.#endInteraction(interactionKey);
+      });
+      editor.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          commit();
+          editor.blur();
+          return;
+        }
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          cancel();
+          editor.blur();
+          return;
+        }
+        if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && field.type === 'number') {
+          const direction = event.key === 'ArrowUp' ? 1 : -1;
+          const baseStep = Number(field.step) || 1;
+          const step = event.shiftKey ? baseStep * 10 : (event.altKey ? baseStep * 0.2 : baseStep);
+          const numeric = Number(editor.value);
+          if (!Number.isFinite(numeric)) return;
+          event.preventDefault();
+          const next = Math.min(field.max ?? Number.POSITIVE_INFINITY, Math.max(field.min ?? Number.NEGATIVE_INFINITY, numeric + (direction * step)));
+          editor.value = String(next);
+          this.fieldDraftValues.set(field.path, editor.value);
+        }
+      });
     }
 
     editor.title = `${field.path}\nDefault: ${def}`;
@@ -504,7 +647,7 @@ export class DevToolsPanel {
   #inspectorBlock(title, data) {
     const details = document.createElement('details');
     details.className = 'devtools-section';
-    details.open = true;
+    this.#rememberSectionState(details, `inspector:${title}`, true);
     details.innerHTML = `<summary>${title}</summary>`;
 
     const pre = document.createElement('pre');
@@ -517,7 +660,7 @@ export class DevToolsPanel {
   #presetsBlock() {
     const details = document.createElement('details');
     details.className = 'devtools-section';
-    details.open = true;
+    this.#rememberSectionState(details, 'presets', true);
     details.innerHTML = '<summary>Presets / Persistence</summary>';
 
     const nameInput = document.createElement('input');
