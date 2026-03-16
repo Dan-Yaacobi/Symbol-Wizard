@@ -1,7 +1,7 @@
-import { generateRoomGraph } from './RoomGraphGenerator.js';
+import { generateWorldGraph } from './WorldGraphGenerator.js';
 
 export function generateBiomeGraph({ seed, roomWidth, roomHeight, biomeConfig } = {}) {
-  return generateRoomGraph({
+  return generateWorldGraph({
     seed,
     roomWidth,
     roomHeight,

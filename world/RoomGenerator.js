@@ -1,6 +1,12 @@
 import { TerrainGenerator } from './TerrainGenerator.js';
 import { ObjectPlacementSystem } from './ObjectPlacementSystem.js';
-import { buildCollisionMap, scanExitCorridors } from './RuntimeSystems.js';
+import { buildCollisionMap } from './RuntimeSystems.js';
+import { RoomPlanner } from './RoomPlanner.js';
+import { ExitAnchorSystem } from './ExitAnchorSystem.js';
+import { PathGenerator } from './PathGenerator.js';
+import { ExitTriggerSystem } from './ExitTriggerSystem.js';
+import { RoomValidationSystem } from './RoomValidationSystem.js';
+import { RoomRepairSystem } from './RoomRepairSystem.js';
 
 const FOREST_ROOM_WIDTH = 120;
 const FOREST_ROOM_HEIGHT = 120;
@@ -24,68 +30,42 @@ export class RoomGenerator {
     this.roomWidth = roomWidth;
     this.roomHeight = roomHeight;
     this.biomeConfig = biomeConfig;
-    this.terrainGenerator = new TerrainGenerator({ roomWidth, roomHeight });
     this.objectPlacementSystem = new ObjectPlacementSystem();
+    this.roomPlanner = new RoomPlanner();
+    this.exitAnchorSystem = new ExitAnchorSystem();
+    this.pathGenerator = new PathGenerator();
+    this.exitTriggerSystem = new ExitTriggerSystem();
+    this.roomValidationSystem = new RoomValidationSystem();
+    this.roomRepairSystem = new RoomRepairSystem();
   }
 
-  generate(roomNode) {
+  generate(roomNode, { rooms, roomGraph } = {}) {
     const rng = createRng(roomNode.seed >>> 0);
     const biomeType = roomNode.biomeType ?? 'forest';
     const useForestSizing = biomeType === 'forest';
     const roomWidth = useForestSizing ? Math.max(this.roomWidth, FOREST_ROOM_WIDTH) : this.roomWidth;
     const roomHeight = useForestSizing ? Math.max(this.roomHeight, FOREST_ROOM_HEIGHT) : this.roomHeight;
-    const center = { x: Math.floor(roomWidth / 2), y: Math.floor(roomHeight / 2) };
 
     const effectiveBiomeConfig = roomNode.biomeConfig ?? this.biomeConfig;
-    const terrainGenerator = useForestSizing
-      ? new TerrainGenerator({ roomWidth, roomHeight })
-      : this.terrainGenerator;
+    const terrainGenerator = new TerrainGenerator({ roomWidth, roomHeight });
+    const plan = this.roomPlanner.createPlan({ roomNode, width: roomWidth, height: roomHeight, biomeType });
+    const reservations = this.exitAnchorSystem.reserve(plan);
+
     const { grid } = terrainGenerator.initializeTiles(roomNode, rng, effectiveBiomeConfig);
 
-    // 1) generate exits
-    const {
-      resolvedExits,
-      resolvedEntrances,
-      roadMask: exitRoadMask,
-      roadWidth: exitRoadWidth,
-    } = terrainGenerator.generateExits(grid, roomNode, rng);
-
-    const mainRoadMask = new Set(exitRoadMask);
-    const branchRoadMask = new Set();
-    const allAnchors = [
-      ...Object.values(resolvedExits).map((passage) => passage.roadAnchor),
-      ...Object.values(resolvedEntrances).map((passage) => passage.roadAnchor),
-    ];
-
-    // 2) generate main road
-    terrainGenerator.generateMainRoad(grid, center, allAnchors, rng, mainRoadMask, exitRoadWidth);
-
-    // 3) generate branch roads
-    terrainGenerator.generateBranchRoads(grid, rng, allAnchors, mainRoadMask, branchRoadMask, center, effectiveBiomeConfig, exitRoadWidth);
-
-    const roadMask = new Set();
-    mergeMask(roadMask, mainRoadMask);
-    mergeMask(roadMask, branchRoadMask);
-
-    const spawnMask = new Set();
-    for (const passage of Object.values(resolvedEntrances)) {
-      if (!passage?.spawn) continue;
-      const sx = Math.round(passage.spawn.x);
-      const sy = Math.round(passage.spawn.y);
-      for (let oy = -2; oy <= 2; oy += 1) {
-        for (let ox = -2; ox <= 2; ox += 1) {
-          spawnMask.add(`${sx + ox},${sy + oy}`);
-        }
-      }
-    }
+    const { roadMask, debugEvents: pathEvents } = this.pathGenerator.carveRequiredPaths({
+      grid,
+      plan,
+      reservations,
+    });
 
     const clearingMask = terrainGenerator.carveForestClearings(grid, rng, biomeType, roadMask);
 
-    const protectedMask = new Set(roadMask);
-    mergeMask(protectedMask, spawnMask);
+    const protectedMask = new Set();
+    mergeMask(protectedMask, roadMask);
+    mergeMask(protectedMask, reservations.noDecorMask);
     mergeMask(protectedMask, clearingMask);
 
-    // 4) place objects
     const objectBlockedMask = new Set(protectedMask);
     const objects = this.objectPlacementSystem.placeObjects({
       tiles: grid,
@@ -95,7 +75,6 @@ export class RoomGenerator {
       biomeType,
     });
 
-    // 5) place landmarks
     const landmarks = this.objectPlacementSystem.placeLandmarks({
       tiles: grid,
       rng,
@@ -104,13 +83,42 @@ export class RoomGenerator {
       biomeType,
     });
 
-    // 6) decorate
     terrainGenerator.decorate(grid, rng, objectBlockedMask);
 
-    // 7) build collision map
+    const triggers = this.exitTriggerSystem.build({ plan });
+
+    let validation = this.roomValidationSystem.validate({
+      roomNode,
+      rooms,
+      roomGraph,
+      plan,
+      grid,
+      triggers,
+    });
+
+    let repairEvents = [];
+    if (!validation.valid) {
+      const repair = this.roomRepairSystem.repair({
+        grid,
+        plan,
+        errors: validation.errors,
+        roadMask,
+      });
+      repairEvents = repair.debugEvents;
+      if (repair.applied) {
+        validation = this.roomValidationSystem.validate({
+          roomNode,
+          rooms,
+          roomGraph,
+          plan,
+          grid,
+          triggers,
+        });
+      }
+    }
+
     const placedObjects = [...objects, ...landmarks];
     const collisionMap = buildCollisionMap(grid, placedObjects);
-    const exitCorridors = scanExitCorridors(grid, resolvedExits, roomWidth, roomHeight);
 
     return {
       id: roomNode.id,
@@ -118,9 +126,21 @@ export class RoomGenerator {
       collisionMap,
       entities: [],
       objects: placedObjects,
-      entrances: structuredClone(resolvedEntrances),
-      exits: structuredClone(resolvedExits),
-      exitCorridors,
+      entrances: structuredClone(plan.entranceAnchors),
+      exits: structuredClone(triggers.exits),
+      exitCorridors: structuredClone(triggers.exitCorridors),
+      generationDebug: {
+        roomGraph: roomGraph?.[roomNode.id] ?? {},
+        events: [
+          ...plan.debugEvents,
+          ...reservations.debugEvents,
+          ...pathEvents,
+          ...triggers.debugEvents,
+          ...validation.debugEvents,
+          ...repairEvents,
+        ],
+        validationErrors: validation.errors,
+      },
       state: {
         visited: roomNode.state?.visited ?? false,
       },
