@@ -179,7 +179,7 @@ function extractVisualLayer(layer, bounds) {
       x: cell.x,
       y: cell.y,
       char,
-      cp437: char.charCodeAt(0),
+      cp437: cell.cp437,
       fg: rgbToHex(fgR, fgG, fgB),
       bg: rgbToHex(bgR, bgG, bgB),
     };
