@@ -1,67 +1,150 @@
 import { tiles } from './TilePalette.js';
-import { LANDING_SAFE_RADIUS, PATH_CORRIDOR_WIDTH } from './GenerationConstants.js';
+import { LANDING_SAFE_RADIUS } from './GenerationConstants.js';
+import { normalizePathGenerationConfig } from './PathGenerationConfig.js';
 
 function tileFrom(baseTile, overrides = {}) {
   return { ...baseTile, ...overrides };
 }
 
-function carveBrush(grid, x, y, width, mask) {
-  const half = Math.floor(width / 2);
-  for (let oy = -half; oy <= half; oy += 1) {
-    for (let ox = -half; ox <= half; ox += 1) {
+function keyOf(x, y) {
+  return `${x},${y}`;
+}
+
+function directionDelta(direction) {
+  if (direction === 'north') return { x: 0, y: -1 };
+  if (direction === 'south') return { x: 0, y: 1 };
+  if (direction === 'west') return { x: -1, y: 0 };
+  return { x: 1, y: 0 };
+}
+
+function perpendicularOptions(direction) {
+  if (direction === 'north' || direction === 'south') return [{ x: -1, y: 0 }, { x: 1, y: 0 }];
+  return [{ x: 0, y: -1 }, { x: 0, y: 1 }];
+}
+
+function detectDirection(from, to) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'east' : 'west';
+  return dy >= 0 ? 'south' : 'north';
+}
+
+function chooseStepToward(current, target) {
+  const dx = target.x - current.x;
+  const dy = target.y - current.y;
+  if (Math.abs(dx) >= Math.abs(dy) && dx !== 0) return { x: Math.sign(dx), y: 0 };
+  if (dy !== 0) return { x: 0, y: Math.sign(dy) };
+  return { x: 0, y: 0 };
+}
+
+function carveTrailTile(grid, x, y, radius, mask) {
+  for (let oy = -radius; oy <= radius; oy += 1) {
+    for (let ox = -radius; ox <= radius; ox += 1) {
       const tx = x + ox;
       const ty = y + oy;
       if (!grid[ty]?.[tx]) continue;
       grid[ty][tx] = tileFrom(tiles.pathPebble, { type: 'road', walkable: true });
-      mask.add(`${tx},${ty}`);
+      mask.add(keyOf(tx, ty));
     }
   }
 }
 
-function carveDirectionalBand(grid, x, y, direction, width, mask) {
-  const half = Math.floor(width / 2);
-  if (direction === 'north' || direction === 'south') {
-    for (let ox = -half; ox <= half; ox += 1) carveBrush(grid, x + ox, y, 1, mask);
-    return;
-  }
-  for (let oy = -half; oy <= half; oy += 1) carveBrush(grid, x, y + oy, 1, mask);
+function expandLanding(grid, anchor, mask) {
+  carveTrailTile(grid, anchor.landingX, anchor.landingY, LANDING_SAFE_RADIUS, mask);
 }
 
-function carveLine(grid, start, end, width, mask) {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
-  const steps = Math.max(1, Math.max(Math.abs(dx), Math.abs(dy)));
-  for (let i = 0; i <= steps; i += 1) {
-    const t = i / steps;
-    const x = Math.round(start.x + (dx * t));
-    const y = Math.round(start.y + (dy * t));
-    const px = i === 0 ? start.x : Math.round(start.x + (dx * ((i - 1) / steps)));
-    const py = i === 0 ? start.y : Math.round(start.y + (dy * ((i - 1) / steps)));
-    const stepDirection = Math.abs(x - px) >= Math.abs(y - py)
-      ? (x >= px ? 'east' : 'west')
-      : (y >= py ? 'south' : 'north');
-    carveDirectionalBand(grid, x, y, stepDirection, width, mask);
+function clearExitArea(grid, anchor, radius, mask) {
+  carveTrailTile(grid, anchor.x, anchor.y, radius, mask);
+}
+
+function makeTrailPoints(start, target, anchorDirection, config, rng, dimensions) {
+  const points = [{ x: start.x, y: start.y }];
+  let current = { x: start.x, y: start.y };
+  const maxSteps = Math.max(12, (dimensions.width + dimensions.height) * 3);
+  let steps = 0;
+
+  while ((current.x !== target.x || current.y !== target.y) && steps < maxSteps) {
+    steps += 1;
+    const toward = chooseStepToward(current, target);
+    let next = { x: current.x + toward.x, y: current.y + toward.y };
+
+    if (rng() < config.wanderChance) {
+      const mainDirection = toward.x === 0 && toward.y === 0 ? anchorDirection : detectDirection(current, next);
+      const options = perpendicularOptions(mainDirection);
+      const side = options[rng() < 0.5 ? 0 : 1];
+      const shifted = { x: next.x + side.x, y: next.y + side.y };
+      if (shifted.x > 1 && shifted.y > 1 && shifted.x < dimensions.width - 2 && shifted.y < dimensions.height - 2) {
+        next = shifted;
+      }
+    }
+
+    next.x = Math.max(1, Math.min(dimensions.width - 2, next.x));
+    next.y = Math.max(1, Math.min(dimensions.height - 2, next.y));
+
+    if (next.x === current.x && next.y === current.y) {
+      const fallback = directionDelta(anchorDirection);
+      next = {
+        x: Math.max(1, Math.min(dimensions.width - 2, current.x + fallback.x)),
+        y: Math.max(1, Math.min(dimensions.height - 2, current.y + fallback.y)),
+      };
+      if (next.x === current.x && next.y === current.y) break;
+    }
+
+    points.push(next);
+    current = next;
   }
+
+  if (points.at(-1).x !== target.x || points.at(-1).y !== target.y) {
+    points.push({ x: target.x, y: target.y });
+  }
+
+  return points;
+}
+
+function carveTrailPoints(grid, points, anchor, config, mask, rng) {
+  for (let i = 0; i < points.length; i += 1) {
+    const point = points[i];
+    const prev = points[i - 1] ?? point;
+    const next = points[i + 1] ?? point;
+    const isTurn = (prev.x !== point.x || prev.y !== point.y)
+      && (next.x !== point.x || next.y !== point.y)
+      && ((prev.x - point.x) !== (point.x - next.x) || (prev.y - point.y) !== (point.y - next.y));
+    const nearExit = i >= Math.max(0, points.length - 4);
+
+    let radius = config.baseTrailRadius;
+    if (isTurn) radius = Math.max(radius, config.turnTrailRadius);
+    if (nearExit) radius = Math.max(radius, config.exitTrailRadius);
+
+    if (rng() < 0.14) {
+      radius += 1;
+    }
+
+    carveTrailTile(grid, point.x, point.y, radius, mask);
+  }
+
+  expandLanding(grid, anchor, mask);
+  clearExitArea(grid, anchor, config.exitClearingRadius, mask);
 }
 
 export class PathGenerator {
-  carveRequiredPaths({ grid, plan, reservations }) {
+  carveRequiredPaths({ grid, plan, reservations, rng = Math.random, pathConfig = {} }) {
+    const config = normalizePathGenerationConfig(pathConfig);
     const roadMask = new Set();
     const debugEvents = [];
     const hub = plan.entryFocusArea.center;
-    carveBrush(grid, hub.x, hub.y, 3, roadMask);
+
+    carveTrailTile(grid, hub.x, hub.y, config.turnTrailRadius, roadMask);
 
     const allAnchors = [...Object.values(plan.exitAnchors), ...Object.values(plan.entranceAnchors)];
     for (const anchor of allAnchors) {
-      const width = Math.max(PATH_CORRIDOR_WIDTH, anchor.corridorWidth ?? PATH_CORRIDOR_WIDTH);
-      carveLine(grid, hub, { x: anchor.x, y: anchor.y }, width, roadMask);
-      carveBrush(grid, anchor.landingX, anchor.landingY, (LANDING_SAFE_RADIUS * 2) + 1, roadMask);
-      debugEvents.push({ type: 'PATH_CARVED_TO_ANCHOR', roomId: plan.roomId, anchorId: anchor.id });
+      const trailPoints = makeTrailPoints(hub, { x: anchor.x, y: anchor.y }, anchor.direction, config, rng, plan.dimensions);
+      carveTrailPoints(grid, trailPoints, anchor, config, roadMask, rng);
+      debugEvents.push({ type: 'PATH_CARVED_TO_ANCHOR', roomId: plan.roomId, anchorId: anchor.id, points: trailPoints.length });
     }
 
     for (const corridor of Object.values(plan.reservedCorridors)) {
       for (const tile of corridor) {
-        carveBrush(grid, tile.x, tile.y, 1, roadMask);
+        carveTrailTile(grid, tile.x, tile.y, 1, roadMask);
       }
     }
 
