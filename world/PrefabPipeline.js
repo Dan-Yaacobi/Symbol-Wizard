@@ -23,21 +23,31 @@ const DAMAGE_CHAR_MAP = {
 
 const FINAL_DEBRIS = ['.', ',', "'", '`'];
 
+function channelToHex(channel) {
+  const value = Math.max(0, Math.min(255, Number(channel) || 0));
+  return value.toString(16).padStart(2, '0');
+}
+
+function rgbToHex(r, g, b) {
+  return `#${channelToHex(r)}${channelToHex(g)}${channelToHex(b)}`;
+}
+
 function normalizeColor(color, fallback = [255, 255, 255]) {
+  // XP prefab export now stores hex strings; keep that contract through save/load.
   if (Array.isArray(color) && color.length >= 3) {
-    return [
-      Math.max(0, Math.min(255, Number(color[0]) || 0)),
-      Math.max(0, Math.min(255, Number(color[1]) || 0)),
-      Math.max(0, Math.min(255, Number(color[2]) || 0)),
-    ];
+    return rgbToHex(color[0], color[1], color[2]);
+  }
+
+  if (typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)) {
+    return color.toLowerCase();
   }
 
   if (typeof color === 'string' && color.startsWith('rgb')) {
     const values = color.match(/\d+/g)?.slice(0, 3).map((value) => Number(value) || 0);
-    if (values && values.length === 3) return values;
+    if (values && values.length === 3) return rgbToHex(values[0], values[1], values[2]);
   }
 
-  return [...fallback];
+  return rgbToHex(fallback[0], fallback[1], fallback[2]);
 }
 
 function isEmptyCell(cell) {

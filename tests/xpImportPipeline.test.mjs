@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
 import { parseXP } from '../tools/rexpaintImporter.js';
 import { buildPrefabFromXP } from '../world/PrefabPipeline.js';
+import { registerPrefabObject, spawnObject } from '../world/ObjectLibrary.js';
+import { renderWorld } from '../systems/RenderSystem.js';
 import { decodeCp437, encodeCp437 } from '../world/Cp437.js';
 
 function createXpLayer(width, height, writer) {
@@ -69,8 +71,8 @@ function testColorPreservation() {
   const parsed = parseXP(createXpFile([layer]));
   const prefab = buildPrefabFromXP(parsed, { id: 'colors' }, { autoCrop: false });
 
-  assert.deepEqual(prefab.visual[0].fg, [12, 34, 56]);
-  assert.deepEqual(prefab.visual[0].bg, [78, 90, 123]);
+  assert.equal(prefab.visual[0].fg, '#0c2238');
+  assert.equal(prefab.visual[0].bg, '#4e5a7b');
 }
 
 function testMultiLayerMergeTopDown() {
@@ -82,8 +84,53 @@ function testMultiLayerMergeTopDown() {
   const left = prefab.visual.find((cell) => cell.x === 0 && cell.y === 0);
   const right = prefab.visual.find((cell) => cell.x === 1 && cell.y === 0);
   assert.equal(left.char, '♣');
-  assert.deepEqual(left.fg, [200, 10, 10]);
+  assert.equal(left.fg, '#c80a0a');
   assert.equal(right.char, '▒');
+}
+
+function testPrefabLoadToRendererColorPipeline() {
+  const layer = createXpLayer(1, 1, () => ({ cp437: 205, fg: [12, 34, 56], bg: [78, 90, 123] }));
+  const parsed = parseXP(createXpFile([layer]));
+  const prefab = buildPrefabFromXP(parsed, { id: 'pipeline-color' }, { autoCrop: false });
+  const prefabJson = JSON.parse(JSON.stringify(prefab));
+
+  const jsonCell = prefabJson.visual[0];
+  console.log('[trace] stage 1 (after JSON read):', jsonCell);
+  assert.equal(jsonCell.fg, '#0c2238');
+  assert.equal(jsonCell.bg, '#4e5a7b');
+  assert.equal(jsonCell.cp437, 205);
+
+  const definition = registerPrefabObject(prefabJson);
+  const normalizedCell = definition.tiles[0];
+  console.log('[trace] stage 2 (after prefab normalization):', normalizedCell);
+  assert.equal(normalizedCell.fg, '#0c2238');
+  assert.equal(normalizedCell.bg, '#4e5a7b');
+
+  const object = spawnObject('pipeline-color', { x: 2, y: 3 });
+  const objectCell = object.tiles[0];
+  console.log('[trace] stage 3 (after object construction):', objectCell);
+  assert.equal(objectCell.fg, '#0c2238');
+  assert.equal(objectCell.bg, '#4e5a7b');
+
+  const drawCalls = [];
+  const renderer = {
+    renderBackground() {},
+    drawCell(cell) {
+      drawCalls.push(cell);
+    },
+  };
+
+  const camera = { x: 0, y: 0, worldToScreen: (x, y) => ({ x, y }) };
+  const map = [[{ char: '.', fg: '#000000', bg: '#000000' }]];
+  const player = { x: 999, y: 999, type: 'player', spriteKey: 'none' };
+
+  renderWorld(renderer, camera, map, player, [], [], [object], [], [], null, [], null, {});
+  const renderCell = drawCalls.find((cell) => cell.glyph === '═');
+  console.log('[trace] stage 4 (before renderer input):', renderCell);
+
+  assert.ok(renderCell, 'Expected object glyph draw call.');
+  assert.equal(renderCell.fg, '#0c2238');
+  assert.equal(renderCell.bg, '#4e5a7b');
 }
 
 function run() {
@@ -91,6 +138,7 @@ function run() {
   testCp437RoundTrip();
   testColorPreservation();
   testMultiLayerMergeTopDown();
+  testPrefabLoadToRendererColorPipeline();
   console.log('XP import pipeline tests passed.');
 }
 

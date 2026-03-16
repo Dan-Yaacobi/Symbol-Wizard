@@ -18,11 +18,25 @@ function normalizeFootprint(footprint) {
 
 
 function normalizeColor(color, fallback) {
+  const clamp = (value) => Math.max(0, Math.min(255, Number(value) || 0));
+  const toHex = (r, g, b) => `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
+
   if (Array.isArray(color) && color.length >= 3) {
     const [r, g, b] = color;
-    return `rgb(${Number(r) | 0}, ${Number(g) | 0}, ${Number(b) | 0})`;
+    return toHex(r, g, b);
+  }
+  if (typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)) return color.toLowerCase();
+  if (typeof color === 'string' && color.startsWith('rgb')) {
+    const values = color.match(/\d+/g)?.slice(0, 3);
+    if (values?.length === 3) return toHex(values[0], values[1], values[2]);
   }
   return typeof color === 'string' ? color : fallback;
+}
+
+function normalizeBreakFrames(breakFrames) {
+  if (!Array.isArray(breakFrames)) return null;
+  // Break frames come from prefab JSON too; normalize tile colors so renderer gets string colors.
+  return breakFrames.map((frame) => normalizeTiles(frame));
 }
 
 function normalizeTiles(tiles) {
@@ -463,7 +477,7 @@ function definitionFromPrefab(prefab) {
       : (typeof prefab.dropTable === 'string' && prefab.dropTable !== 'none'
         ? [{ type: prefab.dropTable, min: 1, max: 1 }]
         : []),
-    breakFrames: Array.isArray(prefab.breakFrames) ? prefab.breakFrames : null,
+    breakFrames: normalizeBreakFrames(prefab.breakFrames),
   });
 }
 
