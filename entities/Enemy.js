@@ -10,7 +10,7 @@ export const ENEMY_BEHAVIOR = {
 
 const ENEMY_TYPE_DEFS = {
   spider: {
-    spriteKey: 'slime',
+    spriteKey: 'spider',
     behavior: ENEMY_BEHAVIOR.CHASER,
     hp: 7,
     speed: 10.5,
@@ -24,7 +24,7 @@ const ENEMY_TYPE_DEFS = {
     radius: 1.6,
   },
   wasp: {
-    spriteKey: 'skeleton',
+    spriteKey: 'wasp',
     behavior: ENEMY_BEHAVIOR.RANGED,
     hp: 3,
     speed: 13,
@@ -37,7 +37,7 @@ const ENEMY_TYPE_DEFS = {
     projectileType: 'stingerProjectile',
   },
   forest_beetle: {
-    spriteKey: 'skeleton',
+    spriteKey: 'forest_beetle',
     behavior: ENEMY_BEHAVIOR.TANK,
     hp: 28,
     speed: 4,
@@ -51,7 +51,7 @@ const ENEMY_TYPE_DEFS = {
     radius: 2.2,
   },
   swarm_bug: {
-    spriteKey: 'slime',
+    spriteKey: 'swarm_bug',
     behavior: ENEMY_BEHAVIOR.SWARM,
     hp: 2,
     speed: 16.5,
@@ -65,7 +65,7 @@ const ENEMY_TYPE_DEFS = {
     radius: 1.3,
   },
   forest_mantis: {
-    spriteKey: 'skeleton',
+    spriteKey: 'forest_mantis',
     behavior: ENEMY_BEHAVIOR.FLANKER,
     hp: 8,
     speed: 12,
@@ -85,10 +85,12 @@ const LEGACY_KIND_ALIASES = {
   slime: 'spider',
   skeleton: 'spider',
   green_enemy: 'spider',
+
   forest_shooter: 'wasp',
   forest_brute: 'forest_beetle',
   forest_swarm_bug: 'swarm_bug',
   forest_flanker: 'forest_mantis',
+
   swarm: 'swarm_bug',
 };
 
