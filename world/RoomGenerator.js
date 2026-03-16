@@ -8,9 +8,7 @@ import { ExitTriggerSystem } from './ExitTriggerSystem.js';
 import { RoomValidationSystem } from './RoomValidationSystem.js';
 import { RoomRepairSystem } from './RoomRepairSystem.js';
 import { resolvePathGenerationConfig } from './PathGenerationConfig.js';
-
-const FOREST_ROOM_WIDTH = 120;
-const FOREST_ROOM_HEIGHT = 120;
+import { resolveWorldGenerationConfig } from './WorldGenerationConfig.js';
 
 function createRng(seed) {
   let state = seed >>> 0;
@@ -45,8 +43,9 @@ export class RoomGenerator {
     const rng = createRng(roomNode.seed >>> 0);
     const biomeType = roomNode.biomeType ?? 'forest';
     const useForestSizing = biomeType === 'forest';
-    const roomWidth = useForestSizing ? Math.max(this.roomWidth, FOREST_ROOM_WIDTH) : this.roomWidth;
-    const roomHeight = useForestSizing ? Math.max(this.roomHeight, FOREST_ROOM_HEIGHT) : this.roomHeight;
+    const worldGenConfig = resolveWorldGenerationConfig(this.runtimeConfig);
+    const roomWidth = useForestSizing ? Math.max(this.roomWidth, worldGenConfig.forestRoomWidth) : this.roomWidth;
+    const roomHeight = useForestSizing ? Math.max(this.roomHeight, worldGenConfig.forestRoomHeight) : this.roomHeight;
 
     const effectiveBiomeConfig = roomNode.biomeConfig ?? this.biomeConfig;
     const terrainGenerator = new TerrainGenerator({ roomWidth, roomHeight });

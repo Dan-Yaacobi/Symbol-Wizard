@@ -53,7 +53,10 @@ runtimeConfig.setLogger((message) => logDev(message));
 await loadObjectsFromFolder('./assets/objects');
 
 const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
-const { biome, startRoom } = biomeGenerator.enterBiome('starting-biome');
+const currentBiomeId = 'starting-biome';
+const { biome, startRoom } = biomeGenerator.enterBiome(currentBiomeId);
+let currentBiomeSeed = biome.seed;
+let pendingDevSeed = String(currentBiomeSeed);
 let activeRoom = startRoom;
 let map = activeRoom.tiles;
 const player = new Player(Math.floor(ROOM_W / 2), Math.floor(ROOM_H / 2));
@@ -62,6 +65,10 @@ const enemies = [];
 const npcs = [];
 let worldObjects = activeRoom.objects ?? [];
 const roomTransitionSystem = new RoomTransitionSystem({ biomeGenerator, fadeDurationMs: 150 });
+
+function randomSeed() {
+  return Math.floor(Math.random() * 0x7fffffff);
+}
 
 
 function resolveValidRoomSpawn(room, preferred) {
@@ -89,16 +96,18 @@ function resolveValidRoomSpawn(room, preferred) {
   return { x: Math.floor(ROOM_W / 2), y: Math.floor(ROOM_H / 2) };
 }
 
-if (activeRoom.entrances['initial-spawn']) {
-  const startEntrance = activeRoom.entrances['initial-spawn'];
+function resolveInitialSpawn(room) {
+  const startEntrance = room?.entrances?.['initial-spawn'];
   const spawnBase = {
-    x: startEntrance.spawn?.x ?? startEntrance.roadAnchor?.x ?? startEntrance.x ?? Math.floor(ROOM_W / 2),
-    y: startEntrance.spawn?.y ?? startEntrance.roadAnchor?.y ?? startEntrance.y ?? Math.floor(ROOM_H / 2),
+    x: startEntrance?.spawn?.x ?? startEntrance?.roadAnchor?.x ?? startEntrance?.x ?? Math.floor(ROOM_W / 2),
+    y: startEntrance?.spawn?.y ?? startEntrance?.roadAnchor?.y ?? startEntrance?.y ?? Math.floor(ROOM_H / 2),
   };
-  const spawn = resolveValidRoomSpawn(activeRoom, spawnBase);
-  player.x = spawn.x;
-  player.y = spawn.y;
+  return resolveValidRoomSpawn(room, spawnBase);
 }
+
+const initialSpawn = resolveInitialSpawn(activeRoom);
+player.x = initialSpawn.x;
+player.y = initialSpawn.y;
 camera.follow(player);
 let projectiles = [];
 let goldPiles = [];
@@ -221,6 +230,59 @@ function resetEncounterState() {
   player.vy = 0;
   logDev('Encounter reset');
 }
+
+function regenerateWorld(seed = null) {
+  const nextSeed = seed === null ? randomSeed() : (Number(seed) >>> 0);
+  const nextBiomeResult = biomeGenerator.regenerateBiome(currentBiomeId, nextSeed);
+  const nextActiveRoom = nextBiomeResult.startRoom;
+  if (!nextActiveRoom) return;
+
+  currentBiomeSeed = nextBiomeResult.biome.seed;
+  pendingDevSeed = String(currentBiomeSeed);
+  roomTransitionSystem.reset();
+
+  activeRoom = nextActiveRoom;
+  map = activeRoom.tiles;
+  worldObjects = activeRoom.objects ?? [];
+
+  enemies.length = 0;
+  npcs.length = 0;
+  projectiles = [];
+  goldPiles = [];
+  combatTextSystem.combatTexts.length = 0;
+  abilitySystem.effects.length = 0;
+  abilitySystem.activeFreeze = null;
+
+  const spawn = resolveInitialSpawn(activeRoom);
+  player.x = spawn.x;
+  player.y = spawn.y;
+  player.vx = 0;
+  player.vy = 0;
+  player.castTimer = 0;
+
+  abilitySystem.map = map;
+  camera.worldW = map[0]?.length ?? ROOM_W;
+  camera.worldH = map.length ?? ROOM_H;
+  camera.hasFollowTarget = false;
+  camera.follow(player);
+  renderer.lastCameraX = Number.NaN;
+  renderer.lastCameraY = Number.NaN;
+
+  devToolsPanel.render();
+  logDev('Map regenerated', { seed: currentBiomeSeed, biomeId: currentBiomeId });
+}
+
+devToolsPanel.setMapTools({
+  getSeed: () => pendingDevSeed,
+  setSeed: (seedValue) => {
+    pendingDevSeed = `${seedValue ?? ''}`;
+  },
+  regenerate: () => {
+    const trimmed = pendingDevSeed.trim();
+    const parsedSeed = trimmed.length > 0 && Number.isFinite(Number(trimmed)) ? Number(trimmed) : null;
+    regenerateWorld(parsedSeed);
+  },
+});
 
 logBoot('main scene entered');
 logDiag('app entered main scene');

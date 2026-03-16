@@ -55,6 +55,14 @@ export class RoomTransitionSystem {
     this.exitTriggerLockTimer = 0;
   }
 
+  reset() {
+    this.phase = 'idle';
+    this.phaseTimer = 0;
+    this.fadeAlpha = 0;
+    this.pendingExit = null;
+    this.exitTriggerLockTimer = 0;
+  }
+
   update(dt, context) {
     this.exitTriggerLockTimer = Math.max(0, this.exitTriggerLockTimer - dt);
 

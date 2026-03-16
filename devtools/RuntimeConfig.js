@@ -108,6 +108,10 @@ export const DEFAULT_CONFIG = {
     minDistanceFromPath: 2,
     minDistanceFromExit: 3,
   },
+  worldGeneration: {
+    forestRoomWidth: 120,
+    forestRoomHeight: 120,
+  },
 };
 
 export const CONFIG_FIELDS = [
@@ -184,6 +188,8 @@ export const CONFIG_FIELDS = [
   { path: 'pathGeneration.exitClearingRadius', label: 'Exit Clearing Radius', section: 'Path Generation', type: 'number', min: 1, max: 12, step: 1 },
   { path: 'pathGeneration.minDistanceFromPath', label: 'Min Distance From Path', section: 'Path Generation', type: 'number', min: 0, max: 12, step: 1 },
   { path: 'pathGeneration.minDistanceFromExit', label: 'Min Distance From Exit', section: 'Path Generation', type: 'number', min: 0, max: 16, step: 1 },
+  { path: 'worldGeneration.forestRoomWidth', label: 'Forest Room Min Width', section: 'World / Generation', type: 'number', min: 40, max: 320, step: 1 },
+  { path: 'worldGeneration.forestRoomHeight', label: 'Forest Room Min Height', section: 'World / Generation', type: 'number', min: 40, max: 320, step: 1 },
 ];
 
 function deepClone(v) { return JSON.parse(JSON.stringify(v)); }
