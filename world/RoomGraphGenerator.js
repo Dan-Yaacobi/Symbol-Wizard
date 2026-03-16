@@ -25,20 +25,6 @@ function oppositeDirection(direction) {
   return 'east';
 }
 
-function slotAnchorPosition(direction, slotIndex, slotCount, roomWidth, roomHeight) {
-  const minAxis = 4;
-  const axisMax = direction === 'north' || direction === 'south' ? roomWidth - 5 : roomHeight - 5;
-  const span = Math.max(minAxis, axisMax) - minAxis;
-  const axis = slotCount <= 1
-    ? Math.round((minAxis + Math.max(minAxis, axisMax)) / 2)
-    : Math.round(minAxis + (span * ((slotIndex + 1) / (slotCount + 1))));
-
-  if (direction === 'north') return { x: axis, y: 2, direction };
-  if (direction === 'south') return { x: axis, y: roomHeight - 3, direction };
-  if (direction === 'west') return { x: 2, y: axis, direction };
-  return { x: roomWidth - 3, y: axis, direction };
-}
-
 function createRoomNode(id, seed, depth) {
   return {
     id,
@@ -47,141 +33,91 @@ function createRoomNode(id, seed, depth) {
     entrances: {},
     exits: {},
     connections: [],
-    state: {
-      visited: false,
-    },
+    state: { visited: false },
   };
 }
 
-function createConnection(sourceRoom, targetRoom, edgeId, direction) {
-  return {
-    exitId: `${edgeId}:out`,
-    targetRoomId: targetRoom.id,
-    targetEntranceId: `${edgeId}:in`,
-    direction,
-  };
-}
-
-function connectRooms(sourceRoom, targetRoom, edgeId, direction) {
-  sourceRoom.connections.push(createConnection(sourceRoom, targetRoom, edgeId, direction));
-  targetRoom.connections.push(createConnection(targetRoom, sourceRoom, `${edgeId}:return`, oppositeDirection(direction)));
-}
-
-function pickUnusedDirection(rng, usedDirections, fallback = null) {
+function pickUnusedDirection(rng, usedDirections, fallback = 'east') {
   const options = DIRECTIONS.filter((dir) => !usedDirections.has(dir));
   if (options.length > 0) return options[Math.floor(rng() * options.length)];
-  return fallback ?? DIRECTIONS[Math.floor(rng() * DIRECTIONS.length)];
+  return fallback;
 }
 
-function isConnected(source, targetId) {
-  return source.connections.some((entry) => entry.targetRoomId === targetId);
+function roomExitCount(room) {
+  return room.connections.length;
 }
 
-function addSupplementalConnections(rooms, rng, minExitsPerRoom, maxExitsPerRoom, edgeCounterRef) {
-  const roomList = [...rooms.values()];
-
-  for (const room of roomList) {
-    while (Math.ceil(room.connections.length / 2) < minExitsPerRoom) {
-      const partner = roomList.find((candidate) => (
-        candidate.id !== room.id
-        && !isConnected(room, candidate.id)
-        && Math.ceil(candidate.connections.length / 2) < maxExitsPerRoom
-        && Math.ceil(room.connections.length / 2) < maxExitsPerRoom
-      ));
-
-      if (!partner) break;
-
-      const used = new Set(room.connections.map((entry) => entry.direction).filter(Boolean));
-      const direction = pickUnusedDirection(rng, used);
-      connectRooms(room, partner, `extra-${edgeCounterRef.value}`, direction);
-      edgeCounterRef.value += 1;
-    }
-  }
+function connectionId(edgeId, direction) {
+  return `${edgeId}:${direction}`;
 }
 
-function assignAnchorsFromConnections(rooms, roomWidth, roomHeight) {
+function connectBidirectional(rooms, roomGraph, sourceId, targetId, direction, edgeId) {
+  const source = rooms.get(sourceId);
+  const target = rooms.get(targetId);
+  if (!source || !target) return;
+
+  const reverseDirection = oppositeDirection(direction);
+  roomGraph[sourceId] ||= {};
+  roomGraph[targetId] ||= {};
+  roomGraph[sourceId][direction] = targetId;
+  roomGraph[targetId][reverseDirection] = sourceId;
+
+  const forwardExitId = connectionId(edgeId, direction);
+  const reverseExitId = connectionId(edgeId, reverseDirection);
+  const forwardEntranceId = `${edgeId}:in:${reverseDirection}`;
+  const reverseEntranceId = `${edgeId}:in:${direction}`;
+
+  source.connections.push({
+    edgeId,
+    exitId: forwardExitId,
+    targetRoomId: targetId,
+    targetEntranceId: forwardEntranceId,
+    direction,
+    reverseDirection,
+    corridorWidth: 3,
+    clearanceRadius: 3,
+  });
+
+  target.connections.push({
+    edgeId,
+    exitId: reverseExitId,
+    targetRoomId: sourceId,
+    targetEntranceId: reverseEntranceId,
+    direction: reverseDirection,
+    reverseDirection: direction,
+    corridorWidth: 3,
+    clearanceRadius: 3,
+  });
+
+  target.entrances[forwardEntranceId] = { direction: reverseDirection, corridorWidth: 3, clearanceRadius: 3 };
+  source.entrances[reverseEntranceId] = { direction, corridorWidth: 3, clearanceRadius: 3 };
+}
+
+function isConnected(rooms, sourceId, targetId) {
+  return (rooms.get(sourceId)?.connections ?? []).some((connection) => connection.targetRoomId === targetId);
+}
+
+function validateGraph(rooms, roomGraph) {
   for (const room of rooms.values()) {
-    room.exits = {};
-    const grouped = new Map();
-    for (const direction of DIRECTIONS) grouped.set(direction, []);
-
     for (const connection of room.connections) {
-      const direction = connection.direction ?? 'east';
-      if (!grouped.has(direction)) grouped.set(direction, []);
-      grouped.get(direction).push(connection);
-    }
-
-    for (const [direction, entries] of grouped.entries()) {
-      entries.sort((a, b) => a.exitId.localeCompare(b.exitId));
-      entries.forEach((connection, index) => {
-        room.exits[connection.exitId] = slotAnchorPosition(direction, index, entries.length, roomWidth, roomHeight);
-      });
-    }
-  }
-}
-
-function assignEntrancesFromIncomingConnections(rooms, roomWidth, roomHeight) {
-  for (const room of rooms.values()) room.entrances = {};
-
-  for (const sourceRoom of rooms.values()) {
-    for (const connection of sourceRoom.connections) {
-      const targetRoom = rooms.get(connection.targetRoomId);
-      if (!targetRoom) continue;
-      const exitAnchor = sourceRoom.exits[connection.exitId];
-      if (!exitAnchor) continue;
-      const direction = oppositeDirection(exitAnchor.direction ?? connection.direction ?? 'east');
-      if (!targetRoom.entrances[connection.targetEntranceId]) {
-        targetRoom.entrances[connection.targetEntranceId] = { direction };
+      const reverseRoom = rooms.get(connection.targetRoomId);
+      if (!reverseRoom) throw new Error(`ROOM_GRAPH_INVALID missing target room ${connection.targetRoomId}`);
+      const reverse = reverseRoom.connections.find((entry) => entry.targetRoomId === room.id && entry.direction === oppositeDirection(connection.direction));
+      if (!reverse) {
+        throw new Error(`ROOM_GRAPH_INVALID missing reverse connection ${room.id}:${connection.direction} -> ${connection.targetRoomId}`);
+      }
+      const graphTarget = roomGraph[room.id]?.[connection.direction];
+      if (graphTarget !== connection.targetRoomId) {
+        throw new Error(`ROOM_GRAPH_INVALID map mismatch for ${room.id}:${connection.direction}`);
       }
     }
   }
-
-  for (const room of rooms.values()) {
-    const grouped = new Map();
-    for (const direction of DIRECTIONS) grouped.set(direction, []);
-
-    for (const [entranceId, anchor] of Object.entries(room.entrances)) {
-      const direction = anchor.direction ?? 'east';
-      grouped.get(direction).push(entranceId);
-    }
-
-    for (const [direction, entranceIds] of grouped.entries()) {
-      entranceIds.sort();
-      entranceIds.forEach((entranceId, index) => {
-        room.entrances[entranceId] = slotAnchorPosition(direction, index, entranceIds.length, roomWidth, roomHeight);
-      });
-    }
-  }
 }
 
-function sanitizeGraph(rooms) {
-  for (const room of rooms.values()) {
-    room.connections = room.connections.filter((entry) => rooms.has(entry.targetRoomId));
-  }
-
-  for (const room of rooms.values()) {
-    const validExitIds = new Set(room.connections.map((entry) => entry.exitId));
-    room.exits = Object.fromEntries(Object.entries(room.exits).filter(([exitId]) => validExitIds.has(exitId)));
-
-    const incomingEntranceIds = new Set();
-    for (const source of rooms.values()) {
-      for (const connection of source.connections) {
-        if (connection.targetRoomId !== room.id) continue;
-        incomingEntranceIds.add(connection.targetEntranceId);
-      }
-    }
-    room.entrances = Object.fromEntries(Object.entries(room.entrances).filter(([entranceId]) => incomingEntranceIds.has(entranceId)));
-  }
-}
-
-export function generateRoomGraph({
-  seed,
-  roomWidth = 240,
-  roomHeight = 160,
-  biomeConfig = {},
-} = {}) {
+export function generateRoomGraph({ seed, biomeConfig = {} } = {}) {
   const rng = createRng(seed >>> 0);
   const rooms = new Map();
+  const roomGraph = {};
 
   const minRooms = Math.max(2, biomeConfig.minRooms ?? 6);
   const maxRooms = Math.max(minRooms, biomeConfig.maxRooms ?? 12);
@@ -191,22 +127,21 @@ export function generateRoomGraph({
 
   const targetRooms = randomInt(rng, minRooms, maxRooms);
   const mainPathLength = clamp(randomInt(rng, Math.max(2, minRooms - 1), maxRooms), 2, targetRooms);
-  const mainPathIds = [];
 
+  const mainPathIds = [];
   for (let i = 0; i < mainPathLength; i += 1) {
     const id = i === 0 ? 'start' : i === mainPathLength - 1 ? 'exit' : `main-${i}`;
-    const room = createRoomNode(id, randomInt(rng, 0, 0x7fffffff), i);
-    rooms.set(id, room);
+    rooms.set(id, createRoomNode(id, randomInt(rng, 0, 0x7fffffff), i));
+    roomGraph[id] = {};
     mainPathIds.push(id);
   }
 
   let edgeCounter = 0;
   for (let i = 0; i < mainPathIds.length - 1; i += 1) {
     const source = rooms.get(mainPathIds[i]);
-    const target = rooms.get(mainPathIds[i + 1]);
-    const used = new Set(source.connections.map((entry) => entry.direction).filter(Boolean));
+    const used = new Set((source?.connections ?? []).map((entry) => entry.direction));
     const direction = pickUnusedDirection(rng, used, 'east');
-    connectRooms(source, target, `main-${edgeCounter}`, direction);
+    connectBidirectional(rooms, roomGraph, mainPathIds[i], mainPathIds[i + 1], direction, `main-${edgeCounter}`);
     edgeCounter += 1;
   }
 
@@ -215,29 +150,44 @@ export function generateRoomGraph({
     const mustGrow = rooms.size < minRooms;
     if (!mustGrow && rng() > branchProbability) break;
 
-    const parents = [...rooms.values()].filter((room) => Math.ceil(room.connections.length / 2) < maxExitsPerRoom);
+    const parents = [...rooms.values()].filter((room) => roomExitCount(room) < maxExitsPerRoom);
     const parent = parents[Math.floor(rng() * parents.length)];
     if (!parent) break;
 
     sideCounter += 1;
-    const child = createRoomNode(`side-${sideCounter}`, randomInt(rng, 0, 0x7fffffff), parent.depth + 1);
-    rooms.set(child.id, child);
+    const childId = `side-${sideCounter}`;
+    rooms.set(childId, createRoomNode(childId, randomInt(rng, 0, 0x7fffffff), parent.depth + 1));
+    roomGraph[childId] = {};
 
-    const used = new Set(parent.connections.map((entry) => entry.direction).filter(Boolean));
+    const used = new Set(parent.connections.map((entry) => entry.direction));
     const direction = pickUnusedDirection(rng, used);
-    connectRooms(parent, child, `side-${edgeCounter}`, direction);
+    connectBidirectional(rooms, roomGraph, parent.id, childId, direction, `side-${edgeCounter}`);
     edgeCounter += 1;
   }
 
-  const edgeCounterRef = { value: edgeCounter };
-  addSupplementalConnections(rooms, rng, minExitsPerRoom, maxExitsPerRoom, edgeCounterRef);
+  const roomList = [...rooms.values()];
+  for (const room of roomList) {
+    while (roomExitCount(room) < minExitsPerRoom) {
+      const partner = roomList.find((candidate) => (
+        candidate.id !== room.id
+        && roomExitCount(candidate) < maxExitsPerRoom
+        && !isConnected(rooms, room.id, candidate.id)
+      ));
+      if (!partner) break;
 
-  assignAnchorsFromConnections(rooms, roomWidth, roomHeight);
-  assignEntrancesFromIncomingConnections(rooms, roomWidth, roomHeight);
-  sanitizeGraph(rooms);
+      const used = new Set(room.connections.map((entry) => entry.direction));
+      const direction = pickUnusedDirection(rng, used);
+      connectBidirectional(rooms, roomGraph, room.id, partner.id, direction, `extra-${edgeCounter}`);
+      edgeCounter += 1;
+    }
+  }
+
+  validateGraph(rooms, roomGraph);
 
   return {
     rooms,
+    roomGraph,
     startRoomId: 'start',
+    debugEvents: [{ type: 'ROOM_GRAPH_CREATED', roomCount: rooms.size }],
   };
 }

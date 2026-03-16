@@ -40,6 +40,7 @@ export class BiomeGenerator {
         biomeConfig,
         seed,
         rooms: graph.rooms,
+        roomGraph: graph.roomGraph,
         startRoomId: graph.startRoomId,
       };
 
@@ -72,14 +73,12 @@ export class BiomeGenerator {
 
     console.debug('[BiomeGenerator] start room debug', {
       startRoomId: biome.startRoomId,
-      exits: Object.keys(startRoomNode.exits),
-      entrances: Object.keys(startRoomNode.entrances),
-      exitCoordinates: Object.entries(startRoomNode.exits).map(([exitId, anchor]) => ({
-        exitId,
-        x: anchor.x,
-        y: anchor.y,
-        direction: anchor.direction,
+      connections: startRoomNode.connections.map((connection) => ({
+        exitId: connection.exitId,
+        direction: connection.direction,
+        targetRoomId: connection.targetRoomId,
       })),
+      entrances: Object.keys(startRoomNode.entrances),
       startRoomConnections: startRoomNode.connections.map((connection) => ({ ...connection })),
     });
   }
@@ -96,6 +95,8 @@ export class BiomeGenerator {
 
     const room = generateRoomInstance({
       roomNode,
+      rooms: this.currentBiome?.rooms,
+      roomGraph: this.currentBiome?.roomGraph,
       roomWidth: this.roomWidth,
       roomHeight: this.roomHeight,
       biomeConfig: this.currentBiome?.biomeConfig,
