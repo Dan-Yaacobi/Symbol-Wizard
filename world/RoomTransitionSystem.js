@@ -18,52 +18,11 @@ function isObjectBlocked(room, x, y) {
   return false;
 }
 
-function isInExitCorridor(room, x, y) {
-  if (!room?.exitCorridors?.length) return false;
-  return room.exitCorridors.some((corridor) => (corridor?.triggerTiles ?? corridor?.edgeTiles ?? []).some((tile) => tile.x === x && tile.y === y));
-}
-
-function buildInwardSpawnPosition(room, entrance, inset = 4) {
-  const direction = entrance?.direction;
-  if (!direction) {
-    return {
-      x: entrance?.spawn?.x ?? entrance?.roadAnchor?.x ?? entrance?.x,
-      y: entrance?.spawn?.y ?? entrance?.roadAnchor?.y ?? entrance?.y,
-    };
-  }
-
-  const minEdgeX = Math.min(entrance?.edgeStart?.x ?? entrance.x ?? 0, entrance?.edgeEnd?.x ?? entrance.x ?? 0);
-  const maxEdgeX = Math.max(entrance?.edgeStart?.x ?? entrance.x ?? 0, entrance?.edgeEnd?.x ?? entrance.x ?? 0);
-  const minEdgeY = Math.min(entrance?.edgeStart?.y ?? entrance.y ?? 0, entrance?.edgeEnd?.y ?? entrance.y ?? 0);
-  const maxEdgeY = Math.max(entrance?.edgeStart?.y ?? entrance.y ?? 0, entrance?.edgeEnd?.y ?? entrance.y ?? 0);
-
-  const centerX = Math.round((minEdgeX + maxEdgeX) / 2);
-  const centerY = Math.round((minEdgeY + maxEdgeY) / 2);
-
-  if (direction === 'east') {
-    return { x: maxEdgeX - inset, y: centerY };
-  }
-
-  if (direction === 'west') {
-    return { x: minEdgeX + inset, y: centerY };
-  }
-
-  if (direction === 'north') {
-    return { x: centerX, y: minEdgeY + inset };
-  }
-
-  if (direction === 'south') {
-    return { x: centerX, y: maxEdgeY - inset };
-  }
-
-  return { x: centerX, y: centerY };
-}
-
 function findSpawnPosition(room, preferredX, preferredY, maxRadius = 6) {
   const startX = Math.round(preferredX);
   const startY = Math.round(preferredY);
 
-  if (isWalkableTile(room, startX, startY) && !isInExitCorridor(room, startX, startY) && !isObjectBlocked(room, startX, startY)) {
+  if (isWalkableTile(room, startX, startY) && !isObjectBlocked(room, startX, startY)) {
     return { x: startX, y: startY };
   }
 
@@ -77,7 +36,7 @@ function findSpawnPosition(room, preferredX, preferredY, maxRadius = 6) {
         if (isObjectBlocked(room, x, y)) continue;
 
         if (!fallback) fallback = { x, y };
-        if (!isInExitCorridor(room, x, y)) return { x, y };
+        return { x, y };
       }
     }
   }
@@ -146,22 +105,18 @@ export class RoomTransitionSystem {
   }
 
   switchRoom(context, exitId) {
-    const roomNode = this.biomeGenerator.getRoomNode(context.activeRoom.id);
-    if (!roomNode) return null;
+    const exit = context.activeRoom?.exits?.[exitId];
+    if (!exit?.targetRoomId || !exit?.targetEntranceId) return null;
 
-    const connection = roomNode.connections.find((entry) => entry.exitId === exitId);
-    if (!connection) return null;
-
-    const targetRoom = this.biomeGenerator.loadRoom(connection.targetRoomId);
-    const targetEntrance = targetRoom?.entrances?.[connection.targetEntranceId];
+    const targetRoom = this.biomeGenerator.loadRoom(exit.targetRoomId);
+    const targetEntrance = targetRoom?.entrances?.[exit.targetEntranceId];
     if (!targetRoom || !targetEntrance) return null;
 
     context.activeRoom.state.visited = true;
     targetRoom.state.visited = true;
 
-    const inwardSpawn = buildInwardSpawnPosition(targetRoom, targetEntrance, 4);
-    const preferredSpawnX = inwardSpawn.x;
-    const preferredSpawnY = inwardSpawn.y;
+    const preferredSpawnX = targetEntrance.landingX ?? targetEntrance.spawn?.x ?? targetEntrance.x;
+    const preferredSpawnY = targetEntrance.landingY ?? targetEntrance.spawn?.y ?? targetEntrance.y;
     const spawn = findSpawnPosition(targetRoom, preferredSpawnX, preferredSpawnY);
     context.player.x = spawn.x;
     context.player.y = spawn.y;

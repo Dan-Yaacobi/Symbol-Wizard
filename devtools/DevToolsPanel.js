@@ -84,6 +84,9 @@ export class DevToolsPanel {
       selectedTile: enabled('debug.selectedTile'),
       layerLabels: enabled('debug.layerLabels'),
       facingMarker: enabled('debug.facingMarker'),
+      showExitAnchors: enabled('debug.showExitAnchors'),
+      showReservedCorridors: enabled('debug.showReservedCorridors'),
+      showLandingTiles: enabled('debug.showLandingTiles'),
       selectedEntityRef: this.selectedEntity,
       selectedTileRef: this.selectedTile,
     };
