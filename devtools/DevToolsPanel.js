@@ -28,6 +28,11 @@ export class DevToolsPanel {
     this.selectedEntity = null;
     this.selectedTile = null;
     this.fieldElements = new Map();
+    this.mapTools = {
+      getSeed: () => '',
+      setSeed: () => {},
+      regenerate: () => {},
+    };
 
     this.root = document.createElement('aside');
     this.root.className = 'devtools-panel hidden';
@@ -59,6 +64,13 @@ export class DevToolsPanel {
   setInspectorData({ selectedEntity, selectedTile }) {
     this.selectedEntity = selectedEntity;
     this.selectedTile = selectedTile;
+    this.render();
+  }
+
+  setMapTools({ getSeed, setSeed, regenerate } = {}) {
+    if (typeof getSeed === 'function') this.mapTools.getSeed = getSeed;
+    if (typeof setSeed === 'function') this.mapTools.setSeed = setSeed;
+    if (typeof regenerate === 'function') this.mapTools.regenerate = regenerate;
     this.render();
   }
 
@@ -120,10 +132,42 @@ export class DevToolsPanel {
       this.root.appendChild(this.#sectionBlock(section, grouped.get(section) ?? []));
     }
     this.root.appendChild(this.#sectionBlock('Debug / Overlays', grouped.get('Debug / Overlays') ?? []));
+    this.root.appendChild(this.#mapToolsBlock());
     this.root.appendChild(this.#inspectorBlock('Selected Entity Inspector', this.selectedEntity));
     this.root.appendChild(this.#inspectorBlock('Selected Tile / Cell Inspector', this.selectedTile));
     this.root.appendChild(this.#sectionBlock('Performance', grouped.get('Performance') ?? []));
     this.root.appendChild(this.#presetsBlock());
+  }
+
+  #mapToolsBlock() {
+    const details = document.createElement('details');
+    details.className = 'devtools-section';
+    details.open = true;
+    details.innerHTML = '<summary>Map Tools</summary>';
+
+    const seedRow = document.createElement('div');
+    seedRow.className = 'devtools-field';
+    seedRow.innerHTML = '<label>Seed</label>';
+
+    const seedInput = document.createElement('input');
+    seedInput.type = 'text';
+    seedInput.placeholder = 'blank = random seed';
+    seedInput.value = this.mapTools.getSeed();
+    seedInput.addEventListener('input', () => this.mapTools.setSeed(seedInput.value));
+    seedRow.appendChild(seedInput);
+
+    const seedMeta = document.createElement('small');
+    seedMeta.textContent = 'Set a seed, then click regenerate.';
+    seedRow.appendChild(seedMeta);
+    details.appendChild(seedRow);
+
+    const regenerateButton = document.createElement('button');
+    regenerateButton.className = 'devtools-action';
+    regenerateButton.textContent = 'Regenerate Map';
+    regenerateButton.addEventListener('click', () => this.mapTools.regenerate());
+    details.appendChild(regenerateButton);
+
+    return details;
   }
 
   #searchSection() {

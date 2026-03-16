@@ -64,6 +64,11 @@ export class BiomeGenerator {
     };
   }
 
+  regenerateBiome(biomeId, seed = randomSeed()) {
+    this.biomes.delete(biomeId);
+    return this.enterBiome(biomeId, seed);
+  }
+
 
   logStartRoomDebug(biome) {
     const startRoomNode = biome?.rooms?.get(biome.startRoomId);
