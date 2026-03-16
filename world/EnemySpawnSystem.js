@@ -2,36 +2,34 @@ import { Enemy } from '../entities/Enemy.js';
 
 const DEFAULT_ENEMY_SPAWN_TABLE = {
   forest: [
-    { type: 'chaser', weight: 5 },
-    { type: 'ranged', weight: 3 },
-    { type: 'tank', weight: 2 },
-    { type: 'swarm', weight: 4 },
+    { type: 'spider', weight: 4 },
+    { type: 'green_enemy', weight: 3 },
+    { type: 'forest_shooter', weight: 2 },
+    { type: 'forest_brute', weight: 1 },
+    { type: 'forest_swarm_bug', weight: 3 },
+    { type: 'forest_flanker', weight: 2 },
   ],
   cave: [
-    { type: 'chaser', weight: 3 },
-    { type: 'ranged', weight: 4 },
-    { type: 'tank', weight: 4 },
-    { type: 'swarm', weight: 2 },
+    { type: 'green_enemy', weight: 3 },
+    { type: 'forest_shooter', weight: 4 },
+    { type: 'forest_brute', weight: 4 },
+    { type: 'forest_swarm_bug', weight: 2 },
+    { type: 'forest_flanker', weight: 2 },
   ],
   river: [
-    { type: 'chaser', weight: 4 },
-    { type: 'ranged', weight: 4 },
-    { type: 'tank', weight: 2 },
-    { type: 'swarm', weight: 3 },
+    { type: 'spider', weight: 4 },
+    { type: 'forest_shooter', weight: 4 },
+    { type: 'forest_brute', weight: 2 },
+    { type: 'forest_swarm_bug', weight: 3 },
+    { type: 'forest_flanker', weight: 3 },
   ],
   mountain: [
-    { type: 'chaser', weight: 3 },
-    { type: 'ranged', weight: 2 },
-    { type: 'tank', weight: 5 },
-    { type: 'swarm', weight: 2 },
+    { type: 'green_enemy', weight: 4 },
+    { type: 'forest_shooter', weight: 2 },
+    { type: 'forest_brute', weight: 5 },
+    { type: 'forest_swarm_bug', weight: 2 },
+    { type: 'forest_flanker', weight: 2 },
   ],
-};
-
-const ARCHETYPE_TO_KIND = {
-  chaser: 'slime',
-  ranged: 'skeleton',
-  tank: 'skeleton',
-  swarm: 'slime',
 };
 
 const DEFAULT_SETTINGS = {
@@ -39,7 +37,7 @@ const DEFAULT_SETTINGS = {
   minEnemies: 3,
   maxEnemies: 25,
   groupSpawnChance: 0.25,
-  swarmGroupMin: 3,
+  swarmGroupMin: 4,
   swarmGroupMax: 6,
   minDistanceFromEntrance: 6,
   minDistanceFromExit: 5,
@@ -72,13 +70,13 @@ function resolveSettings(runtimeConfig = null) {
 
 function weightedPick(entries, rng) {
   const total = entries.reduce((acc, entry) => acc + Math.max(0, entry.weight ?? 0), 0);
-  if (total <= 0) return entries[0]?.type ?? 'chaser';
+  if (total <= 0) return entries[0]?.type ?? 'spider';
   let roll = rng() * total;
   for (const entry of entries) {
     roll -= Math.max(0, entry.weight ?? 0);
     if (roll <= 0) return entry.type;
   }
-  return entries[entries.length - 1]?.type ?? 'chaser';
+  return entries[entries.length - 1]?.type ?? 'spider';
 }
 
 function randomInt(rng, min, max) {
@@ -149,8 +147,12 @@ function findValidPoint(room, context, center = null) {
   return null;
 }
 
-function resolveGroupSize(archetype, remaining, settings, rng) {
-  if (archetype === 'swarm') {
+function isSwarmType(type) {
+  return type === 'forest_swarm_bug';
+}
+
+function resolveGroupSize(type, remaining, settings, rng) {
+  if (isSwarmType(type)) {
     const size = randomInt(rng, settings.swarmGroupMin, settings.swarmGroupMax);
     return Math.max(1, Math.min(size, remaining));
   }
@@ -189,9 +191,8 @@ function collectPathMask(room, fallbackPathMask) {
   return mask;
 }
 
-function createEnemy(archetype, x, y) {
-  const kind = ARCHETYPE_TO_KIND[archetype] ?? 'slime';
-  return new Enemy(kind, x, y);
+function createEnemy(enemyType, x, y) {
+  return new Enemy(enemyType, x, y);
 }
 
 export function spawnEnemyGroup(type, centerX, centerY, options = {}) {
@@ -264,9 +265,9 @@ export function spawnEnemiesForRoom(room, options = {}) {
   let groupIndex = 0;
 
   while (enemies.length < desiredCount) {
-    const archetype = weightedPick(spawnTable, rng);
+    const enemyType = weightedPick(spawnTable, rng);
     const remaining = desiredCount - enemies.length;
-    const groupSize = resolveGroupSize(archetype, remaining, settings, rng);
+    const groupSize = resolveGroupSize(enemyType, remaining, settings, rng);
 
     let center = null;
     for (let attempt = 0; attempt < settings.maxSpawnAttempts; attempt += 1) {
@@ -279,7 +280,7 @@ export function spawnEnemiesForRoom(room, options = {}) {
     if (!center) break;
 
     const groupId = `group-${groupIndex}`;
-    const group = spawnEnemyGroup(archetype, center.x, center.y, {
+    const group = spawnEnemyGroup(enemyType, center.x, center.y, {
       room,
       occupiedTiles,
       pathMask,
@@ -296,7 +297,7 @@ export function spawnEnemiesForRoom(room, options = {}) {
       continue;
     }
 
-    groupCenters.push({ x: center.x, y: center.y, type: archetype, groupId });
+    groupCenters.push({ x: center.x, y: center.y, type: enemyType, groupId });
     enemies.push(...group.enemies);
     spawnPoints.push(...group.points);
     groupIndex += 1;

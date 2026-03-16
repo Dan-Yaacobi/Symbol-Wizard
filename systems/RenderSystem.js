@@ -421,7 +421,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
 
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
-    const baseColor = enemy.kind === 'slime' ? palette.slime : palette.skeleton;
+    const baseColor = enemy.spriteKey === 'slime' ? palette.slime : palette.skeleton;
     let renderColor = enemy.frozen ? (enemy.freezeTint ?? '#9edbff') : baseColor;
 
     if (enemy.hitFlashTimer > 0) {

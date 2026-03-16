@@ -1,10 +1,90 @@
-export function updateEnemies(enemies, player, dt, config = null) {
+import { Projectile } from '../entities/Projectile.js';
+import { ENEMY_BEHAVIOR } from '../entities/Enemy.js';
+
+function resetMeleeState(enemy) {
+  enemy.isWindingUp = false;
+  enemy.isAttacking = false;
+  enemy.attackElapsed = 0;
+  enemy.attackDamageApplied = false;
+}
+
+function stopEnemy(enemy) {
+  enemy.vx = 0;
+  enemy.vy = 0;
+}
+
+function applyMeleeLogic(enemy, dt, cooldownMultiplier = 1) {
+  stopEnemy(enemy);
+
+  if (enemy.isWindingUp) {
+    enemy.attackElapsed = (enemy.attackElapsed ?? 0) + dt;
+    if (enemy.attackElapsed >= (enemy.attackWindup ?? 0.4)) {
+      enemy.isWindingUp = false;
+      enemy.isAttacking = true;
+      enemy.attackElapsed = 0;
+      enemy.attackDamageApplied = false;
+    }
+    return;
+  }
+
+  if (enemy.isAttacking) {
+    enemy.attackElapsed = (enemy.attackElapsed ?? 0) + dt;
+    if (enemy.attackElapsed >= (enemy.attackDuration ?? 0.3)) {
+      enemy.isAttacking = false;
+      enemy.attackElapsed = 0;
+      enemy.attackDamageApplied = false;
+      enemy.attackTimer = (enemy.attackCooldown ?? 0.8) * cooldownMultiplier;
+    }
+    return;
+  }
+
+  if ((enemy.attackTimer ?? 0) <= 0) {
+    enemy.isWindingUp = true;
+    enemy.attackElapsed = 0;
+    enemy.attackDamageApplied = false;
+  }
+}
+
+function move(enemy, dirX, dirY, dt, speedMultiplier = 1, jitter = 0) {
+  const len = Math.hypot(dirX, dirY) || 1;
+  enemy.vx = (dirX / len) * enemy.speed * speedMultiplier + jitter;
+  enemy.vy = (dirY / len) * enemy.speed * speedMultiplier;
+  enemy.x += enemy.vx * dt;
+  enemy.y += enemy.vy * dt;
+}
+
+function createEnemyProjectile(enemy, player) {
+  const dx = player.x - enemy.x;
+  const dy = player.y - enemy.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const projectile = new Projectile(enemy.x, enemy.y, dx / len, dy / len);
+  projectile.faction = 'enemy';
+  projectile.damage = enemy.attackDamage ?? 2;
+  projectile.speed = 40;
+  projectile.ttl = 1.2;
+  projectile.color = '#ffb893';
+  projectile.glowColor = '#ffd4b8';
+  projectile.trailColor = '#ffc69b';
+  projectile.hitParticleColor = '#ffd6b8';
+  return projectile;
+}
+
+export function updateEnemies(enemies, player, dt, projectiles = [], config = null) {
+  const detectRadius = config?.get?.('enemies.detectRadius') ?? config?.get?.('enemies.aggroRange') ?? 26;
+  const chaseRadius = config?.get?.('enemies.chaseRadius') ?? config?.get?.('enemies.disengageRange') ?? 40;
+  const aggroMemory = config?.get?.('enemies.aggroMemory') ?? 2.5;
+  const attackRangeMult = config?.get?.('enemies.attackRangeMultiplier') ?? 1;
+  const speedMult = config?.get?.('enemies.moveSpeedMultiplier') ?? 1;
+  const cooldownMult = config?.get?.('enemies.attackCooldownMultiplier') ?? 1;
+  const rangedAttackRange = config?.get?.('enemies.rangedAttackRange') ?? 10;
+  const rangedCooldown = config?.get?.('enemies.rangedCooldown') ?? 1.5;
+  const tankSpeedMultiplier = config?.get?.('enemies.tankSpeedMultiplier') ?? 0.6;
+  const flankerOffsetDistance = config?.get?.('enemies.flankerOffsetDistance') ?? 5;
+
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
 
-    if (enemy.hitFlashTimer > 0) {
-      enemy.hitFlashTimer = Math.max(0, enemy.hitFlashTimer - dt);
-    }
+    if (enemy.hitFlashTimer > 0) enemy.hitFlashTimer = Math.max(0, enemy.hitFlashTimer - dt);
 
     if (enemy.hitKnockbackTimer > 0) {
       enemy.x += enemy.hitKnockbackX * dt;
@@ -17,12 +97,8 @@ export function updateEnemies(enemies, player, dt, config = null) {
     }
 
     if (enemy.frozen) {
-      enemy.vx = 0;
-      enemy.vy = 0;
-      enemy.isWindingUp = false;
-      enemy.isAttacking = false;
-      enemy.attackElapsed = 0;
-      enemy.attackDamageApplied = false;
+      stopEnemy(enemy);
+      resetMeleeState(enemy);
       continue;
     }
 
@@ -31,66 +107,84 @@ export function updateEnemies(enemies, player, dt, config = null) {
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy);
-    const len = distance || 1;
-    const attackRangeMult = config?.get?.('enemies.attackRangeMultiplier') ?? 1;
-    const aggroRange = config?.get?.('enemies.aggroRange') ?? 26;
-    const disengageRange = config?.get?.('enemies.disengageRange') ?? 40;
     const attackRange = (enemy.attackRange ?? 3) * attackRangeMult;
     const inAttackRange = distance <= attackRange;
-    if (distance > disengageRange || distance > aggroRange) {
-      enemy.vx = 0;
-      enemy.vy = 0;
+
+    if (distance <= detectRadius) {
+      enemy.aggroMemoryTimer = aggroMemory;
+    } else {
+      enemy.aggroMemoryTimer = Math.max(0, (enemy.aggroMemoryTimer ?? 0) - dt);
+    }
+
+    const shouldAggro = distance <= detectRadius || (enemy.aggroMemoryTimer ?? 0) > 0;
+    if (!shouldAggro || distance > chaseRadius) {
+      stopEnemy(enemy);
+      resetMeleeState(enemy);
       continue;
     }
 
-    if (!inAttackRange) {
-      enemy.isWindingUp = false;
-      enemy.isAttacking = false;
-      enemy.attackElapsed = 0;
-      enemy.attackDamageApplied = false;
+    switch (enemy.behavior) {
+      case ENEMY_BEHAVIOR.RANGED: {
+        resetMeleeState(enemy);
+        const retreatDistance = enemy.retreatDistance ?? 4;
+        const targetRange = Math.max(enemy.attackRange ?? rangedAttackRange, rangedAttackRange);
 
-      const jitter = enemy.kind === 'slime' ? Math.sin(performance.now() * 0.01 + enemy.x) * 0.3 : 0;
-      const speedMult = config?.get?.('enemies.moveSpeedMultiplier') ?? 1;
-      enemy.vx = (dx / len) * enemy.speed * speedMult + jitter;
-      enemy.vy = (dy / len) * enemy.speed * speedMult;
-      enemy.x += enemy.vx * dt;
-      enemy.y += enemy.vy * dt;
-      continue;
-    }
-
-    enemy.vx = 0;
-    enemy.vy = 0;
-
-    if (enemy.isWindingUp) {
-      enemy.attackElapsed = (enemy.attackElapsed ?? 0) + dt;
-      if (enemy.attackElapsed >= (enemy.attackWindup ?? 0.4)) {
-        enemy.isWindingUp = false;
-        enemy.isAttacking = true;
-        enemy.attackElapsed = 0;
-        enemy.attackDamageApplied = false;
+        if (distance < retreatDistance) {
+          move(enemy, -dx, -dy, dt, speedMult);
+        } else if (distance > targetRange) {
+          move(enemy, dx, dy, dt, speedMult);
+        } else {
+          stopEnemy(enemy);
+          if ((enemy.attackTimer ?? 0) <= 0) {
+            projectiles.push(createEnemyProjectile(enemy, player));
+            enemy.attackTimer = Math.max(enemy.attackCooldown ?? rangedCooldown, rangedCooldown);
+          }
+        }
+        break;
       }
-      continue;
-    }
-
-    if (enemy.isAttacking) {
-      enemy.vx = 0;
-      enemy.vy = 0;
-      enemy.attackElapsed = (enemy.attackElapsed ?? 0) + dt;
-
-      if (enemy.attackElapsed >= (enemy.attackDuration ?? 0.3)) {
-        enemy.isAttacking = false;
-        enemy.attackElapsed = 0;
-        enemy.attackDamageApplied = false;
-        const cooldownMult = config?.get?.('enemies.attackCooldownMultiplier') ?? 1;
-        enemy.attackTimer = (enemy.attackCooldown ?? 0.8) * cooldownMult;
+      case ENEMY_BEHAVIOR.TANK: {
+        if (!inAttackRange) {
+          resetMeleeState(enemy);
+          move(enemy, dx, dy, dt, speedMult * tankSpeedMultiplier);
+        } else {
+          applyMeleeLogic(enemy, dt, cooldownMult);
+        }
+        break;
       }
-      continue;
-    }
-
-    if ((enemy.attackTimer ?? 0) <= 0) {
-      enemy.isWindingUp = true;
-      enemy.attackElapsed = 0;
-      enemy.attackDamageApplied = false;
+      case ENEMY_BEHAVIOR.SWARM: {
+        if (!inAttackRange) {
+          resetMeleeState(enemy);
+          move(enemy, dx, dy, dt, speedMult);
+        } else {
+          applyMeleeLogic(enemy, dt, cooldownMult);
+        }
+        break;
+      }
+      case ENEMY_BEHAVIOR.FLANKER: {
+        if (!inAttackRange) {
+          resetMeleeState(enemy);
+          const angleToPlayer = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+          enemy.flankAngleOffset = (enemy.flankAngleOffset ?? 0) + dt * (enemy.flankOrbitSpeed ?? 1.2) * (enemy.flankDirection ?? 1);
+          const orbitAngle = angleToPlayer + (enemy.flankDirection ?? 1) * (Math.PI / 2) + enemy.flankAngleOffset;
+          const targetX = player.x + Math.cos(orbitAngle) * flankerOffsetDistance;
+          const targetY = player.y + Math.sin(orbitAngle) * flankerOffsetDistance;
+          move(enemy, targetX - enemy.x, targetY - enemy.y, dt, speedMult);
+        } else {
+          applyMeleeLogic(enemy, dt, cooldownMult);
+        }
+        break;
+      }
+      case ENEMY_BEHAVIOR.CHASER:
+      default: {
+        if (!inAttackRange) {
+          resetMeleeState(enemy);
+          const jitter = enemy.enemyType === 'spider' ? Math.sin(performance.now() * 0.01 + enemy.x) * 0.3 : 0;
+          move(enemy, dx, dy, dt, speedMult, jitter);
+        } else {
+          applyMeleeLogic(enemy, dt, cooldownMult);
+        }
+        break;
+      }
     }
   }
 }
