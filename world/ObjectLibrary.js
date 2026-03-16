@@ -532,7 +532,10 @@ export function spawnObject(type, position, overrides = {}, rng = Math.random) {
   const definition = getObjectDefinition(type);
   if (!definition) return null;
 
-  const quarterTurns = definition.rotations ? Math.floor(rng() * 4) : 0;
+  const hasRotationOverride = Number.isInteger(overrides.rotation);
+  const quarterTurns = hasRotationOverride
+    ? ((overrides.rotation % 4) + 4) % 4
+    : (definition.rotations ? Math.floor(rng() * 4) : 0);
   const footprintInput = overrides.footprint ?? definition.footprint;
   const baseFootprint = normalizeFootprint(footprintInput);
   const rotatedFootprint = rotateFootprint(baseFootprint, quarterTurns);

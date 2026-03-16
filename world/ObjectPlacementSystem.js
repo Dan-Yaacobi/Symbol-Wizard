@@ -60,6 +60,47 @@ function collectObjectTiles(center, footprint) {
   return normalizeFootprintCells(footprint).map((cell) => ({ x: center.x + cell.x, y: center.y + cell.y }));
 }
 
+function rotateFootprintCells(footprint, quarterTurns = 0) {
+  const turns = ((quarterTurns % 4) + 4) % 4;
+  return normalizeFootprintCells(footprint).map((cell) => {
+    if (turns === 1) return { x: -cell.y, y: cell.x };
+    if (turns === 2) return { x: -cell.x, y: -cell.y };
+    if (turns === 3) return { x: cell.y, y: -cell.x };
+    return { x: cell.x, y: cell.y };
+  });
+}
+
+function isFootprintValid({ tiles, footprint, center, occupiedTiles, blockedMask, safetyConfig, densityField }) {
+  const cells = collectObjectTiles(center, footprint);
+  if (cells.length === 0) return false;
+
+  const mapHeight = tiles.length;
+  const mapWidth = tiles[0]?.length ?? 0;
+  const mapEdge = safetyConfig.minDistanceFromMapEdge ?? 0;
+
+  for (const cell of cells) {
+    const inBounds = cell.x >= 0 && cell.x < mapWidth && cell.y >= 0 && cell.y < mapHeight;
+    if (!inBounds) return false;
+
+    // Protect outer boundary walls regardless of runtime edge distance tuning.
+    if (cell.x <= 1 || cell.x >= mapWidth - 2 || cell.y <= 1 || cell.y >= mapHeight - 2) return false;
+
+    if (cell.x < mapEdge || cell.y < mapEdge || cell.x >= mapWidth - mapEdge || cell.y >= mapHeight - mapEdge) return false;
+
+    const tile = tiles[cell.y]?.[cell.x];
+    if (!tile?.walkable || tile.type === 'road') return false;
+    if (blockedMask?.has(tileKey(cell.x, cell.y))) return false;
+    if (occupiedTiles?.has(tileKey(cell.x, cell.y))) return false;
+    if ((densityField[cell.y]?.[cell.x] ?? 0) <= 0) return false;
+  }
+
+  if (violatesAnchorDistance(cells, safetyConfig.pathAnchors, safetyConfig.minDistanceFromPath)) return false;
+  if (violatesAnchorDistance(cells, safetyConfig.exitAnchors, safetyConfig.minDistanceFromExit)) return false;
+  if (violatesAnchorDistance(cells, safetyConfig.entranceAnchors, safetyConfig.minDistanceFromExit)) return false;
+
+  return true;
+}
+
 function isWithinDistanceSquared(ax, ay, bx, by, distance) {
   const dx = ax - bx;
   const dy = ay - by;
@@ -214,24 +255,16 @@ function violatesAnchorDistance(tilesToCheck, anchors = [], minDistance = 0) {
   return false;
 }
 
-function validatePlacement({ tiles, center, definition, occupiedTiles, blockedMask, safetyConfig, densityField }) {
-  const cells = collectObjectTiles(center, definition.footprint);
-  const mapEdge = safetyConfig.minDistanceFromMapEdge ?? 0;
-
-  for (const cell of cells) {
-    if (cell.x < mapEdge || cell.y < mapEdge || cell.x >= tiles[0].length - mapEdge || cell.y >= tiles.length - mapEdge) return false;
-    const tile = tiles[cell.y]?.[cell.x];
-    if (!tile?.walkable || tile.type === 'road') return false;
-    if (blockedMask?.has(tileKey(cell.x, cell.y))) return false;
-    if (occupiedTiles?.has(tileKey(cell.x, cell.y))) return false;
-    if ((densityField[cell.y]?.[cell.x] ?? 0) <= 0) return false;
-  }
-
-  if (violatesAnchorDistance(cells, safetyConfig.pathAnchors, safetyConfig.minDistanceFromPath)) return false;
-  if (violatesAnchorDistance(cells, safetyConfig.exitAnchors, safetyConfig.minDistanceFromExit)) return false;
-  if (violatesAnchorDistance(cells, safetyConfig.entranceAnchors, safetyConfig.minDistanceFromExit)) return false;
-
-  return true;
+function validatePlacement({ tiles, center, definition, footprint = definition.footprint, occupiedTiles, blockedMask, safetyConfig, densityField }) {
+  return isFootprintValid({
+    tiles,
+    footprint,
+    center,
+    occupiedTiles,
+    blockedMask,
+    safetyConfig,
+    densityField,
+  });
 }
 
 function reservePlacement({ occupiedTiles, blockedMask, cells, padding = 0 }) {
@@ -275,17 +308,33 @@ function spawnPlacedObject(params) {
     idIndex, safetyConfig, densityField, categoryRule,
   } = params;
 
-  if (!validatePlacement({ tiles, center, definition, occupiedTiles, blockedMask, safetyConfig, densityField })) return null;
+  const previewRotation = definition.rotations ? Math.floor(rng() * 4) : 0;
+  const previewFootprint = rotateFootprintCells(definition.footprint, previewRotation);
+  if (!validatePlacement({
+    tiles,
+    center,
+    definition,
+    footprint: previewFootprint,
+    occupiedTiles,
+    blockedMask,
+    safetyConfig,
+    densityField,
+  })) return null;
 
   const placed = spawnObject(
     definition.id,
     center,
-    { id: `${roomId}-${idPrefix}-${idIndex}`, footprint: structuredClone(definition.footprint), state: { spawned: true } },
+    {
+      id: `${roomId}-${idPrefix}-${idIndex}`,
+      footprint: structuredClone(definition.footprint),
+      state: { spawned: true },
+      rotation: previewRotation,
+    },
     rng,
   );
   if (!placed) return null;
 
-  const cells = collectObjectTiles(center, definition.footprint);
+  const cells = collectObjectTiles(center, placed.footprint);
   reservePlacement({ occupiedTiles, blockedMask, cells, padding: categoryRule.basePadding });
   stampObjectTiles(tiles, placed);
   return placed;
