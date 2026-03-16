@@ -98,6 +98,7 @@ export const DEFAULT_CONFIG = {
     showExitAnchors: false,
     showReservedCorridors: false,
     showLandingTiles: false,
+    showEnemySpawnZones: false,
   },
   pathGeneration: {
     baseTrailRadius: 2,
@@ -120,6 +121,19 @@ export const DEFAULT_CONFIG = {
     minDistanceFromMapEdge: 2,
     clusterRadiusMultiplier: 1,
     maxAttemptsPerObjectType: 100,
+  },
+  enemyGeneration: {
+    enemyDensityFactor: 0.0035,
+    minEnemies: 3,
+    maxEnemies: 25,
+    groupSpawnChance: 0.25,
+    swarmGroupMin: 3,
+    swarmGroupMax: 6,
+    minDistanceFromEntrance: 6,
+    minDistanceFromExit: 5,
+    minDistanceFromPath: 2,
+    minDistanceBetweenEnemyGroups: 10,
+    maxSpawnAttempts: 100,
   },
 };
 
@@ -206,6 +220,18 @@ export const CONFIG_FIELDS = [
   { path: 'objectGeneration.minDistanceFromMapEdge', label: 'Min Distance From Map Edge', section: 'Object Generation', type: 'number', min: 0, max: 16, step: 1 },
   { path: 'objectGeneration.clusterRadiusMultiplier', label: 'Cluster Radius Multiplier', section: 'Object Generation', type: 'number', min: 0.25, max: 4, step: 0.05 },
   { path: 'objectGeneration.maxAttemptsPerObjectType', label: 'Max Attempts Per Type', section: 'Object Generation', type: 'number', min: 10, max: 1000, step: 10 },
+  { path: 'enemyGeneration.enemyDensityFactor', label: 'Enemy Density Factor', section: 'Enemy Generation', type: 'number', min: 0.0005, max: 0.05, step: 0.0005 },
+  { path: 'enemyGeneration.minEnemies', label: 'Min Enemies', section: 'Enemy Generation', type: 'number', min: 0, max: 60, step: 1 },
+  { path: 'enemyGeneration.maxEnemies', label: 'Max Enemies', section: 'Enemy Generation', type: 'number', min: 1, max: 100, step: 1 },
+  { path: 'enemyGeneration.groupSpawnChance', label: 'Group Spawn Chance', section: 'Enemy Generation', type: 'number', min: 0, max: 1, step: 0.01 },
+  { path: 'enemyGeneration.swarmGroupMin', label: 'Swarm Group Min', section: 'Enemy Generation', type: 'number', min: 1, max: 12, step: 1 },
+  { path: 'enemyGeneration.swarmGroupMax', label: 'Swarm Group Max', section: 'Enemy Generation', type: 'number', min: 1, max: 16, step: 1 },
+  { path: 'enemyGeneration.minDistanceFromEntrance', label: 'Min Distance From Entrance', section: 'Enemy Generation', type: 'number', min: 0, max: 24, step: 1 },
+  { path: 'enemyGeneration.minDistanceFromExit', label: 'Min Distance From Exit', section: 'Enemy Generation', type: 'number', min: 0, max: 24, step: 1 },
+  { path: 'enemyGeneration.minDistanceFromPath', label: 'Min Distance From Path', section: 'Enemy Generation', type: 'number', min: 0, max: 16, step: 1 },
+  { path: 'enemyGeneration.minDistanceBetweenEnemyGroups', label: 'Min Distance Between Groups', section: 'Enemy Generation', type: 'number', min: 0, max: 40, step: 1 },
+  { path: 'enemyGeneration.maxSpawnAttempts', label: 'Max Spawn Attempts', section: 'Enemy Generation', type: 'number', min: 10, max: 500, step: 5 },
+  { path: 'debug.showEnemySpawnZones', label: 'Show Enemy Spawn Zones', section: 'Debug / Overlays', type: 'boolean' },
 ];
 
 function deepClone(v) { return JSON.parse(JSON.stringify(v)); }
