@@ -112,6 +112,15 @@ export const DEFAULT_CONFIG = {
     forestRoomWidth: 120,
     forestRoomHeight: 120,
   },
+  objectGeneration: {
+    objectDensity: 1,
+    clusterDensity: 1,
+    minDistanceFromPath: 2,
+    minDistanceFromExit: 3,
+    minDistanceFromMapEdge: 2,
+    clusterRadiusMultiplier: 1,
+    maxAttemptsPerObjectType: 100,
+  },
 };
 
 export const CONFIG_FIELDS = [
@@ -190,6 +199,13 @@ export const CONFIG_FIELDS = [
   { path: 'pathGeneration.minDistanceFromExit', label: 'Min Distance From Exit', section: 'Path Generation', type: 'number', min: 0, max: 16, step: 1 },
   { path: 'worldGeneration.forestRoomWidth', label: 'Forest Room Min Width', section: 'World / Generation', type: 'number', min: 40, max: 320, step: 1 },
   { path: 'worldGeneration.forestRoomHeight', label: 'Forest Room Min Height', section: 'World / Generation', type: 'number', min: 40, max: 320, step: 1 },
+  { path: 'objectGeneration.objectDensity', label: 'Object Density', section: 'Object Generation', type: 'number', min: 0.1, max: 3, step: 0.05 },
+  { path: 'objectGeneration.clusterDensity', label: 'Cluster Density', section: 'Object Generation', type: 'number', min: 0.1, max: 3, step: 0.05 },
+  { path: 'objectGeneration.minDistanceFromPath', label: 'Min Distance From Path', section: 'Object Generation', type: 'number', min: 0, max: 12, step: 1 },
+  { path: 'objectGeneration.minDistanceFromExit', label: 'Min Distance From Exit', section: 'Object Generation', type: 'number', min: 0, max: 16, step: 1 },
+  { path: 'objectGeneration.minDistanceFromMapEdge', label: 'Min Distance From Map Edge', section: 'Object Generation', type: 'number', min: 0, max: 16, step: 1 },
+  { path: 'objectGeneration.clusterRadiusMultiplier', label: 'Cluster Radius Multiplier', section: 'Object Generation', type: 'number', min: 0.25, max: 4, step: 0.05 },
+  { path: 'objectGeneration.maxAttemptsPerObjectType', label: 'Max Attempts Per Type', section: 'Object Generation', type: 'number', min: 10, max: 1000, step: 10 },
 ];
 
 function deepClone(v) { return JSON.parse(JSON.stringify(v)); }
