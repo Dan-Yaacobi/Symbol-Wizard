@@ -1,3 +1,5 @@
+import { LANDING_SAFE_RADIUS, PATH_CORRIDOR_WIDTH } from './GenerationConstants.js';
+
 function oppositeDirection(direction) {
   if (direction === 'north') return 'south';
   if (direction === 'south') return 'north';
@@ -39,8 +41,39 @@ function bfsReachable(grid, start, targetSet) {
   return false;
 }
 
+function corridorWidthAtDepth(grid, anchor, depth) {
+  const half = Math.floor((PATH_CORRIDOR_WIDTH - 1) / 2);
+  const offsets = [];
+  if (anchor.direction === 'north') {
+    for (let ox = -half; ox <= half; ox += 1) offsets.push([anchor.x + ox, anchor.y + depth]);
+  } else if (anchor.direction === 'south') {
+    for (let ox = -half; ox <= half; ox += 1) offsets.push([anchor.x + ox, anchor.y - depth]);
+  } else if (anchor.direction === 'west') {
+    for (let oy = -half; oy <= half; oy += 1) offsets.push([anchor.x + depth, anchor.y + oy]);
+  } else {
+    for (let oy = -half; oy <= half; oy += 1) offsets.push([anchor.x - depth, anchor.y + oy]);
+  }
+
+  let walkableCount = 0;
+  for (const [x, y] of offsets) {
+    if (walkable(grid[y]?.[x])) walkableCount += 1;
+  }
+  return walkableCount;
+}
+
+function objectCollisionAt(objects, x, y) {
+  for (const object of objects ?? []) {
+    if (!object?.collision) continue;
+    const footprint = object.footprint ?? [[0, 0]];
+    for (const [dx, dy] of footprint) {
+      if (Math.round(object.x + dx) === x && Math.round(object.y + dy) === y) return true;
+    }
+  }
+  return false;
+}
+
 export class RoomValidationSystem {
-  validate({ roomNode, rooms, plan, grid, triggers, roomGraph }) {
+  validate({ roomNode, rooms, plan, grid, triggers, roomGraph, objects = [] }) {
     const errors = [];
 
     for (const connection of roomNode.connections ?? []) {
@@ -61,9 +94,54 @@ export class RoomValidationSystem {
       }
     }
 
+    const allAnchors = [...Object.values(plan.exitAnchors), ...Object.values(plan.entranceAnchors)];
+
+    for (const anchor of allAnchors) {
+      if (!Number.isFinite(anchor.landingX) || !Number.isFinite(anchor.landingY)) {
+        errors.push({ type: 'LANDING_INVALID', roomId: roomNode.id, anchorId: anchor.id, detail: 'Landing tile missing' });
+        continue;
+      }
+
+      if (!walkable(grid[anchor.landingY]?.[anchor.landingX])) {
+        errors.push({ type: 'LANDING_INVALID', roomId: roomNode.id, anchorId: anchor.id, detail: 'Landing tile not walkable' });
+      }
+      if (objectCollisionAt(objects, anchor.landingX, anchor.landingY)) {
+        errors.push({ type: 'SPAWN_COLLISION', roomId: roomNode.id, anchorId: anchor.id, detail: 'Landing collides with object' });
+      }
+
+      let landingUnsafe = false;
+      for (let oy = -LANDING_SAFE_RADIUS; oy <= LANDING_SAFE_RADIUS && !landingUnsafe; oy += 1) {
+        for (let ox = -LANDING_SAFE_RADIUS; ox <= LANDING_SAFE_RADIUS; ox += 1) {
+          if (!walkable(grid[anchor.landingY + oy]?.[anchor.landingX + ox])) {
+            landingUnsafe = true;
+            break;
+          }
+        }
+      }
+      if (landingUnsafe) {
+        errors.push({ type: 'LANDING_INVALID', roomId: roomNode.id, anchorId: anchor.id, detail: 'Landing safety area blocked' });
+      }
+    }
+
     for (const anchor of Object.values(plan.exitAnchors)) {
       if (!walkable(grid[anchor.y]?.[anchor.x])) {
         errors.push({ type: 'TILE_CONSISTENCY', roomId: roomNode.id, anchorId: anchor.id, detail: 'Anchor tile blocked' });
+      }
+
+      const corridorDepth = Math.max(2, anchor.corridorLength ?? 6);
+      for (let depth = 0; depth <= corridorDepth; depth += 1) {
+        const width = corridorWidthAtDepth(grid, anchor, depth);
+        if (width < PATH_CORRIDOR_WIDTH) {
+          errors.push({ type: 'CORRIDOR_WIDTH', roomId: roomNode.id, anchorId: anchor.id, detail: 'Exit corridor below minimum width' });
+          break;
+        }
+      }
+
+      for (const tile of plan.reservedCorridors[anchor.id] ?? []) {
+        if (!walkable(grid[tile.y]?.[tile.x])) {
+          errors.push({ type: 'CORRIDOR_BLOCKED', roomId: roomNode.id, anchorId: anchor.id, detail: 'Reserved corridor tile blocked' });
+          break;
+        }
       }
     }
 
@@ -72,6 +150,10 @@ export class RoomValidationSystem {
       const reachable = bfsReachable(grid, spawn, new Set([`${anchor.x},${anchor.y}`]));
       if (!reachable) {
         errors.push({ type: 'PATH_CONSISTENCY', roomId: roomNode.id, anchorId: anchor.id, detail: 'Anchor unreachable from spawn' });
+      }
+      const landingReachable = bfsReachable(grid, spawn, new Set([`${anchor.landingX},${anchor.landingY}`]));
+      if (!landingReachable) {
+        errors.push({ type: 'LANDING_REACHABILITY', roomId: roomNode.id, anchorId: anchor.id, detail: 'Landing unreachable from hub' });
       }
     }
 

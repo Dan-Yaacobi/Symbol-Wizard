@@ -1,26 +1,30 @@
 function buildEdgeSpan(anchor, width, height) {
+  const halfWidth = Math.max(1, Math.floor((anchor.corridorWidth ?? 3) / 2));
   if (anchor.direction === 'north' || anchor.direction === 'south') {
     const y = anchor.direction === 'north' ? 0 : height - 1;
     return {
-      edgeStart: { x: Math.max(0, anchor.x - 1), y },
-      edgeEnd: { x: Math.min(width - 1, anchor.x + 1), y },
+      edgeStart: { x: Math.max(0, anchor.x - halfWidth), y },
+      edgeEnd: { x: Math.min(width - 1, anchor.x + halfWidth), y },
     };
   }
 
   const x = anchor.direction === 'west' ? 0 : width - 1;
   return {
-    edgeStart: { x, y: Math.max(0, anchor.y - 1) },
-    edgeEnd: { x, y: Math.min(height - 1, anchor.y + 1) },
+    edgeStart: { x, y: Math.max(0, anchor.y - halfWidth) },
+    edgeEnd: { x, y: Math.min(height - 1, anchor.y + halfWidth) },
   };
 }
 
 function makeTriggerTiles(anchor, width, height, depth = 4) {
   const tiles = [];
+  const halfWidth = Math.max(1, Math.floor((anchor.corridorWidth ?? 3) / 2));
   for (let d = 0; d < depth; d += 1) {
-    if (anchor.direction === 'north') tiles.push({ x: anchor.x, y: Math.min(height - 1, d) });
-    if (anchor.direction === 'south') tiles.push({ x: anchor.x, y: Math.max(0, height - 1 - d) });
-    if (anchor.direction === 'west') tiles.push({ x: Math.min(width - 1, d), y: anchor.y });
-    if (anchor.direction === 'east') tiles.push({ x: Math.max(0, width - 1 - d), y: anchor.y });
+    for (let w = -halfWidth; w <= halfWidth; w += 1) {
+      if (anchor.direction === 'north') tiles.push({ x: anchor.x + w, y: Math.min(height - 1, d) });
+      if (anchor.direction === 'south') tiles.push({ x: anchor.x + w, y: Math.max(0, height - 1 - d) });
+      if (anchor.direction === 'west') tiles.push({ x: Math.min(width - 1, d), y: anchor.y + w });
+      if (anchor.direction === 'east') tiles.push({ x: Math.max(0, width - 1 - d), y: anchor.y + w });
+    }
   }
   return tiles;
 }
@@ -39,7 +43,11 @@ export class ExitTriggerSystem {
         edgeStart: span.edgeStart,
         edgeEnd: span.edgeEnd,
         roadAnchor: { x: anchor.x, y: anchor.y },
-        spawn: { x: anchor.x, y: anchor.y },
+        spawn: { x: anchor.landingX, y: anchor.landingY },
+        landing: { x: anchor.landingX, y: anchor.landingY },
+        targetRoomId: anchor.targetRoomId,
+        targetEntranceId: anchor.targetEntranceId,
+        entryDirection: anchor.reverseDirection,
         triggerDepth: 4,
       };
       corridors.push({

@@ -95,6 +95,9 @@ export const DEFAULT_CONFIG = {
     selectedTile: false,
     layerLabels: false,
     facingMarker: false,
+    showExitAnchors: false,
+    showReservedCorridors: false,
+    showLandingTiles: false,
   },
 };
 
@@ -160,6 +163,9 @@ export const CONFIG_FIELDS = [
   { path: 'debug.selectedTile', label: 'Selected Tile Highlight', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.layerLabels', label: 'Render Layer Labels', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.facingMarker', label: 'Facing Marker', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.showExitAnchors', label: 'Show Exit Anchors', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.showReservedCorridors', label: 'Show Reserved Corridors', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.showLandingTiles', label: 'Show Landing Tiles', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.overlaysEnabled', label: 'Master Overlay Toggle', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.showStatsHud', label: 'Compact Stats HUD', section: 'Performance', type: 'boolean' },
 ];

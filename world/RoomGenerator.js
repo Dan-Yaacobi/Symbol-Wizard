@@ -94,6 +94,7 @@ export class RoomGenerator {
       plan,
       grid,
       triggers,
+      objects: [...objects, ...landmarks],
     });
 
     let repairEvents = [];
@@ -113,6 +114,7 @@ export class RoomGenerator {
           plan,
           grid,
           triggers,
+          objects: [...objects, ...landmarks],
         });
       }
     }
@@ -129,6 +131,11 @@ export class RoomGenerator {
       entrances: structuredClone(plan.entranceAnchors),
       exits: structuredClone(triggers.exits),
       exitCorridors: structuredClone(triggers.exitCorridors),
+      debugOverlay: {
+        exitAnchors: Object.values(plan.exitAnchors).map((anchor) => ({ x: anchor.x, y: anchor.y })),
+        landingTiles: [...Object.values(plan.exitAnchors), ...Object.values(plan.entranceAnchors)].map((anchor) => ({ x: anchor.landingX, y: anchor.landingY })),
+        reservedCorridorTiles: Object.values(plan.reservedCorridors).flat(),
+      },
       generationDebug: {
         roomGraph: roomGraph?.[roomNode.id] ?? {},
         events: [

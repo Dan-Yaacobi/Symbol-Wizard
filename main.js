@@ -606,6 +606,7 @@ function tick(now) {
       abilitySystem.getActiveEffects(),
       input.mouse,
       devToolsPanel.getRenderDebugOptions(),
+      activeRoom,
     );
     drawHUD(renderer, player, abilitySystem);
     renderer.composite();
@@ -736,6 +737,7 @@ function tick(now) {
     abilitySystem.getActiveEffects(),
     input.mouse,
     devToolsPanel.getRenderDebugOptions(),
+    activeRoom,
   );
   drawHUD(renderer, player, abilitySystem);
   if (roomTransitionSystem.fadeAlpha > 0) {
