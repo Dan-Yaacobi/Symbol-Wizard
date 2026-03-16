@@ -1,5 +1,95 @@
 import { CONFIG_FIELDS } from './RuntimeConfig.js';
 
+const ENEMY_TUNING_LAYOUT = [
+  {
+    type: 'spider',
+    label: 'Spider',
+    fields: [
+      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 30, step: 0.1 },
+      { key: 'hp', label: 'HP', min: 1, max: 200, step: 1 },
+      { key: 'speed', label: 'Speed', min: 1, max: 30, step: 0.1 },
+      { key: 'attackRange', label: 'Attack Range', min: 1, max: 20, step: 0.1 },
+      { key: 'attackDamage', label: 'Attack Damage', min: 0, max: 20, step: 0.1 },
+      { key: 'attackCooldown', label: 'Attack Cooldown', min: 0.1, max: 5, step: 0.05 },
+      { key: 'attackWindup', label: 'Attack Windup', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackDuration', label: 'Attack Duration', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackHitTime', label: 'Attack Hit Time', min: 0.01, max: 5, step: 0.01 },
+      { key: 'hitKnockback', label: 'Hit Knockback', min: 0, max: 30, step: 0.1 },
+      { key: 'radius', label: 'Radius', min: 0.5, max: 5, step: 0.05 },
+    ],
+  },
+  {
+    type: 'wasp',
+    label: 'Wasp',
+    fields: [
+      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 30, step: 0.1 },
+      { key: 'hp', label: 'HP', min: 1, max: 200, step: 1 },
+      { key: 'speed', label: 'Speed', min: 1, max: 30, step: 0.1 },
+      { key: 'attackRange', label: 'Attack Range', min: 1, max: 20, step: 0.1 },
+      { key: 'attackDamage', label: 'Attack Damage', min: 0, max: 20, step: 0.1 },
+      { key: 'attackCooldown', label: 'Attack Cooldown', min: 0.1, max: 5, step: 0.05 },
+      { key: 'attackWindup', label: 'Attack Windup', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackDuration', label: 'Attack Duration', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackHitTime', label: 'Attack Hit Time', min: 0.01, max: 5, step: 0.01 },
+      { key: 'hitKnockback', label: 'Hit Knockback', min: 0, max: 30, step: 0.1 },
+      { key: 'radius', label: 'Radius', min: 0.5, max: 5, step: 0.05 },
+      { key: 'retreatDistance', label: 'Retreat Distance', min: 0.5, max: 20, step: 0.1 },
+    ],
+  },
+  {
+    type: 'swarm_bug',
+    label: 'Swarm Bug',
+    fields: [
+      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 30, step: 0.1 },
+      { key: 'hp', label: 'HP', min: 1, max: 200, step: 1 },
+      { key: 'speed', label: 'Speed', min: 1, max: 30, step: 0.1 },
+      { key: 'attackRange', label: 'Attack Range', min: 1, max: 20, step: 0.1 },
+      { key: 'attackDamage', label: 'Attack Damage', min: 0, max: 20, step: 0.1 },
+      { key: 'attackCooldown', label: 'Attack Cooldown', min: 0.1, max: 5, step: 0.05 },
+      { key: 'attackWindup', label: 'Attack Windup', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackDuration', label: 'Attack Duration', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackHitTime', label: 'Attack Hit Time', min: 0.01, max: 5, step: 0.01 },
+      { key: 'hitKnockback', label: 'Hit Knockback', min: 0, max: 30, step: 0.1 },
+      { key: 'radius', label: 'Radius', min: 0.5, max: 5, step: 0.05 },
+    ],
+  },
+  {
+    type: 'forest_beetle',
+    label: 'Forest Beetle',
+    fields: [
+      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 30, step: 0.1 },
+      { key: 'hp', label: 'HP', min: 1, max: 200, step: 1 },
+      { key: 'speed', label: 'Speed', min: 1, max: 30, step: 0.1 },
+      { key: 'attackRange', label: 'Attack Range', min: 1, max: 20, step: 0.1 },
+      { key: 'attackDamage', label: 'Attack Damage', min: 0, max: 20, step: 0.1 },
+      { key: 'attackCooldown', label: 'Attack Cooldown', min: 0.1, max: 5, step: 0.05 },
+      { key: 'attackWindup', label: 'Attack Windup', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackDuration', label: 'Attack Duration', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackHitTime', label: 'Attack Hit Time', min: 0.01, max: 5, step: 0.01 },
+      { key: 'hitKnockback', label: 'Hit Knockback', min: 0, max: 30, step: 0.1 },
+      { key: 'radius', label: 'Radius', min: 0.5, max: 5, step: 0.05 },
+    ],
+  },
+  {
+    type: 'forest_mantis',
+    label: 'Forest Mantis',
+    fields: [
+      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 30, step: 0.1 },
+      { key: 'hp', label: 'HP', min: 1, max: 200, step: 1 },
+      { key: 'speed', label: 'Speed', min: 1, max: 30, step: 0.1 },
+      { key: 'attackRange', label: 'Attack Range', min: 1, max: 20, step: 0.1 },
+      { key: 'attackDamage', label: 'Attack Damage', min: 0, max: 20, step: 0.1 },
+      { key: 'attackCooldown', label: 'Attack Cooldown', min: 0.1, max: 5, step: 0.05 },
+      { key: 'attackWindup', label: 'Attack Windup', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackDuration', label: 'Attack Duration', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackHitTime', label: 'Attack Hit Time', min: 0.01, max: 5, step: 0.01 },
+      { key: 'hitKnockback', label: 'Hit Knockback', min: 0, max: 30, step: 0.1 },
+      { key: 'radius', label: 'Radius', min: 0.5, max: 5, step: 0.05 },
+      { key: 'flankOrbitSpeed', label: 'Flank Orbit Speed', min: 0.1, max: 10, step: 0.05 },
+    ],
+  },
+];
+
 const SECTION_ORDER = [
   'Search / Filter',
   'Favorites / Pinned Fields',
@@ -37,6 +127,14 @@ export class DevToolsPanel {
       spawnEnemyGroup: () => {},
       killAllEnemies: () => {},
       toggleEnemyAi: () => false,
+    };
+    this.enemyTuningTools = {
+      getValue: () => undefined,
+      isOverridden: () => false,
+      setOverride: () => {},
+      clearAllOverrides: () => {},
+      getApplyToExistingEnemies: () => false,
+      setApplyToExistingEnemies: () => {},
     };
 
     this.root = document.createElement('aside');
@@ -79,6 +177,24 @@ export class DevToolsPanel {
     if (typeof spawnEnemyGroup === 'function') this.mapTools.spawnEnemyGroup = spawnEnemyGroup;
     if (typeof killAllEnemies === 'function') this.mapTools.killAllEnemies = killAllEnemies;
     if (typeof toggleEnemyAi === 'function') this.mapTools.toggleEnemyAi = toggleEnemyAi;
+    this.render();
+  }
+
+
+  setEnemyTuningTools({
+    getValue,
+    isOverridden,
+    setOverride,
+    clearAllOverrides,
+    getApplyToExistingEnemies,
+    setApplyToExistingEnemies,
+  } = {}) {
+    if (typeof getValue === 'function') this.enemyTuningTools.getValue = getValue;
+    if (typeof isOverridden === 'function') this.enemyTuningTools.isOverridden = isOverridden;
+    if (typeof setOverride === 'function') this.enemyTuningTools.setOverride = setOverride;
+    if (typeof clearAllOverrides === 'function') this.enemyTuningTools.clearAllOverrides = clearAllOverrides;
+    if (typeof getApplyToExistingEnemies === 'function') this.enemyTuningTools.getApplyToExistingEnemies = getApplyToExistingEnemies;
+    if (typeof setApplyToExistingEnemies === 'function') this.enemyTuningTools.setApplyToExistingEnemies = setApplyToExistingEnemies;
     this.render();
   }
 
@@ -141,11 +257,102 @@ export class DevToolsPanel {
       this.root.appendChild(this.#sectionBlock(section, grouped.get(section) ?? []));
     }
     this.root.appendChild(this.#sectionBlock('Debug / Overlays', grouped.get('Debug / Overlays') ?? []));
+    this.root.appendChild(this.#enemyTuningBlock());
     this.root.appendChild(this.#mapToolsBlock());
     this.root.appendChild(this.#inspectorBlock('Selected Entity Inspector', this.selectedEntity));
     this.root.appendChild(this.#inspectorBlock('Selected Tile / Cell Inspector', this.selectedTile));
     this.root.appendChild(this.#sectionBlock('Performance', grouped.get('Performance') ?? []));
     this.root.appendChild(this.#presetsBlock());
+  }
+
+
+  #enemyTuningBlock() {
+    const details = document.createElement('details');
+    details.className = 'devtools-section';
+    details.open = true;
+    details.innerHTML = '<summary>Enemy Tuning</summary>';
+
+    const applyRow = document.createElement('div');
+    applyRow.className = 'devtools-field';
+    applyRow.innerHTML = '<label>Apply changes to existing enemies</label>';
+    const applyBtn = document.createElement('button');
+    const applyEnabled = Boolean(this.enemyTuningTools.getApplyToExistingEnemies());
+    applyBtn.textContent = applyEnabled ? 'ON' : 'OFF';
+    applyBtn.addEventListener('click', () => this.enemyTuningTools.setApplyToExistingEnemies(!applyEnabled));
+    applyRow.appendChild(applyBtn);
+    const applyMeta = document.createElement('small');
+    applyMeta.textContent = 'When enabled, updates current enemies instantly.';
+    applyRow.appendChild(applyMeta);
+    details.appendChild(applyRow);
+
+    const resetButton = document.createElement('button');
+    resetButton.className = 'devtools-action';
+    resetButton.textContent = 'Reset Enemy Values';
+    resetButton.addEventListener('click', () => this.enemyTuningTools.clearAllOverrides());
+    details.appendChild(resetButton);
+
+    for (const enemy of ENEMY_TUNING_LAYOUT) {
+      const enemyDetails = document.createElement('details');
+      enemyDetails.className = 'devtools-section';
+      enemyDetails.open = false;
+      enemyDetails.innerHTML = `<summary>${enemy.label}</summary>`;
+
+      for (const field of enemy.fields) {
+        const value = this.enemyTuningTools.getValue(enemy.type, field.key);
+        const overridden = this.enemyTuningTools.isOverridden(enemy.type, field.key);
+        enemyDetails.appendChild(this.#enemyTuningFieldRow(enemy.type, field, value, overridden));
+      }
+
+      details.appendChild(enemyDetails);
+    }
+
+    return details;
+  }
+
+  #enemyTuningFieldRow(enemyType, field, value, overridden) {
+    const row = document.createElement('div');
+    row.className = 'devtools-field';
+    if (overridden) row.classList.add('dirty');
+    row.innerHTML = `<label>${field.label}</label>`;
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = String(field.min);
+    slider.max = String(field.max);
+    slider.step = String(field.step);
+    slider.value = String(value);
+
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.min = String(field.min);
+    input.max = String(field.max);
+    input.step = String(field.step);
+    input.value = String(value);
+
+    const applyValue = (raw) => {
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) return;
+      const clamped = Math.min(field.max, Math.max(field.min, parsed));
+      this.enemyTuningTools.setOverride(enemyType, field.key, clamped);
+    };
+
+    slider.addEventListener('input', () => applyValue(slider.value));
+    input.addEventListener('input', () => applyValue(input.value));
+
+    row.appendChild(slider);
+    row.appendChild(input);
+
+    const meta = document.createElement('small');
+    meta.textContent = overridden ? 'overridden' : 'default';
+    row.appendChild(meta);
+
+    const reset = document.createElement('button');
+    reset.textContent = '↺';
+    reset.title = 'Reset enemy parameter';
+    reset.addEventListener('click', () => this.enemyTuningTools.setOverride(enemyType, field.key, null));
+    row.appendChild(reset);
+
+    return row;
   }
 
   #mapToolsBlock() {

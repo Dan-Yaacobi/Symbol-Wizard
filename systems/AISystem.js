@@ -113,14 +113,15 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     const dx = player.x - enemy.x;
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy);
-    if (distance <= detectRadius) {
+    const enemyDetectRadius = enemy.aggroRadius ?? detectRadius;
+    if (distance <= enemyDetectRadius) {
       enemy.aggroMemoryTimer = aggroMemory;
     } else {
       enemy.aggroMemoryTimer = Math.max(0, (enemy.aggroMemoryTimer ?? 0) - dt);
     }
 
     const wasAggroed = Boolean(enemy.isAggroed);
-    enemy.isAggroed = distance <= detectRadius || (enemy.aggroMemoryTimer ?? 0) > 0;
+    enemy.isAggroed = distance <= enemyDetectRadius || (enemy.aggroMemoryTimer ?? 0) > 0;
     if (enemy.isAggroed && !wasAggroed) {
       newlyAggroed.push(enemy);
     }
