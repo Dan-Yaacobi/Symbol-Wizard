@@ -2,43 +2,29 @@ import { Projectile } from '../entities/Projectile.js';
 import { visualPalette } from '../data/VisualTheme.js';
 
 export class AbilitySystem {
-  constructor({
-    definitions,
-    player,
-    enemies,
-    map,
-    camera,
-    spawnProjectile,
-    spendGold,
-    reportDamage,
-    onEnemySlain,
-  }) {
-    this.definitions = new Map(definitions.map((ability) => [ability.id, ability]));
+  constructor({ definitions, player, enemies, map, camera, spawnProjectile, reportDamage, onEnemySlain }) {
+    this.definitions = new Map(definitions.map((spell) => [spell.id, spell]));
     this.player = player;
     this.enemies = enemies;
     this.map = map;
     this.camera = camera;
     this.spawnProjectile = spawnProjectile;
-    this.spendGold = spendGold;
     this.reportDamage = reportDamage;
     this.onEnemySlain = onEnemySlain;
 
     this.cooldowns = new Map();
-    this.upgrades = new Map();
     this.slots = [null, null, null, null];
     this.effects = [];
-
     this.activeFreeze = null;
 
-    for (const ability of definitions) {
-      this.upgrades.set(ability.id, 1);
-      this.cooldowns.set(ability.id, 0);
+    for (const spell of definitions) {
+      this.cooldowns.set(spell.id, 0);
     }
   }
 
   tick(dt) {
-    for (const [abilityId, value] of this.cooldowns.entries()) {
-      this.cooldowns.set(abilityId, Math.max(0, value - dt));
+    for (const [spellId, value] of this.cooldowns.entries()) {
+      this.cooldowns.set(spellId, Math.max(0, value - dt));
     }
 
     this.effects = this.effects
@@ -136,17 +122,15 @@ export class AbilitySystem {
       enemy.freezeTint = null;
       enemy.freezeGlow = null;
 
-      if (freezeData.shatterDamage > 0) {
-        this.damageEnemy(enemy, freezeData.shatterDamage);
-      }
+      if (freezeData.shatterDamage > 0) this.damageEnemy(enemy, freezeData.shatterDamage);
     }
   }
 
   applyTimeFreeze({ freezeDuration, cooldownReduction, shatterDamage, vulnerabilityMultiplier, radiusPadding, chainFreeze }) {
-    const ability = this.definitions.get('time-freeze');
-    if (!ability) return;
+    const spell = this.definitions.get('time-freeze');
+    if (!spell) return;
 
-    this.cooldowns.set('time-freeze', Math.max(1, ability.cooldown - cooldownReduction));
+    this.cooldowns.set('time-freeze', Math.max(1, spell.cooldown - cooldownReduction));
 
     if (this.activeFreeze) {
       this.endFreeze(this.activeFreeze);
@@ -180,10 +164,10 @@ export class AbilitySystem {
     return this.activeFreeze.vulnerabilityMultiplier ?? 1;
   }
 
-  assignAbilityToSlot(slotIndex, abilityId) {
+  assignAbilityToSlot(slotIndex, spellId) {
     if (slotIndex < 0 || slotIndex > 3) return false;
-    if (abilityId !== null && !this.definitions.has(abilityId)) return false;
-    this.slots[slotIndex] = abilityId;
+    if (spellId !== null && !this.definitions.has(spellId)) return false;
+    this.slots[slotIndex] = spellId;
     return true;
   }
 
@@ -194,59 +178,40 @@ export class AbilitySystem {
   }
 
   getAbilityBySlot(slotIndex) {
-    const abilityId = this.slots[slotIndex];
-    return abilityId ? this.definitions.get(abilityId) : null;
+    const spellId = this.slots[slotIndex];
+    return spellId ? this.definitions.get(spellId) : null;
   }
 
   castSlot(slotIndex, context) {
-    const ability = this.getAbilityBySlot(slotIndex);
-    if (!ability) return { ok: false, reason: 'empty-slot' };
+    const spell = this.getAbilityBySlot(slotIndex);
+    if (!spell) return { ok: false, reason: 'empty-slot' };
 
-    const cooldown = this.cooldowns.get(ability.id) ?? 0;
+    const cooldown = this.cooldowns.get(spell.id) ?? 0;
     if (cooldown > 0) return { ok: false, reason: 'cooldown' };
 
-    if (this.player.mana < ability.manaCost) return { ok: false, reason: 'mana' };
+    if (this.player.mana < spell.manaCost) return { ok: false, reason: 'mana' };
 
-    this.player.mana -= ability.manaCost;
-    this.cooldowns.set(ability.id, ability.cooldown);
+    this.player.mana -= spell.manaCost;
+    this.cooldowns.set(spell.id, spell.cooldown);
     this.player.castTimer = Math.max(this.player.castTimer ?? 0, 0.24);
 
-    const level = this.upgrades.get(ability.id) ?? 1;
-
     try {
-      ability.cast({ ...context, system: this, abilityLevel: level, ability });
+      spell.cast({ ...context, system: this, spellLevel: 1, spell });
     } catch (error) {
-      this.player.mana = Math.min(this.player.maxMana, this.player.mana + ability.manaCost);
-      this.cooldowns.set(ability.id, 0);
-      console.error(`[AbilitySystem] Failed to cast ability "${ability.id}".`, error);
-      return { ok: false, reason: 'cast-error', abilityId: ability.id };
+      this.player.mana = Math.min(this.player.maxMana, this.player.mana + spell.manaCost);
+      this.cooldowns.set(spell.id, 0);
+      console.error(`[AbilitySystem] Failed to cast spell "${spell.id}".`, error);
+      return { ok: false, reason: 'cast-error', abilityId: spell.id };
     }
 
-    return { ok: true, reason: 'cast', abilityId: ability.id };
+    return { ok: true, reason: 'cast', abilityId: spell.id };
   }
 
-  getCooldownPercent(abilityId) {
-    const ability = this.definitions.get(abilityId);
-    if (!ability) return 0;
-    const remaining = this.cooldowns.get(abilityId) ?? 0;
-    return ability.cooldown <= 0 ? 0 : remaining / ability.cooldown;
-  }
-
-  getUpgradeLevel(abilityId) {
-    return this.upgrades.get(abilityId) ?? 1;
-  }
-
-  upgradeAbility(abilityId) {
-    const ability = this.definitions.get(abilityId);
-    if (!ability) return { ok: false, reason: 'unknown' };
-
-    const level = this.upgrades.get(abilityId) ?? 1;
-    const node = ability.upgrades[level];
-    if (!node) return { ok: false, reason: 'maxed' };
-
-    if (!this.spendGold(node.cost)) return { ok: false, reason: 'gold' };
-    this.upgrades.set(abilityId, level + 1);
-    return { ok: true };
+  getCooldownPercent(spellId) {
+    const spell = this.definitions.get(spellId);
+    if (!spell) return 0;
+    const remaining = this.cooldowns.get(spellId) ?? 0;
+    return spell.cooldown <= 0 ? 0 : remaining / spell.cooldown;
   }
 
   getAbilities() {
@@ -289,22 +254,6 @@ export class AbilitySystem {
     return this.effects;
   }
 
-  findClosestEnemyInRange(x, y, range) {
-    let best = null;
-    let bestDist = Infinity;
-
-    for (const enemy of this.enemies) {
-      if (!enemy.alive) continue;
-      const dist = Math.hypot(enemy.x - x, enemy.y - y);
-      if (dist <= range && dist < bestDist) {
-        best = enemy;
-        bestDist = dist;
-      }
-    }
-
-    return best;
-  }
-
   damageEnemy(enemy, amount, hitContext = {}) {
     if (!enemy || !enemy.alive) return false;
     const scaled = amount * this.getDamageMultiplier(enemy);
@@ -343,9 +292,7 @@ export class AbilitySystem {
 
     this.spawnHitParticles(enemy.x, enemy.y, hitContext.particleColor ?? '#d9dce3');
 
-    if (hitContext.strongHit) {
-      this.camera?.startShake?.(0.1, 0.45);
-    }
+    if (hitContext.strongHit) this.camera?.startShake?.(0.1, 0.45);
   }
 
   spawnHitParticles(x, y, color = '#d9dce3') {
@@ -366,12 +313,7 @@ export class AbilitySystem {
       });
     }
 
-    this.spawnEffect({
-      type: 'hit-particles',
-      color,
-      particles,
-      ttl: Math.max(...particles.map((particle) => particle.life)),
-    });
+    this.spawnEffect({ type: 'hit-particles', color, particles, ttl: Math.max(...particles.map((particle) => particle.life)) });
   }
 
   isWalkable(x, y) {
