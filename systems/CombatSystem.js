@@ -46,6 +46,7 @@ export function updateProjectiles(
   projectiles,
   map,
   enemies,
+  player,
   dt,
   combatTextSystem = null,
   abilitySystem = null,
@@ -80,27 +81,34 @@ export function updateProjectiles(
       }
     }
 
-    for (const enemy of enemies) {
-      if (!enemy.alive) continue;
-      if (collides({ ...p, radius: p.radius ?? 0.8 }, enemy)) {
-        const isCritical = Math.random() < 0.2;
-        const baseDamage = isCritical ? p.damage * 2 : p.damage;
-        const multiplier = abilitySystem?.getDamageMultiplier(enemy) ?? 1;
-        const damage = baseDamage * multiplier;
-        enemy.hp -= damage;
-        combatTextSystem?.spawnDamageText(enemy, damage, isCritical);
-        abilitySystem?.registerHitFeedback?.(enemy, {
-          sourceX: p.x,
-          sourceY: p.y,
-          particleColor: p.hitParticleColor,
-          strongHit: isCritical || damage >= 8,
-        });
-        deadProjectiles.add(p);
-        if (enemy.hp <= 0) {
-          enemy.alive = false;
-          slain.push(enemy);
+    if ((p.faction ?? 'player') === 'player') {
+      for (const enemy of enemies) {
+        if (!enemy.alive) continue;
+        if (collides({ ...p, radius: p.radius ?? 0.8 }, enemy)) {
+          const isCritical = Math.random() < 0.2;
+          const baseDamage = isCritical ? p.damage * 2 : p.damage;
+          const multiplier = abilitySystem?.getDamageMultiplier(enemy) ?? 1;
+          const damage = baseDamage * multiplier;
+          enemy.hp -= damage;
+          combatTextSystem?.spawnDamageText(enemy, damage, isCritical);
+          abilitySystem?.registerHitFeedback?.(enemy, {
+            sourceX: p.x,
+            sourceY: p.y,
+            particleColor: p.hitParticleColor,
+            strongHit: isCritical || damage >= 8,
+          });
+          deadProjectiles.add(p);
+          if (enemy.hp <= 0) {
+            enemy.alive = false;
+            slain.push(enemy);
+          }
         }
       }
+    } else if (player && collides({ ...p, radius: p.radius ?? 0.8 }, player)) {
+      const damage = p.damage ?? 1;
+      player.hp = Math.max(0, player.hp - damage);
+      combatTextSystem?.spawnDamageText(player, damage, false);
+      deadProjectiles.add(p);
     }
   }
 

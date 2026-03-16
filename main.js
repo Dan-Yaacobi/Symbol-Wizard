@@ -781,7 +781,7 @@ function tick(now) {
   if (!dialogueManager.isOpen && !diagMinimalMode && !devCapturing) {
     handlePlayer(dt);
     if (enemyAiEnabled) {
-      updateEnemies(enemies, player, dt, runtimeConfig);
+      updateEnemies(enemies, player, dt, projectiles, runtimeConfig);
       updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem, runtimeConfig);
     } else {
       for (const enemy of enemies) {
@@ -795,6 +795,7 @@ function tick(now) {
       projectiles,
       map,
       enemies,
+      player,
       dt,
       combatTextSystem,
       abilitySystem,
