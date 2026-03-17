@@ -56,7 +56,7 @@ function isFiniteNumber(value) {
 function applyModifier(currentValue, modifier) {
   if (!modifier || typeof modifier !== 'object') return currentValue;
   let next = currentValue;
-  if (isFiniteNumber(modifier.set)) next = modifier.set;
+  if (Object.prototype.hasOwnProperty.call(modifier, 'set')) next = modifier.set;
   if (isFiniteNumber(modifier.multiply) && isFiniteNumber(next)) next *= modifier.multiply;
   if (isFiniteNumber(modifier.add) && isFiniteNumber(next)) next += modifier.add;
   if (isFiniteNumber(modifier.min) && isFiniteNumber(next)) next = Math.max(modifier.min, next);
