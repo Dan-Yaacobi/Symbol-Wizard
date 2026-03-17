@@ -3,6 +3,7 @@ import { createSpellInstance } from './SpellInstance.js';
 import { applyElementModifiers } from './ElementSystem.js';
 import { getBehaviorExecutor } from './behaviors/index.js';
 import { resolveComponent } from './components/index.js';
+import { updateOrbitBehavior } from './behaviors/orbit.js';
 
 export function resolveTarget(context = {}) {
   if (context.targetPosition && Number.isFinite(context.targetPosition.x) && Number.isFinite(context.targetPosition.y)) {
@@ -166,6 +167,7 @@ export function updateSpellInstances(activeSpellInstances, dt, context = {}) {
     instance.state.tickTimer += dt;
 
     updateZoneBehavior(instance, dt, context);
+    updateOrbitBehavior(instance, dt, context);
     if (instance.base.behavior !== 'zone') instance.handleEvent('onTick', { ...context, dt });
 
     if (instance.state.hasHit || instance.state.age >= instance.state.lifetime) {

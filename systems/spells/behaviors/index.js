@@ -1,6 +1,9 @@
 import { executeBehavior as executeProjectile } from './projectile.js';
 import { executeBehavior as executeZone } from './zone.js';
 import { executeBehavior as executeBeam } from './beam.js';
+import { executeBehavior as executeChain } from './chain.js';
+import { executeBehavior as executeOrbit } from './orbit.js';
+import { executeBehavior as executeNova } from './nova.js';
 
 const behaviorMap = {
   projectile: executeProjectile,
@@ -10,14 +13,13 @@ const behaviorMap = {
     console.warn(`[SpellSystem] Behavior "${instance?.base?.behavior}" is not implemented yet.`);
     return false;
   },
+  chain: executeChain,
   summon: (instance) => {
     console.warn(`[SpellSystem] Behavior "${instance?.base?.behavior}" is not implemented yet.`);
     return false;
   },
-  orbit: (instance) => {
-    console.warn(`[SpellSystem] Behavior "${instance?.base?.behavior}" is not implemented yet.`);
-    return false;
-  },
+  orbit: executeOrbit,
+  nova: executeNova,
 };
 
 export function getBehaviorExecutor(behaviorId) {
