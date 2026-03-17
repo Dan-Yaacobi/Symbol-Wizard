@@ -1,49 +1,86 @@
 # SPELL SYSTEM SPECIFICATION
 
+---
+
 ## SYSTEM IDENTITY
 
 This is a persistent RPG spell system.
 
-* The game is NOT a roguelike
-* The player builds a permanent spell arsenal over time
-* Progression is based on crafting and evolving spells
-* The player explores procedural biomes but returns to persistent hubs
-* Spells are constructed, upgraded, and combined over time
+- The game is NOT a roguelike
+- The player builds a permanent spell arsenal over time
+- Progression is based on crafting and evolving spells
+- The player explores procedural biomes but returns to persistent hubs
+- Spells are constructed, upgraded, and combined over time
+
+---
 
 ## SYSTEM SEPARATION
 
 There are three strictly separated systems:
 
-1. Crafting System (persistent)
+### 1. Crafting System (persistent)
+- Used to construct and modify spells
+- Happens outside combat
+- Uses cost and resources as constraints
 
-* Used to construct and modify spells
-* Happens outside combat
-* Uses cost and resources as constraints
+### 2. Runtime Spell System (combat)
+- Handles casting and execution of spells
+- Uses runtime instances
 
-2. Runtime Spell System (combat)
-
-* Handles casting and execution of spells
-* Uses runtime instances
-
-3. Interaction System (runtime)
-
-* Handles interactions between spells, environment, and enemies
+### 3. Interaction System (runtime)
+- Handles interactions between spells, environment, and enemies
 
 These systems must NOT be merged.
+
+---
 
 ## SPELL STRUCTURE
 
 Each spell must contain:
 
-* id
-* name
-* description
-* behavior
-* targeting
-* element
-* components[]
-* parameters{}
-* cost
+- id
+- name
+- description
+- behavior
+- targeting
+- element
+- components[]
+- parameters{}
+- cost
+
+Definitions:
+
+- behavior → core delivery type
+- targeting → how the spell selects its target
+- element → transformation layer that modifies behavior
+- components → modular augmentations
+- parameters → behavior-specific values
+- cost → crafting complexity budget
+
+---
+
+## PARAMETERS FIELD
+
+`parameters{}` contains behavior-specific values.
+
+Examples:
+
+Projectile:
+- speed
+- range
+- size
+
+Zone:
+- radius
+- duration
+
+Beam:
+- width
+- length
+
+Components may inject or modify parameters.
+
+---
 
 ## BASE SPELL PROGRESSION
 
@@ -51,264 +88,208 @@ Players do NOT start with advanced spells like Fireball.
 
 They start with a simple base spell:
 
-Example:
-
-* Magic Bolt (basic projectile)
+- Magic Bolt (basic projectile)
 
 Base spells are evolved through crafting:
 
 Magic Bolt → Fire Bolt → Explosive Fire Bolt → Multi Fire Bolt
 
-This replaces the need for predefined large spell lists.
+### RULE
+
+Base spell construction is achieved by:
+
+- adding an element
+- adding components
+
+There is NO separate evolution system.
+
+All progression is expressed through composition.
+
+---
 
 ## BEHAVIOR SYSTEM (LOCKED)
 
-* projectile
-* beam
-* zone
-* burst
-* summon
-* orbit
+- projectile
+- beam
+- zone
+- burst
+- summon
+- orbit
+
+Each behavior defines:
+
+- how the spell exists in the world
+- how it executes
+- its spatial and temporal presence
+
+Behavior does NOT define:
+
+- element effects
+- components
+- status effects
+
+---
 
 ## TARGETING SYSTEM
 
-* cursor
-* player-centered
-* ground-targeted
-* enemy-targeted
-* self
+- cursor
+- player-centered
+- ground-targeted
+- enemy-targeted
+- self
+
+Directional targeting is NOT used.
+
+---
 
 ## ELEMENT SYSTEM
 
-* fire
-* frost
-* electric
-* earth
+- fire
+- frost
+- electric
+- earth
 
-Elements modify behavior meaningfully.
+Elements are NOT cosmetic.
+
+They must modify behavior meaningfully.
+
+Examples:
+
+Fire:
+- explosion
+- spread
+- burn
+
+Frost:
+- slow
+- freeze buildup
+- control
+
+Electric:
+- chaining
+- instability
+- speed
+
+Earth:
+- weight
+- knockback
+- structure
+
+---
 
 ## COMPONENT SYSTEM
 
-Components are augmentations that:
+Components are modular augmentations.
 
-* trigger on events
-* inject new payloads
-* modify behavior
+Examples:
 
-## MULTI-INSTANCE RULE
+- explode_on_hit
+- spawn_zone_on_hit
+- emit_projectiles
+- spawn_on_expire
+- split
+- multi_cast
+- chain
+- fork
+- ring
+- cone
+- spiral
+- wave
+- pierce
+- bounce
+- pull
+- push
+- orbit_attach
+- delay
+- grow
+- ramp
+- pulse
 
-Multiple outputs must be spatially distributed.
+---
+
+## COMPONENT EXECUTION MODEL
+
+Components operate using event hooks.
+
+Supported events:
+
+- onCast
+- onHit
+- onExpire
+- onTick
+
+Components can:
+
+1. Modify base behavior parameters
+2. Inject new spell payloads
+3. React to runtime events
+
+Examples:
+
+explode_on_hit:
+- triggers onHit
+- creates explosion payload
+
+emit_projectiles:
+- triggers onTick or onHit
+- spawns additional projectiles
+
+---
+
+## MULTI-INSTANCE DISTRIBUTION RULE
+
+Any spell that produces multiple outputs MUST distribute them spatially.
+
+No stacking on identical vectors unless explicitly intended.
+
+---
 
 ## RUNTIME SPELL INSTANCE
 
-Base spells are immutable.
+Base spell definitions are immutable.
 
 Casting creates a runtime instance.
 
-Instances can mutate during execution.
+Runtime instances can:
+
+- mutate element
+- mutate behavior through interactions
+- carry dynamic state
+
+### RULE
+
+Base spell definitions must NEVER change during runtime.
+
+---
 
 ## CASTING PIPELINE
 
-Input → Validation → Target → Instance → Components → Execute → Effects → Commit
+Execution order:
 
-Cooldown/mana only used if successful.
+Input  
+→ Validation  
+→ Target Resolution  
+→ Runtime Instance Creation  
+→ Apply Components  
+→ Execute Behavior  
+→ Apply Effects  
+→ Commit Cooldown/Mana  
+
+### CRITICAL RULE
+
+Cooldown and mana are ONLY consumed if execution succeeds.
+
+---
 
 ## STATUS SYSTEM
 
-Element-driven status effects.
-
-## INTERACTION SYSTEM
-
-* spell ↔ spell
-* spell ↔ environment
-* spell ↔ enemy
-
-Separate from crafting.
-
-## CRAFTING SYSTEM (UPDATED)
-
-There is NO fusion system.
-
-Crafting is composed of TWO distinct parts:
-
-### A. BASE SPELL CONSTRUCTION
-
-Players evolve base spells over time.
-
-Example:
-
-Magic Bolt
-→ add fire → Fire Bolt
-→ add explode → Fireball
-→ add multi → Multi Fireball
-
-This builds the core identity of the spell.
-
-### B. AUGMENTATION / COMPOSITION
-
-Spells can be combined to produce MULTIPLE EFFECTS.
-
-Example:
-
-Fireball + Frost Bolt
-→ casts BOTH spells together
-
-This is NOT fusion.
-
-This does NOT create a new spell identity.
-
-This is composition.
-
-## RULE:
-
-Combining spells results in:
-
-* parallel execution
-* shared cast event
-* combined cost
-
-## SPELL GRAPH
-
-Graph represents:
-
-* valid augmentations
-* valid compositions
-
-NOT fusion outcomes.
-
-## COMBINATION PHILOSOPHY
-
-* allow combinations
-* control via cost and validation
-
-## COST SYSTEM
-
-Cost is ONLY used for crafting.
-
-Cost is NOT:
-
-* mana
-* runtime energy
-* damage
-
-Cost represents:
-
-"spell complexity budget during crafting"
-
-Formula:
-
-cost =
-behavior
-* element
-* components
-* nested payloads
-* nested tax
-
-## RESOURCE COST (NEW)
-
-In addition to cost points, crafting requires resources.
-
-Each crafting action requires:
-
-* at least one magical item (mandatory)
-* additional standard resources
-
-Crafting is gated by BOTH:
-
-* cost validity
-* resource availability
-
-## SOFT / HARD CAP
-
-Soft = 100
-Hard = 150
-
-## OVERLOAD
-
-* requires special items
-* allows exceeding soft cap
-* MUST have downsides
-
-## RECURSION
-
-Allowed but controlled via:
-
-* cost
-* limits
-* scaling
-
-## RUNTIME LIMITS
-
-* entity caps
-* recursion caps
-
-## VISUAL ANCHOR
-
-Each spell retains a clear identity.
-
-## VALIDATION
-
-validateSpell():
-
-returns:
-
-* valid
-* reason
-* cost
-* overload
-
-## PROGRESSION
-
-* unlock components
-* unlock higher complexity
-* unlock overload
-
-## PLAYER BUILD
-
-* spellbook
-* 4 slots
-* free selection
-
-## NAMING
-
-Spells must feel like real abilities.
-
-## FAILURES
-
-* invalid craft
-* missing resources
-* exceeding caps
-
-## CONSTRAINTS
-
-System must NOT:
-
-* create infinite loops
-* break readability
-* allow uncontrolled recursion
-
-## IMPLEMENTATION ORDER
-
-1. behaviors
-2. targeting
-3. elements
-4. runtime system
-5. components
-6. cost
-7. validation
-8. crafting
-9. UI
-10. interactions
-11. overload
-
-## SUMMARY
-
-System is based on:
-
-* base spell evolution
-* augmentation layering
-* multi-spell composition
-* cost + resource constraints
-* controlled chaos
-
-## END OF SPECIFICATION
+Enemies maintain:
+
+```js
+statusEffects: [
+  {
+    type,
+    duration,
+    intensity
+  }
+]
