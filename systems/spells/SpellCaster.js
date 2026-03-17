@@ -27,13 +27,49 @@ export function resolveTarget(context = {}) {
   };
 }
 
+function applyComponentStackingRules(components) {
+  const result = [];
+  const replaceById = new Map();
+  const ignoredIds = new Set();
+
+  for (const component of components) {
+    if (!component || typeof component.id !== 'string') continue;
+    const stacking = component.stacking ?? 'additive';
+
+    if (stacking === 'replace') {
+      replaceById.set(component.id, component);
+      continue;
+    }
+
+    if (stacking === 'ignore') {
+      if (ignoredIds.has(component.id)) continue;
+      ignoredIds.add(component.id);
+      result.push(component);
+      continue;
+    }
+
+    result.push(component);
+  }
+
+  for (const component of replaceById.values()) result.push(component);
+  return result;
+}
+
 export function castSpell(spellOrArray, context = {}) {
   const spells = Array.isArray(spellOrArray) ? spellOrArray : [spellOrArray];
   if (spells.length === 0) return { ok: false, reason: 'empty-spell-list' };
 
   for (const spell of spells) {
     const validation = validateSpell(spell);
-    if (!validation.valid) return { ok: false, reason: validation.reason, cost: validation.cost, overload: validation.overload };
+    if (!validation.valid) {
+      return {
+        ok: false,
+        reason: validation.reason,
+        message: validation.message,
+        cost: validation.cost,
+        overload: validation.overload,
+      };
+    }
   }
 
   const resolvedTarget = resolveTarget(context);
@@ -41,7 +77,8 @@ export function castSpell(spellOrArray, context = {}) {
 
   for (const spell of spells) {
     const instance = createSpellInstance(spell);
-    const components = instance.components.map((componentRef) => resolveComponent(componentRef)).filter(Boolean);
+    const rawComponents = instance.components.map((componentRef) => resolveComponent(componentRef)).filter(Boolean);
+    const components = applyComponentStackingRules(rawComponents);
 
     const runtimeContext = {
       ...context,
@@ -54,8 +91,19 @@ export function castSpell(spellOrArray, context = {}) {
 
     applyElementModifiers(instance);
 
-    const behaviorExecutor = getBehaviorExecutor(instance.base.behavior);
-    const behaviorSuccess = behaviorExecutor ? behaviorExecutor(instance, runtimeContext) : false;
+    const overrideComponents = components.filter((component) => component.type === 'override');
+    let behaviorSuccess = true;
+
+    if (overrideComponents.length > 0) {
+      for (const component of overrideComponents) {
+        const didOverrideCast = component.hooks?.onBehavior?.(instance, runtimeContext);
+        behaviorSuccess = Boolean(didOverrideCast) && behaviorSuccess;
+      }
+    } else {
+      const behaviorExecutor = getBehaviorExecutor(instance.base.behavior);
+      behaviorSuccess = behaviorExecutor(instance, runtimeContext);
+    }
+
     if (!behaviorSuccess) return { ok: false, reason: `behavior-failed:${instance.base.behavior}` };
 
     if (Array.isArray(context.activeSpellInstances)) context.activeSpellInstances.push({ instance, components });

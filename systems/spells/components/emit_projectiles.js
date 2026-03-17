@@ -16,12 +16,15 @@ function rotateVector(vx, vy, radians) {
 
 export const emitProjectilesComponent = {
   id: 'emit_projectiles',
+  type: 'override',
+  stacking: 'replace',
   hooks: {
-    onCast(instance, context) {
+    onCast() {},
+    onBehavior(instance, context) {
       const system = context?.system;
       const origin = context?.origin ?? context?.player;
       const target = context?.targetPosition;
-      if (!system || !origin || !target) return;
+      if (!system || !origin || !target) return false;
 
       const count = Math.max(2, Math.floor(instance?.parameters?.emitCount ?? 3));
       const spreadDegrees = clampSpreadDegrees(instance?.parameters?.emitSpreadDegrees ?? 30);
@@ -29,19 +32,35 @@ export const emitProjectilesComponent = {
       const start = -spreadDegrees / 2;
 
       const baseDirection = normalize(target.x - origin.x, target.y - origin.y);
+      let spawnCount = 0;
 
       for (let i = 0; i < count; i += 1) {
         const offsetDegrees = start + step * i;
         const direction = rotateVector(baseDirection.x, baseDirection.y, (offsetDegrees * Math.PI) / 180);
-        system.createProjectile(origin.x, origin.y, direction.x, direction.y, {
+        const projectile = system.createProjectile(origin.x, origin.y, direction.x, direction.y, {
           speed: instance?.parameters?.speed ?? 60,
           damage: instance?.parameters?.damage ?? 2,
           ttl: instance?.parameters?.ttl ?? 0.85,
           color: instance?.parameters?.color ?? '#9cc7ff',
           radius: instance?.parameters?.size ?? 1,
           hitParticleColor: '#ffd2ad',
+          spellInstance: instance,
+          onHit: (hitData) => {
+            instance.state.hasHit = true;
+            for (const component of context.components) {
+              component.hooks?.onHit?.(instance, hitData);
+            }
+          },
         });
+
+        if (projectile) spawnCount += 1;
       }
+
+      const behaviorDuration = Number.isFinite(instance?.parameters?.duration) ? instance.parameters.duration : null;
+      const projectileLifetime = Number.isFinite(instance?.parameters?.ttl) ? instance.parameters.ttl : null;
+      instance.state.lifetime = projectileLifetime ?? behaviorDuration ?? 1;
+
+      return spawnCount > 0;
     },
     onHit() {},
     onExpire() {},

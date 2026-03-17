@@ -1,11 +1,13 @@
 export const explodeOnHitComponent = {
   id: 'explode_on_hit',
+  type: 'trigger',
+  stacking: 'ignore',
   hooks: {
     onCast() {},
-    onHit(instance, target) {
-      const system = target?.context?.system;
-      const x = target?.x ?? target?.position?.x;
-      const y = target?.y ?? target?.position?.y;
+    onHit(instance, hitData) {
+      const system = hitData?.system;
+      const x = hitData?.x;
+      const y = hitData?.y;
       if (!system || !Number.isFinite(x) || !Number.isFinite(y)) return;
       system.spawnEffect({
         type: 'burst',
