@@ -255,7 +255,18 @@ Runtime instances can:
 - mutate element
 - mutate behavior through interactions
 - carry dynamic state
+- 
+### MUTATION RULE
 
+Runtime instances may change:
+
+- element
+- behavior parameters
+- attached components (temporary)
+
+These changes occur through interactions.
+
+Base spell definitions must NEVER be modified.
 ### RULE
 
 Base spell definitions must NEVER change during runtime.
@@ -280,6 +291,19 @@ Input
 Cooldown and mana are ONLY consumed if execution succeeds.
 
 ---
+### COMPOSITION TARGETING RULE
+
+When combining spells:
+
+- If targeting types differ, the system resolves to a shared compatible target.
+- Priority order:
+  1. enemy-targeted
+  2. cursor
+  3. ground-targeted
+  4. player-centered
+  5. self
+
+All composed spells must use the resolved target.
 
 ## STATUS SYSTEM
 
@@ -293,3 +317,15 @@ statusEffects: [
     intensity
   }
 ]
+Examples:
+
+- Fire → burn (damage over time)
+- Frost → slow / freeze buildup
+- Electric → shock (enables chaining interactions)
+- Earth → stagger (interrupt / heavy slow)
+
+Status effects must be:
+
+- stackable or refreshable depending on type
+- time-based
+- extendable with new types without modifying core system
