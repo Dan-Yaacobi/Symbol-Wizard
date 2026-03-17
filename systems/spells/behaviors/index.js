@@ -21,5 +21,13 @@ const behaviorMap = {
 };
 
 export function getBehaviorExecutor(behaviorId) {
-  return behaviorMap[behaviorId] ?? null;
+  const behaviorExecutor = behaviorMap[behaviorId];
+  if (!behaviorExecutor) {
+    return (instance) => {
+      console.warn(`[SpellSystem] Missing behavior executor for "${behaviorId}" on spell "${instance?.base?.id ?? 'unknown'}".`);
+      return false;
+    };
+  }
+
+  return (instance, context) => Boolean(behaviorExecutor(instance, context));
 }

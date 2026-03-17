@@ -6,11 +6,20 @@ const COMPONENTS = new Map([
   [emitProjectilesComponent.id, emitProjectilesComponent],
 ]);
 
+function normalizeComponent(component) {
+  if (!component || typeof component !== 'object') return null;
+  return {
+    ...component,
+    type: component.type ?? 'augment',
+    stacking: component.stacking ?? 'additive',
+  };
+}
+
 export function resolveComponent(componentRef) {
   if (!componentRef) return null;
-  if (typeof componentRef === 'string') return COMPONENTS.get(componentRef) ?? null;
+  if (typeof componentRef === 'string') return normalizeComponent(COMPONENTS.get(componentRef) ?? null);
   if (typeof componentRef === 'object' && typeof componentRef.id === 'string') {
-    return COMPONENTS.get(componentRef.id) ?? componentRef;
+    return normalizeComponent(COMPONENTS.get(componentRef.id) ?? componentRef);
   }
   return null;
 }

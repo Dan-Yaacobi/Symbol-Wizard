@@ -100,9 +100,9 @@ export function updateProjectiles(
           p.onHit?.({
             x: p.x,
             y: p.y,
-            enemy,
             target: enemy,
-            context: { system: abilitySystem },
+            system: abilitySystem,
+            instance: p.spellInstance,
           });
           deadProjectiles.add(p);
           if (enemy.hp <= 0) {

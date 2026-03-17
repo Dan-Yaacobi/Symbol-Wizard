@@ -26,5 +26,9 @@ export function executeBehavior(instance, context) {
     },
   });
 
+  const projectileTtl = Number.isFinite(projectile?.ttl) ? projectile.ttl : null;
+  const behaviorDuration = Number.isFinite(instance.parameters?.duration) ? instance.parameters.duration : null;
+  instance.state.lifetime = projectileTtl ?? behaviorDuration ?? 1;
+
   return Boolean(projectile);
 }
