@@ -1,9 +1,19 @@
 import { explodeOnHitComponent } from './explode_on_hit.js';
 import { emitProjectilesComponent } from './emit_projectiles.js';
+import { applyStatusOnHitComponent } from './apply_status_on_hit.js';
+import { spawnZoneOnHitComponent } from './spawn_zone_on_hit.js';
+import { increaseSpeedComponent } from './increase_speed.js';
+import { increaseDamageComponent } from './increase_damage.js';
+import { pierceComponent } from './pierce.js';
 
 const COMPONENTS = new Map([
   [explodeOnHitComponent.id, explodeOnHitComponent],
   [emitProjectilesComponent.id, emitProjectilesComponent],
+  [applyStatusOnHitComponent.id, applyStatusOnHitComponent],
+  [spawnZoneOnHitComponent.id, spawnZoneOnHitComponent],
+  [increaseSpeedComponent.id, increaseSpeedComponent],
+  [increaseDamageComponent.id, increaseDamageComponent],
+  [pierceComponent.id, pierceComponent],
 ]);
 
 function normalizeComponent(component) {
@@ -19,7 +29,8 @@ export function resolveComponent(componentRef) {
   if (!componentRef) return null;
   if (typeof componentRef === 'string') return normalizeComponent(COMPONENTS.get(componentRef) ?? null);
   if (typeof componentRef === 'object' && typeof componentRef.id === 'string') {
-    return normalizeComponent(COMPONENTS.get(componentRef.id) ?? componentRef);
+    const base = COMPONENTS.get(componentRef.id) ?? {};
+    return normalizeComponent({ ...base, ...componentRef });
   }
   return null;
 }

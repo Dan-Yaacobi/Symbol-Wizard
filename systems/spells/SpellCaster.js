@@ -55,6 +55,39 @@ function applyComponentStackingRules(components) {
   return result;
 }
 
+function applyAugments(instance, components, runtimeContext) {
+  for (const component of components) {
+    if (component?.type !== 'augment') continue;
+    component.hooks?.onAugment?.(instance, runtimeContext);
+    if (typeof component?.onAugment === 'function') component.onAugment(instance, runtimeContext);
+  }
+}
+
+function updateZoneBehavior(instance, dt, context = {}) {
+  if (instance?.base?.behavior !== 'zone') return;
+  const system = context?.system;
+  const zoneState = instance.state?.zone;
+  if (!system || !zoneState) return;
+
+  zoneState.tickAccumulator = (zoneState.tickAccumulator ?? 0) + dt;
+  const tickInterval = Math.max(0.05, zoneState.tickInterval ?? 0.25);
+  while (zoneState.tickAccumulator >= tickInterval) {
+    zoneState.tickAccumulator -= tickInterval;
+    const targets = system.getEntitiesInRadius(zoneState.x, zoneState.y, zoneState.radius);
+    for (const target of targets) {
+      system.applyDamage(target, zoneState.damage);
+      instance.handleEvent('onTick', {
+        ...context,
+        x: zoneState.x,
+        y: zoneState.y,
+        target,
+        system,
+        instance,
+      });
+    }
+  }
+}
+
 export function castSpell(spellOrArray, context = {}) {
   const spells = Array.isArray(spellOrArray) ? spellOrArray : [spellOrArray];
   if (spells.length === 0) return { ok: false, reason: 'empty-spell-list' };
@@ -90,7 +123,8 @@ export function castSpell(spellOrArray, context = {}) {
       components,
     };
 
-    for (const component of components) component.hooks?.onCast?.(instance, runtimeContext);
+    applyAugments(instance, components, runtimeContext);
+    instance.handleEvent('onCast', runtimeContext);
 
     applyElementModifiers(instance);
 
@@ -131,10 +165,11 @@ export function updateSpellInstances(activeSpellInstances, dt, context = {}) {
     instance.state.age += dt;
     instance.state.tickTimer += dt;
 
-    for (const component of components) component.hooks?.onTick?.(instance, context);
+    updateZoneBehavior(instance, dt, context);
+    if (instance.base.behavior !== 'zone') instance.handleEvent('onTick', { ...context, dt });
 
     if (instance.state.hasHit || instance.state.age >= instance.state.lifetime) {
-      for (const component of components) component.hooks?.onExpire?.(instance, context);
+      instance.handleEvent('onExpire', context);
       activeSpellInstances.splice(i, 1);
     }
   }

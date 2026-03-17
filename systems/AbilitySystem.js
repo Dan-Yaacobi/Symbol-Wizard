@@ -286,6 +286,20 @@ export class AbilitySystem {
     });
   }
 
+  applyStatus(target, type, duration) {
+    if (!target || typeof type !== 'string') return false;
+    const finalDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
+    target.statusEffects ??= new Map();
+    const current = target.statusEffects.get(type);
+    const remaining = Number.isFinite(current?.duration) ? current.duration : 0;
+    target.statusEffects.set(type, {
+      type,
+      duration: Math.max(remaining, finalDuration),
+      appliedAt: Date.now(),
+    });
+    return true;
+  }
+
   damageEnemy(enemy, amount, hitContext = {}) {
     if (!enemy || !enemy.alive) return false;
     const scaled = amount * this.getDamageMultiplier(enemy);

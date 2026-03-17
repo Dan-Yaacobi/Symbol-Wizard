@@ -27,8 +27,18 @@ function spawnProjectileTrail(projectile) {
 
 
 function triggerProjectileHit(projectile, payload) {
-  if (projectile.hitHandled) return;
-  projectile.hitHandled = true;
+  const target = payload?.target ?? null;
+  projectile.hitTargets ??= new Set();
+
+  if (!target && projectile.hitHandled) return;
+  if (target && projectile.hitTargets.has(target)) return;
+
+  if (target) {
+    projectile.hitTargets.add(target);
+  } else {
+    projectile.hitHandled = true;
+  }
+
   console.log('[PROJECTILE HIT]', payload.x, payload.y);
   projectile.onHit?.(payload);
 }
@@ -90,7 +100,7 @@ export function updateProjectiles(
       if (object.destroyed || !object.attackable) continue;
       if (objectIntersectsCircle(object, p.x, p.y, p.radius ?? 0.8)) {
         triggerProjectileHit(p, { x: p.x, y: p.y, target: object, system: abilitySystem, instance: p.spellInstance });
-        deadProjectiles.add(p);
+        if (!p.pierce) deadProjectiles.add(p);
         const result = applyAttackToObject(object, p.damage ?? 2);
         if (result.destroyed) onDestructibleDestroyed?.(object);
       }
@@ -100,6 +110,7 @@ export function updateProjectiles(
       for (const enemy of enemies) {
         if (!enemy.alive) continue;
         if (collides({ ...p, radius: p.radius ?? 0.8 }, enemy)) {
+          if (p.hitTargets?.has(enemy)) continue;
           const isCritical = Math.random() < 0.2;
           const baseDamage = isCritical ? p.damage * 2 : p.damage;
           const multiplier = abilitySystem?.getDamageMultiplier(enemy) ?? 1;
@@ -119,7 +130,8 @@ export function updateProjectiles(
             system: abilitySystem,
             instance: p.spellInstance,
           });
-          deadProjectiles.add(p);
+          if (!p.pierce) deadProjectiles.add(p);
+          if (p.pierce && Number.isFinite(p.pierceCount) && p.hitTargets?.size >= p.pierceCount) deadProjectiles.add(p);
           if (enemy.hp <= 0) {
             enemy.alive = false;
             slain.push(enemy);

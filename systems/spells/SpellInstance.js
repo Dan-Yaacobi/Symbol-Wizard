@@ -14,6 +14,9 @@ export function createSpellInstance(baseSpell) {
 
     handleEvent(eventName, payload) {
       this.components.forEach((component) => {
+        if (typeof component?.hooks?.[eventName] === 'function') {
+          component.hooks[eventName](this, payload);
+        }
         if (typeof component?.[eventName] === 'function') {
           component[eventName](payload, this);
         }
