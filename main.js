@@ -28,6 +28,7 @@ import { DialogueManager } from './systems/DialogueManager.js';
 import { SpellRegistry, defaultSpellSlots } from './data/spells.js';
 import { AbilitySystem } from './systems/AbilitySystem.js';
 import { SpellbookWindow } from './ui/SpellbookWindow.js';
+import { SpellCraftingWindow } from './ui/SpellCraftingWindow.js';
 import { PrefabEditorScreen } from './ui/PrefabEditorScreen.js';
 import { palette } from './entities/SpriteLibrary.js';
 import { visualTheme } from './data/VisualTheme.js';
@@ -164,6 +165,16 @@ const uiRoot = document.getElementById('uiPanels') ?? (() => {
   return fallback;
 })();
 const spellbook = new SpellbookWindow({ root: uiRoot, abilitySystem, input });
+new SpellCraftingWindow({
+  root: uiRoot,
+  spellbook,
+  onCrafted: (spell) => {
+    if (!spell?.id || abilitySystem.definitions.has(spell.id)) return false;
+    abilitySystem.definitions.set(spell.id, spell);
+    abilitySystem.cooldowns.set(spell.id, 0);
+    return true;
+  },
+});
 
 const prefabEditor = new PrefabEditorScreen();
 await prefabEditor.initialize();

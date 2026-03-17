@@ -518,3 +518,60 @@ body {
   padding: 6px 8px;
   font-size: 11px;
 }
+
+.spell-crafting-window {
+  width: 100%;
+  min-height: 112px;
+  border: 2px solid var(--panel-border);
+  background: var(--panel);
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.spell-crafting-header h3 {
+  margin: 0 0 6px;
+}
+
+.spell-crafting-selectors {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+.spell-crafting-selectors label,
+.craft-components {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.craft-components {
+  border: 1px solid var(--panel-border);
+  padding: 4px;
+  max-height: 88px;
+  overflow-y: auto;
+}
+
+.craft-button {
+  width: 100%;
+  background: #1a2a3d;
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  padding: 8px;
+  cursor: pointer;
+}
+
+.craft-feedback {
+  min-height: 18px;
+  margin: 6px 0 0;
+}
+
+.craft-feedback.success {
+  color: #8ef7ad;
+}
+
+.craft-feedback.error {
+  color: #ff9e9e;
+}

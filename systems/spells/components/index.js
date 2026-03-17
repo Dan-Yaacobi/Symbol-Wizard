@@ -15,6 +15,7 @@ const COMPONENTS = new Map([
   [increaseDamageComponent.id, increaseDamageComponent],
   [pierceComponent.id, pierceComponent],
 ]);
+export const ComponentRegistry = Object.freeze(Object.fromEntries(COMPONENTS));
 
 function normalizeComponent(component) {
   if (!component || typeof component !== 'object') return null;
