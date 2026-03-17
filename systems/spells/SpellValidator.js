@@ -1,4 +1,4 @@
-const VALID_BEHAVIORS = new Set(['projectile', 'zone', 'beam', 'burst', 'summon', 'orbit']);
+const VALID_BEHAVIORS = new Set(['projectile', 'zone', 'beam', 'burst', 'summon', 'orbit', 'chain', 'nova']);
 
 function validateBehaviorParameters(behavior, parameters, cost, overload) {
   if (behavior === 'projectile') {
@@ -16,6 +16,14 @@ function validateBehaviorParameters(behavior, parameters, cost, overload) {
 
   if (behavior === 'beam' && !Number.isFinite(parameters?.duration)) {
     return { valid: false, reason: 'invalid-beam-duration', message: 'Beam spells require a numeric parameters.duration.', cost, overload };
+  }
+
+  if (behavior === 'chain' && !Number.isFinite(parameters?.chainCount)) {
+    return { valid: false, reason: 'invalid-chain-count', message: 'Chain spells require a numeric parameters.chainCount.', cost, overload };
+  }
+
+  if (behavior === 'nova' && !Number.isFinite(parameters?.count)) {
+    return { valid: false, reason: 'invalid-nova-count', message: 'Nova spells require a numeric parameters.count.', cost, overload };
   }
 
   return { valid: true, reason: 'ok', message: 'ok', cost, overload };
