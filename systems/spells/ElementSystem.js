@@ -1,6 +1,6 @@
 export const ElementRegistry = {
   fire: {
-    components: ['explode_on_hit', 'apply_status_on_hit'],
+    components: ['apply_status_on_hit'],
     configModifiers: {
       damage: { multiply: 1.25 },
       speed: { multiply: 0.95 },
@@ -9,7 +9,7 @@ export const ElementRegistry = {
     },
   },
   frost: {
-    components: ['apply_status_on_hit', 'spawn_zone_on_hit'],
+    components: ['apply_status_on_hit'],
     configModifiers: {
       damage: { multiply: 0.9 },
       speed: { multiply: 0.85 },
@@ -19,26 +19,22 @@ export const ElementRegistry = {
     },
   },
   lightning: {
-    components: ['increase_speed', 'pierce', 'emit_projectiles'],
+    components: ['apply_status_on_hit'],
     configModifiers: {
       damage: { multiply: 1.1 },
       speed: { multiply: 1.3 },
       ttl: { multiply: 0.8 },
-      emitCount: { set: 3 },
-      emitSpreadDegrees: { set: 20 },
       statusType: { set: 'shock' },
       statusDuration: { set: 1.2 },
     },
   },
   poison: {
-    components: ['apply_status_on_hit', 'spawn_zone_on_hit'],
+    components: ['apply_status_on_hit'],
     configModifiers: {
       damage: { multiply: 0.85 },
       ttl: { multiply: 1.35 },
       statusType: { set: 'poison' },
       statusDuration: { set: 3.2 },
-      spawnZoneDamage: { set: 1.5 },
-      spawnZoneDuration: { set: 2.2 },
     },
   },
   arcane: {
