@@ -13,28 +13,6 @@ const projectileSprite = [
   ],
 ];
 
-function castMagicBolt({ player, target, system, spellLevel = 1 }) {
-  const worldX = target?.x;
-  const worldY = target?.y;
-  const dx = worldX - player.x;
-  const dy = worldY - player.y;
-  const len = Math.hypot(dx, dy);
-
-  if (!Number.isFinite(len) || len === 0) return;
-
-  const dirX = dx / len;
-  const dirY = dy / len;
-
-  system.createProjectile(player.x, player.y, dirX, dirY, {
-    color: visualTheme.colors.projectileArcane,
-    speed: 65 + spellLevel * 6,
-    damage: 3 + spellLevel,
-    ttl: 0.9,
-    radius: 1.1,
-    spriteFrames: projectileSprite,
-  });
-}
-
 function castFireBurst({ player, system, spellLevel = 1 }) {
   const radius = 6 + spellLevel * 0.6;
   const damage = 4 + spellLevel * 2;
@@ -95,11 +73,23 @@ export const SpellRegistry = {
     name: 'Magic Bolt',
     icon: '*',
     description: 'A basic arcane projectile.',
+    behavior: 'projectile',
+    targeting: 'cursor',
+    element: 'arcane',
+    components: [],
+    parameters: {
+      speed: 65,
+      damage: 4,
+      ttl: 0.9,
+      size: 1.1,
+      color: visualTheme.colors.projectileArcane,
+      spriteFrames: projectileSprite,
+    },
+    cost: 12,
     damage: 4,
     range: 14,
     cooldown: 0.22,
     manaCost: 4,
-    cast: castMagicBolt,
   },
   'fire-burst': {
     id: 'fire-burst',
@@ -137,4 +127,3 @@ export const SpellRegistry = {
 };
 
 export const defaultSpellSlots = ['magic-bolt', 'fire-burst', 'blink', 'time-freeze'];
-
