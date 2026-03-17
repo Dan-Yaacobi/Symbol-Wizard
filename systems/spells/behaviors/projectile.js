@@ -17,9 +17,11 @@ export function executeBehavior(instance, context) {
     color: instance.parameters?.color ?? '#8fe8ff',
     hitParticleColor: instance.parameters?.hitParticleColor,
     spriteFrames: instance.parameters?.spriteFrames,
+    pierce: Boolean(instance.parameters?.pierce),
+    pierceCount: Number.isFinite(instance.parameters?.pierceCount) ? instance.parameters.pierceCount : null,
     spellInstance: instance,
     onHit: (payload) => {
-      instance.state.hasHit = true;
+      if (!instance.parameters?.pierce) instance.state.hasHit = true;
       instance.handleEvent('onHit', payload);
     },
   });

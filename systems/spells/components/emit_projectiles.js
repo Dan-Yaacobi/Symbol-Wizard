@@ -43,10 +43,12 @@ export const emitProjectilesComponent = {
           ttl: instance?.parameters?.ttl ?? instance?.parameters?.lifetime ?? 0.85,
           color: instance?.parameters?.color ?? '#9cc7ff',
           radius: instance?.parameters?.size ?? 1,
+          pierce: Boolean(instance?.parameters?.pierce),
+          pierceCount: Number.isFinite(instance?.parameters?.pierceCount) ? instance.parameters.pierceCount : null,
           hitParticleColor: '#ffd2ad',
           spellInstance: instance,
           onHit: (payload) => {
-            instance.state.hasHit = true;
+            if (!instance?.parameters?.pierce) instance.state.hasHit = true;
             instance.handleEvent('onHit', payload);
           },
         });
