@@ -1,6 +1,6 @@
 import { validateSpell } from './SpellValidator.js';
 import { createSpellInstance } from './SpellInstance.js';
-import { applyElementModifiers } from './ElementSystem.js';
+import { applyElementModifiers, composeSpellWithElement } from './ElementSystem.js';
 import { getBehaviorExecutor } from './behaviors/index.js';
 import { resolveComponent } from './components/index.js';
 import { updateOrbitBehavior } from './behaviors/orbit.js';
@@ -110,7 +110,19 @@ export function castSpell(spellOrArray, context = {}) {
   let didCastAny = false;
 
   for (const spell of spells) {
-    const instance = createSpellInstance(spell);
+    const finalSpell = composeSpellWithElement(spell, context.element ?? context.elementOverride ?? spell.element ?? null);
+    const finalValidation = validateSpell(finalSpell);
+    if (!finalValidation.valid) {
+      return {
+        ok: false,
+        reason: finalValidation.reason,
+        message: finalValidation.message,
+        cost: finalValidation.cost,
+        overload: finalValidation.overload,
+      };
+    }
+
+    const instance = createSpellInstance(finalSpell);
     const rawComponents = instance.components.map((componentRef) => resolveComponent(componentRef)).filter(Boolean);
     const components = applyComponentStackingRules(rawComponents);
     instance.components = components;
