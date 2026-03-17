@@ -1,5 +1,6 @@
 import { Projectile } from '../entities/Projectile.js';
 import { visualPalette } from '../data/VisualTheme.js';
+import { castSpell, updateSpellInstances } from './spells/SpellCaster.js';
 
 export class AbilitySystem {
   constructor({ definitions, player, enemies, map, camera, spawnProjectile, reportDamage, onEnemySlain }) {
@@ -15,6 +16,7 @@ export class AbilitySystem {
     this.cooldowns = new Map();
     this.slots = [null, null, null, null];
     this.effects = [];
+    this.activeSpellInstances = [];
     this.activeFreeze = null;
 
     for (const spell of definitions) {
@@ -32,6 +34,7 @@ export class AbilitySystem {
       .filter((effect) => effect.ttl > 0);
 
     this.updateFreeze(dt);
+    updateSpellInstances(this.activeSpellInstances, dt, { system: this, player: this.player });
   }
 
   updateEffect(effect, dt) {
@@ -196,7 +199,21 @@ export class AbilitySystem {
     this.player.castTimer = Math.max(this.player.castTimer ?? 0, 0.24);
 
     try {
-      spell.cast({ ...context, system: this, spellLevel: 1, spell });
+      if (spell.behavior) {
+        const castResult = castSpell(spell, {
+          ...context,
+          system: this,
+          player: this.player,
+          activeSpellInstances: this.activeSpellInstances,
+        });
+        if (!castResult.ok) {
+          this.player.mana = Math.min(this.player.maxMana, this.player.mana + spell.manaCost);
+          this.cooldowns.set(spell.id, 0);
+          return { ok: false, reason: castResult.reason, abilityId: spell.id };
+        }
+      } else {
+        spell.cast({ ...context, system: this, spellLevel: 1, spell });
+      }
     } catch (error) {
       this.player.mana = Math.min(this.player.maxMana, this.player.mana + spell.manaCost);
       this.cooldowns.set(spell.id, 0);

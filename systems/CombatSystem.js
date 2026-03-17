@@ -97,6 +97,13 @@ export function updateProjectiles(
             particleColor: p.hitParticleColor,
             strongHit: isCritical || damage >= 8,
           });
+          p.onHit?.({
+            x: p.x,
+            y: p.y,
+            enemy,
+            target: enemy,
+            context: { system: abilitySystem },
+          });
           deadProjectiles.add(p);
           if (enemy.hp <= 0) {
             enemy.alive = false;
