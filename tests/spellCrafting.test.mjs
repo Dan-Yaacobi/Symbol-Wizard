@@ -14,8 +14,7 @@ function testBaseWithElement() {
   const spell = craftSpell({ base: 'magic-bolt', element: 'fire' });
   assert.equal(spell.behavior, 'projectile');
   assert.equal(spell.element, 'fire');
-  assert.ok(spell.components.includes('explode_on_hit'));
-  assert.ok(spell.components.includes('apply_status_on_hit'));
+  assert.deepEqual(spell.components, ['apply_status_on_hit']);
   assert.equal(spell.config.statusType, 'burn');
 }
 
@@ -36,7 +35,7 @@ function testBaseElementAndComponent() {
   assert.equal(spell.behavior, 'projectile');
   assert.deepEqual(
     spell.components,
-    ['explode_on_hit', 'apply_status_on_hit', 'pierce'],
+    ['apply_status_on_hit', 'pierce'],
   );
   assert.equal(spell.config.statusType, 'burn');
 
@@ -61,11 +60,24 @@ function testBaseElementAndComponent() {
   assert.equal(result.ok, true);
 }
 
+
+
+function testElementsStayStatusFocused() {
+  const frost = craftSpell({ base: 'magic-bolt', element: 'frost' });
+  const poison = craftSpell({ base: 'magic-bolt', element: 'poison' });
+
+  assert.deepEqual(frost.components, ['apply_status_on_hit']);
+  assert.equal(frost.config.statusType, 'slow');
+  assert.equal(poison.config.statusType, 'poison');
+  assert.equal('spawnZoneDamage' in poison.config, false);
+}
+
 function run() {
   testBaseOnly();
   testBaseWithElement();
   testBaseWithComponent();
   testBaseElementAndComponent();
+  testElementsStayStatusFocused();
   console.log('Spell crafting tests passed.');
 }
 
