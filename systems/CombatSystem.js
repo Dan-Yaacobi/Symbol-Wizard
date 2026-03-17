@@ -25,6 +25,14 @@ function spawnProjectileTrail(projectile) {
   }
 }
 
+
+function triggerProjectileHit(projectile, payload) {
+  if (projectile.hitHandled) return;
+  projectile.hitHandled = true;
+  console.log('[PROJECTILE HIT]', payload.x, payload.y);
+  projectile.onHit?.(payload);
+}
+
 function updateProjectileTrail(projectile, dt) {
   projectile.trailParticles ??= [];
   projectile.trailSpawnTimer = (projectile.trailSpawnTimer ?? 0) - dt;
@@ -66,15 +74,22 @@ export function updateProjectiles(
     p.y += p.dy * p.speed * speedMult * dt;
     p.radius = config?.get?.('combat.projectileCollisionRadius') ?? p.radius;
 
-    if (p.ttl <= 0) deadProjectiles.add(p);
+    if (p.ttl <= 0) {
+      triggerProjectileHit(p, { x: p.x, y: p.y, target: null, system: abilitySystem, instance: p.spellInstance });
+      deadProjectiles.add(p);
+    }
 
     const tx = Math.round(p.x);
     const ty = Math.round(p.y);
-    if (!map[ty] || !map[ty][tx] || !map[ty][tx].walkable) deadProjectiles.add(p);
+    if (!map[ty] || !map[ty][tx] || !map[ty][tx].walkable) {
+      triggerProjectileHit(p, { x: p.x, y: p.y, target: null, system: abilitySystem, instance: p.spellInstance });
+      deadProjectiles.add(p);
+    }
 
     for (const object of worldObjects) {
       if (object.destroyed || !object.attackable) continue;
       if (objectIntersectsCircle(object, p.x, p.y, p.radius ?? 0.8)) {
+        triggerProjectileHit(p, { x: p.x, y: p.y, target: object, system: abilitySystem, instance: p.spellInstance });
         deadProjectiles.add(p);
         const result = applyAttackToObject(object, p.damage ?? 2);
         if (result.destroyed) onDestructibleDestroyed?.(object);
@@ -97,7 +112,7 @@ export function updateProjectiles(
             particleColor: p.hitParticleColor,
             strongHit: isCritical || damage >= 8,
           });
-          p.onHit?.({
+          triggerProjectileHit(p, {
             x: p.x,
             y: p.y,
             target: enemy,
@@ -115,6 +130,7 @@ export function updateProjectiles(
       const damage = p.damage ?? 1;
       player.hp = Math.max(0, player.hp - damage);
       combatTextSystem?.spawnDamageText(player, damage, false);
+      triggerProjectileHit(p, { x: p.x, y: p.y, target: player, system: abilitySystem, instance: p.spellInstance });
       deadProjectiles.add(p);
     }
   }

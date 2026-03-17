@@ -12,19 +12,19 @@ export function executeBehavior(instance, context) {
   const projectile = system.createProjectile(origin.x, origin.y, dx / length, dy / length, {
     speed: instance.parameters?.speed ?? 65,
     damage: instance.parameters?.damage ?? 3,
-    ttl: instance.parameters?.ttl ?? 0.9,
+    ttl: instance.parameters?.ttl ?? instance.parameters?.lifetime ?? 0.9,
     radius: instance.parameters?.size ?? 1.1,
     color: instance.parameters?.color ?? '#8fe8ff',
     hitParticleColor: instance.parameters?.hitParticleColor,
     spriteFrames: instance.parameters?.spriteFrames,
     spellInstance: instance,
-    onHit: (hitData) => {
+    onHit: (payload) => {
       instance.state.hasHit = true;
-      for (const component of context.components) {
-        component.hooks?.onHit?.(instance, hitData);
-      }
+      instance.handleEvent('onHit', payload);
     },
   });
+
+  if (projectile) projectile.spellInstance = instance;
 
   const projectileTtl = Number.isFinite(projectile?.ttl) ? projectile.ttl : null;
   const behaviorDuration = Number.isFinite(instance.parameters?.duration) ? instance.parameters.duration : null;

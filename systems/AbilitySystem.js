@@ -271,6 +271,21 @@ export class AbilitySystem {
     return this.effects;
   }
 
+
+  getEntitiesInRadius(x, y, radius) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(radius)) return [];
+    return this.enemies.filter((enemy) => enemy.alive && Math.hypot(enemy.x - x, enemy.y - y) <= radius);
+  }
+
+  applyDamage(target, amount) {
+    return this.damageEnemy(target, amount, {
+      sourceX: Number.isFinite(target?.x) ? target.x : this.player?.x ?? 0,
+      sourceY: Number.isFinite(target?.y) ? target.y : this.player?.y ?? 0,
+      particleColor: '#ffd2ad',
+      strongHit: amount >= 8,
+    });
+  }
+
   damageEnemy(enemy, amount, hitContext = {}) {
     if (!enemy || !enemy.alive) return false;
     const scaled = amount * this.getDamageMultiplier(enemy);

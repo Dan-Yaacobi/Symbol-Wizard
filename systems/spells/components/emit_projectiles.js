@@ -40,20 +40,21 @@ export const emitProjectilesComponent = {
         const projectile = system.createProjectile(origin.x, origin.y, direction.x, direction.y, {
           speed: instance?.parameters?.speed ?? 60,
           damage: instance?.parameters?.damage ?? 2,
-          ttl: instance?.parameters?.ttl ?? 0.85,
+          ttl: instance?.parameters?.ttl ?? instance?.parameters?.lifetime ?? 0.85,
           color: instance?.parameters?.color ?? '#9cc7ff',
           radius: instance?.parameters?.size ?? 1,
           hitParticleColor: '#ffd2ad',
           spellInstance: instance,
-          onHit: (hitData) => {
+          onHit: (payload) => {
             instance.state.hasHit = true;
-            for (const component of context.components) {
-              component.hooks?.onHit?.(instance, hitData);
-            }
+            instance.handleEvent('onHit', payload);
           },
         });
 
-        if (projectile) spawnCount += 1;
+        if (projectile) {
+          projectile.spellInstance = instance;
+          spawnCount += 1;
+        }
       }
 
       const behaviorDuration = Number.isFinite(instance?.parameters?.duration) ? instance.parameters.duration : null;
