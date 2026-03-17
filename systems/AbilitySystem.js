@@ -2,6 +2,11 @@ import { Projectile } from '../entities/Projectile.js';
 import { visualPalette } from '../data/VisualTheme.js';
 import { castSpell, updateSpellInstances } from './spells/SpellCaster.js';
 
+const STATUS_TICK_DAMAGE = {
+  burn: 2,
+  poison: 1,
+};
+
 export class AbilitySystem {
   constructor({ definitions, player, enemies, map, camera, spawnProjectile, reportDamage, onEnemySlain }) {
     this.definitions = new Map(definitions.map((spell) => [spell.id, spell]));
@@ -92,6 +97,12 @@ export class AbilitySystem {
         activeStatuses.push(type);
 
         if (nextTickTimer >= 0.5) {
+          const tickDamage = this.getStatusTickDamage(type, status, target);
+          if (tickDamage > 0) {
+            console.log('[STATUS DAMAGE]', type, tickDamage);
+            this.applyDamage(target, tickDamage);
+          }
+
           this.spawnEffect({
             type: 'status-tick',
             x: target.x,
@@ -363,11 +374,18 @@ export class AbilitySystem {
     return true;
   }
 
+  getStatusTickDamage(type, status, target) {
+    if (!target || target.alive === false) return 0;
+    if (Number.isFinite(status?.damagePerTick)) return Math.max(0, status.damagePerTick);
+    return STATUS_TICK_DAMAGE[type] ?? 0;
+  }
+
   damageEnemy(enemy, amount, hitContext = {}) {
     if (!enemy || !enemy.alive) return false;
     const scaled = amount * this.getDamageMultiplier(enemy);
     const damage = Math.max(0, scaled);
     enemy.hp -= damage;
+    console.log('[FLOATING TEXT]', damage);
     this.reportDamage?.(enemy, damage, false);
     this.registerHitFeedback(enemy, hitContext);
     if (enemy.hp <= 0) {
