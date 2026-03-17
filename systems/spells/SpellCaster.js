@@ -79,6 +79,9 @@ export function castSpell(spellOrArray, context = {}) {
     const instance = createSpellInstance(spell);
     const rawComponents = instance.components.map((componentRef) => resolveComponent(componentRef)).filter(Boolean);
     const components = applyComponentStackingRules(rawComponents);
+    instance.components = components;
+
+    console.log('[SPELL CAST]', spell.id);
 
     const runtimeContext = {
       ...context,
@@ -130,7 +133,7 @@ export function updateSpellInstances(activeSpellInstances, dt, context = {}) {
 
     for (const component of components) component.hooks?.onTick?.(instance, context);
 
-    if (instance.state.age >= instance.state.lifetime) {
+    if (instance.state.hasHit || instance.state.age >= instance.state.lifetime) {
       for (const component of components) component.hooks?.onExpire?.(instance, context);
       activeSpellInstances.splice(i, 1);
     }
