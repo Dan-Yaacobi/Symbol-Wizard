@@ -33,6 +33,7 @@ export class AbilitySystem {
       .map((effect) => this.updateEffect(effect, dt))
       .filter((effect) => effect.ttl > 0);
 
+    this.updateStatusEffects(dt);
     this.updateFreeze(dt);
     updateSpellInstances(this.activeSpellInstances, dt, { system: this, player: this.player });
   }
@@ -55,6 +56,54 @@ export class AbilitySystem {
     }
 
     return { ...effect, ttl: effect.ttl - dt };
+  }
+
+  updateStatusEffects(dt) {
+    if (!Number.isFinite(dt) || dt <= 0) return;
+
+    const statusTargets = [this.player, ...this.enemies];
+    for (const target of statusTargets) {
+      if (!target?.statusEffects || !(target.statusEffects instanceof Map) || target.statusEffects.size === 0) {
+        target.activeStatuses = [];
+        continue;
+      }
+
+      const activeStatuses = [];
+      for (const [type, status] of target.statusEffects.entries()) {
+        const duration = Math.max(0, Number.isFinite(status?.duration) ? status.duration - dt : 0);
+        if (duration <= 0) {
+          target.statusEffects.delete(type);
+          continue;
+        }
+
+        const nextTickTimer = (Number.isFinite(status?.tickTimer) ? status.tickTimer : 0) + dt;
+        const nextPulseTimer = (Number.isFinite(status?.pulseTimer) ? status.pulseTimer : 0) + dt;
+        const shouldPulse = nextPulseTimer >= 0.25;
+
+        target.statusEffects.set(type, {
+          ...status,
+          type,
+          duration,
+          tickTimer: nextTickTimer >= 0.5 ? 0 : nextTickTimer,
+          pulseTimer: shouldPulse ? 0 : nextPulseTimer,
+          pulseFlash: shouldPulse ? 0.12 : Math.max(0, (status?.pulseFlash ?? 0) - dt),
+        });
+
+        activeStatuses.push(type);
+
+        if (nextTickTimer >= 0.5) {
+          this.spawnEffect({
+            type: 'status-tick',
+            x: target.x,
+            y: target.y - 1,
+            statusType: type,
+            ttl: 0.12,
+          });
+        }
+      }
+
+      target.activeStatuses = activeStatuses;
+    }
   }
 
   updateFreeze(dt) {
@@ -296,7 +345,21 @@ export class AbilitySystem {
       type,
       duration: Math.max(remaining, finalDuration),
       appliedAt: Date.now(),
+      tickTimer: 0,
+      pulseTimer: 0,
+      pulseFlash: 0.14,
     });
+
+    target.activeStatuses = [...target.statusEffects.keys()];
+
+    this.spawnEffect({
+      type: 'status-apply',
+      x: target.x,
+      y: target.y,
+      statusType: type,
+      ttl: 0.2,
+    });
+
     return true;
   }
 

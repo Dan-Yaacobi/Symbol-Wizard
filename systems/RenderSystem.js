@@ -7,6 +7,59 @@ function getEntitySprite(entity) {
 
 const c = visualTheme.colors;
 
+const STATUS_STYLE = {
+  burn: { icon: '🔥', tint: '#ff7a6a', effectColor: '#ff9a6a' },
+  poison: { icon: '☠', tint: '#7edb7e', effectColor: '#87e48e' },
+  slow: { icon: '~', tint: '#78b9ff', effectColor: '#8bc8ff' },
+};
+
+function blendHexColors(base, tint, amount = 0.28) {
+  const parse = (hex) => {
+    const normalized = typeof hex === 'string' ? hex.trim() : '';
+    if (!/^#([0-9a-fA-F]{6})$/.test(normalized)) return null;
+    return {
+      r: Number.parseInt(normalized.slice(1, 3), 16),
+      g: Number.parseInt(normalized.slice(3, 5), 16),
+      b: Number.parseInt(normalized.slice(5, 7), 16),
+    };
+  };
+
+  const a = parse(base);
+  const b = parse(tint);
+  if (!a || !b) return base;
+
+  const ratio = Math.max(0, Math.min(1, amount));
+  const toHex = (value) => Math.round(value).toString(16).padStart(2, '0');
+
+  return `#${toHex(a.r + (b.r - a.r) * ratio)}${toHex(a.g + (b.g - a.g) * ratio)}${toHex(a.b + (b.b - a.b) * ratio)}`;
+}
+
+function getPrimaryStatus(entity) {
+  if (!Array.isArray(entity?.activeStatuses) || entity.activeStatuses.length === 0) return null;
+  return entity.activeStatuses[0];
+}
+
+function getEntityTintColor(entity, baseColor) {
+  const statusType = getPrimaryStatus(entity);
+  const statusStyle = statusType ? STATUS_STYLE[statusType] : null;
+  if (!statusStyle?.tint) return baseColor;
+
+  const statusMap = entity?.statusEffects;
+  const status = statusMap instanceof Map ? statusMap.get(statusType) : null;
+  const pulseFlash = Math.max(0, Math.min(0.3, status?.pulseFlash ?? 0));
+  return blendHexColors(baseColor, statusStyle.tint, 0.2 + pulseFlash);
+}
+
+function drawStatusIcon(renderer, camera, entity) {
+  const statusType = getPrimaryStatus(entity);
+  if (!statusType) return;
+
+  const style = STATUS_STYLE[statusType] ?? { icon: '*', tint: '#ffffff' };
+  const sx = Math.round(entity.x) - camera.x;
+  const sy = Math.round(entity.y) - 5 - camera.y;
+  drawCell(renderer, { glyph: style.icon, fg: style.tint, layer: renderLayers.effects }, sx, sy);
+}
+
 function drawCell(renderer, { glyph, fg, bg = c.worldBackground, layer = renderLayers.entities }, x, y) {
   renderer.drawCell(toRenderCell({ glyph, fg, bg, layer }), x, y);
 }
@@ -212,6 +265,27 @@ function drawAbilityEffect(renderer, camera, effect) {
   }
 
 
+  if (effect.type === 'status-apply') {
+    const style = STATUS_STYLE[effect.statusType] ?? { icon: '*', effectColor: '#ffffff' };
+    const ringRadius = 1 + (1 - lifeRatio) * 2;
+    const points = Math.max(8, Math.round(ringRadius * 7));
+    for (let i = 0; i < points; i += 1) {
+      const angle = (Math.PI * 2 * i) / points;
+      const x = effect.x + Math.cos(angle) * ringRadius;
+      const y = effect.y + Math.sin(angle) * ringRadius;
+      drawCell(renderer, { glyph: '·', fg: style.effectColor ?? style.tint, layer: renderLayers.effects }, Math.round(x) - camera.x, Math.round(y) - camera.y);
+    }
+    drawCell(renderer, { glyph: style.icon, fg: style.tint ?? '#ffffff', layer: renderLayers.effects }, Math.round(effect.x) - camera.x, Math.round(effect.y) - 1 - camera.y);
+    return;
+  }
+
+  if (effect.type === 'status-tick') {
+    const style = STATUS_STYLE[effect.statusType] ?? { icon: '*', effectColor: '#ffffff' };
+    const glyph = lifeRatio > 0.5 ? '·' : '.';
+    drawCell(renderer, { glyph, fg: style.effectColor ?? style.tint, layer: renderLayers.effects }, Math.round(effect.x) - camera.x, Math.round(effect.y) - camera.y);
+    return;
+  }
+
   if (effect.type === 'hit-particles') {
     for (const particle of effect.particles ?? []) {
       const lifeRatio = particle.life / Math.max(0.0001, particle.maxLife ?? particle.life ?? 1);
@@ -407,8 +481,10 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   }
 
   for (const npc of npcs) {
-    const npcColor = npc.dialogueEngaged ? '#f5df9a' : colorForEntity(npc);
+    const npcBaseColor = npc.dialogueEngaged ? '#f5df9a' : colorForEntity(npc);
+    const npcColor = getEntityTintColor(npc, npcBaseColor);
     drawSprite(renderer, camera, npc, npcColor);
+    drawStatusIcon(renderer, camera, npc);
 
     if (npc.dialogueEngaged) {
       const pulse = npc.dialoguePulse > 0 ? '○' : '·';
@@ -423,12 +499,14 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     if (!enemy.alive) continue;
     const baseColor = enemy.spriteKey === 'slime' ? palette.slime : palette.skeleton;
     let renderColor = enemy.frozen ? (enemy.freezeTint ?? '#9edbff') : baseColor;
+    renderColor = getEntityTintColor(enemy, renderColor);
 
     if (enemy.hitFlashTimer > 0) {
       renderColor = '#f4f7ff';
     }
 
     drawSprite(renderer, camera, enemy, renderColor);
+    drawStatusIcon(renderer, camera, enemy);
 
     if (enemy.frozen) {
       const sx = Math.round(enemy.x) - camera.x;
@@ -450,7 +528,9 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     drawCell(renderer, { glyph: '$', fg: palette.gold }, gx, gy);
   }
 
-  drawSprite(renderer, camera, player, palette.player);
+  const playerColor = getEntityTintColor(player, palette.player);
+  drawSprite(renderer, camera, player, playerColor);
+  drawStatusIcon(renderer, camera, player);
   const px = Math.round(player.x) - camera.x;
   const py = Math.round(player.y) - camera.y;
   drawCell(renderer, { glyph: '!', fg: palette.playerAccent }, px, py - 2);
