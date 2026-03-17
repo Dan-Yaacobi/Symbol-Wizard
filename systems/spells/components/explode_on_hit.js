@@ -8,7 +8,7 @@ export const explodeOnHitComponent = {
 
     console.log('[COMPONENT TRIGGER]', 'explode_on_hit');
 
-    const radius = 2;
+    const radius = 10;
     const targets = system.getEntitiesInRadius(x, y, radius);
 
     targets.forEach((target) => {
