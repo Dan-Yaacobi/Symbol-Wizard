@@ -40,6 +40,7 @@ import {
   updateDestructibleAnimations,
   updateTownNpcs,
 } from './systems/WorldObjectSystem.js';
+import { resolveWallOverlap } from './systems/EnemyCollisionSystem.js';
 
 const VIEW_W = 104;
 const VIEW_H = 58;
@@ -111,6 +112,7 @@ function syncRoomEnemies(room) {
   enemies.length = 0;
   for (const enemy of room?.entities ?? []) {
     enemy.alive = enemy.alive ?? true;
+    resolveWallOverlap(enemy, room?.tiles);
     enemies.push(enemy);
   }
 }
@@ -343,6 +345,7 @@ devToolsPanel.setMapTools({
     if (applyEnemyTuningToExistingEnemies) {
       for (const enemy of group.enemies) applyEnemyTuningToEnemy(enemy);
     }
+    for (const enemy of group.enemies) resolveWallOverlap(enemy, activeRoom?.tiles);
     enemies.push(...group.enemies);
     activeRoom.entities = [...enemies];
     logDev('Spawned enemy group', { count: group.enemies.length, center });
@@ -826,7 +829,7 @@ function tick(now) {
   if (!dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
     handlePlayer(dt);
     if (enemyAiEnabled) {
-      updateEnemies(enemies, player, dt, projectiles, runtimeConfig);
+      updateEnemies(enemies, player, dt, projectiles, runtimeConfig, { map, tileSize: 1 });
       updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem, runtimeConfig);
     } else {
       for (const enemy of enemies) {
