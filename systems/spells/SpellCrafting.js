@@ -3,6 +3,28 @@ import { ElementRegistry, composeSpellWithElement } from './ElementSystem.js';
 import { validateSpell } from './SpellValidator.js';
 import { resolveComponent } from './components/index.js';
 
+export const MAX_CRAFTING_COST = 5;
+
+export const BASE_SPELL_COSTS = Object.freeze({
+  'magic-bolt': 1,
+});
+
+export const ELEMENT_COSTS = Object.freeze({
+  arcane: 0,
+  fire: 2,
+  frost: 2,
+  lightning: 2,
+  poison: 1,
+});
+
+export const COMPONENT_COSTS = Object.freeze({
+  apply_status_on_hit: 1,
+  pierce: 1,
+  explode_on_hit: 3,
+  emit_projectiles: 3,
+  spawn_zone_on_hit: 3,
+});
+
 function normalizeSpellId(baseId) {
   if (typeof baseId !== 'string') return null;
   if (SpellRegistry[baseId]) return baseId;
@@ -40,6 +62,41 @@ function buildConfig(spell) {
   return { ...config, ...parameters };
 }
 
+function getCostFromTable(table, id, label) {
+  if (!id) return 0;
+  const cost = table[id];
+  if (!Number.isFinite(cost)) {
+    throw new Error(`Missing ${label} cost for: ${String(id)}`);
+  }
+  return cost;
+}
+
+export function calculateSpellCost({ base, element = null, components = [] } = {}) {
+  const normalizedBaseId = normalizeSpellId(base);
+  if (!normalizedBaseId) {
+    throw new Error(`Unknown base spell: ${String(base)}`);
+  }
+
+  const normalizedComponents = normalizeComponents(components);
+  const totalCost = getCostFromTable(BASE_SPELL_COSTS, normalizedBaseId, 'base spell')
+    + getCostFromTable(ELEMENT_COSTS, element, 'element')
+    + normalizedComponents.reduce((sum, componentId) => sum + getCostFromTable(COMPONENT_COSTS, componentId, 'component'), 0);
+
+  return {
+    totalCost,
+    maxCost: MAX_CRAFTING_COST,
+    withinLimit: totalCost <= MAX_CRAFTING_COST,
+    breakdown: {
+      base: getCostFromTable(BASE_SPELL_COSTS, normalizedBaseId, 'base spell'),
+      element: getCostFromTable(ELEMENT_COSTS, element, 'element'),
+      components: normalizedComponents.map((componentId) => ({
+        id: componentId,
+        cost: getCostFromTable(COMPONENT_COSTS, componentId, 'component'),
+      })),
+    },
+  };
+}
+
 export function craftSpell({ base, element = null, components = [] } = {}) {
   const normalizedBaseId = normalizeSpellId(base);
   if (!normalizedBaseId) {
@@ -60,17 +117,32 @@ export function craftSpell({ base, element = null, components = [] } = {}) {
     throw new Error(`Unknown element: ${String(element)}`);
   }
 
-  const elementAppliedSpell = composeSpellWithElement({ ...baseSpell }, shouldApplyElement ? element : baseSpell.element ?? null);
+  const appliedElement = shouldApplyElement ? element : baseSpell.element ?? null;
+  const elementAppliedSpell = composeSpellWithElement({ ...baseSpell }, appliedElement);
 
   const mergedComponents = normalizeComponents([
     ...(Array.isArray(elementAppliedSpell.components) ? elementAppliedSpell.components : []),
     ...components,
   ]);
 
+  const costSummary = calculateSpellCost({
+    base: normalizedBaseId,
+    element: appliedElement,
+    components: mergedComponents,
+  });
+
+  if (!costSummary.withinLimit) {
+    throw new Error(`Spell is too complex to craft (${costSummary.totalCost}/${costSummary.maxCost}).`);
+  }
+
   const craftedSpell = {
     ...elementAppliedSpell,
     components: mergedComponents,
+    cost: costSummary.totalCost,
     config: buildConfig(elementAppliedSpell),
+    craftingCost: costSummary.totalCost,
+    craftingCostBreakdown: costSummary.breakdown,
+    maxCraftingCost: costSummary.maxCost,
   };
 
   const validation = validateSpell(craftedSpell);

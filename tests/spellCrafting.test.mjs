@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { craftSpell } from '../systems/spells/SpellCrafting.js';
+import { MAX_CRAFTING_COST, calculateSpellCost, craftSpell } from '../systems/spells/SpellCrafting.js';
 import { castSpell } from '../systems/spells/SpellCaster.js';
 
 function testBaseOnly() {
@@ -8,6 +8,7 @@ function testBaseOnly() {
   assert.deepEqual(spell.components, []);
   assert.ok(typeof spell.config === 'object');
   assert.equal(spell.config.damage, 4);
+  assert.equal(spell.cost, 1);
 }
 
 function testBaseWithElement() {
@@ -16,6 +17,7 @@ function testBaseWithElement() {
   assert.equal(spell.element, 'fire');
   assert.deepEqual(spell.components, ['apply_status_on_hit']);
   assert.equal(spell.config.statusType, 'burn');
+  assert.equal(spell.cost, 4);
 }
 
 function testBaseWithComponent() {
@@ -23,6 +25,7 @@ function testBaseWithComponent() {
   assert.equal(spell.behavior, 'projectile');
   assert.deepEqual(spell.components, ['pierce']);
   assert.ok(spell.config.speed > 0);
+  assert.equal(spell.cost, 2);
 }
 
 function testBaseElementAndComponent() {
@@ -38,6 +41,7 @@ function testBaseElementAndComponent() {
     ['apply_status_on_hit', 'pierce'],
   );
   assert.equal(spell.config.statusType, 'burn');
+  assert.equal(spell.cost, 5);
 
   const result = castSpell(spell, {
     player: { x: 0, y: 0, facingX: 1, facingY: 0 },
@@ -60,8 +64,6 @@ function testBaseElementAndComponent() {
   assert.equal(result.ok, true);
 }
 
-
-
 function testElementsStayStatusFocused() {
   const frost = craftSpell({ base: 'magic-bolt', element: 'frost' });
   const poison = craftSpell({ base: 'magic-bolt', element: 'poison' });
@@ -72,12 +74,37 @@ function testElementsStayStatusFocused() {
   assert.equal('spawnZoneDamage' in poison.config, false);
 }
 
+function testCalculateSpellCostBreakdown() {
+  const summary = calculateSpellCost({
+    base: 'magic-bolt',
+    element: 'fire',
+    components: ['explode_on_hit', 'pierce', 'pierce'],
+  });
+
+  assert.equal(summary.maxCost, MAX_CRAFTING_COST);
+  assert.equal(summary.totalCost, 7);
+  assert.equal(summary.withinLimit, false);
+  assert.deepEqual(summary.breakdown.components, [
+    { id: 'explode_on_hit', cost: 3 },
+    { id: 'pierce', cost: 1 },
+  ]);
+}
+
+function testOverBudgetCraftingFails() {
+  assert.throws(
+    () => craftSpell({ base: 'magic-bolt', element: 'fire', components: ['explode_on_hit'] }),
+    /Spell is too complex to craft \(7\/5\)\./,
+  );
+}
+
 function run() {
   testBaseOnly();
   testBaseWithElement();
   testBaseWithComponent();
   testBaseElementAndComponent();
   testElementsStayStatusFocused();
+  testCalculateSpellCostBreakdown();
+  testOverBudgetCraftingFails();
   console.log('Spell crafting tests passed.');
 }
 

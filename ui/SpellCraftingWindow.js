@@ -1,5 +1,5 @@
 import { SpellRegistry } from '../data/spells.js';
-import { craftSpell } from '../systems/spells/SpellCrafting.js';
+import { craftSpell, calculateSpellCost } from '../systems/spells/SpellCrafting.js';
 import { ElementRegistry } from '../systems/spells/ElementSystem.js';
 import { ComponentRegistry } from '../systems/spells/components/index.js';
 
@@ -85,6 +85,22 @@ export class SpellCraftingWindow {
     this.feedbackType = type;
   }
 
+  getCostSummary() {
+    if (!this.selectedBase) {
+      return { totalCost: 0, maxCost: 0, withinLimit: false, breakdown: { base: 0, element: 0, components: [] } };
+    }
+
+    try {
+      return calculateSpellCost({
+        base: this.selectedBase,
+        element: this.selectedElement || null,
+        components: this.selectedComponents,
+      });
+    } catch {
+      return { totalCost: 0, maxCost: 0, withinLimit: false, breakdown: { base: 0, element: 0, components: [] } };
+    }
+  }
+
   toggleComponent(componentId, checked) {
     if (!this.allowedComponents.includes(componentId)) return;
 
@@ -110,6 +126,11 @@ export class SpellCraftingWindow {
     const hasInvalidComponent = this.selectedComponents.some((component) => !this.allowedComponents.includes(component));
     if (hasInvalidComponent) {
       return { valid: false, message: 'One or more selected components are invalid.' };
+    }
+
+    const costSummary = this.getCostSummary();
+    if (!costSummary.withinLimit) {
+      return { valid: false, message: `Spell exceeds crafting limit (${costSummary.totalCost}/${costSummary.maxCost}).` };
     }
 
     return { valid: true, message: 'ok' };
@@ -156,6 +177,20 @@ export class SpellCraftingWindow {
   }
 
   render() {
+    const costSummary = this.getCostSummary();
+    const craftDisabled = !costSummary.withinLimit;
+    const componentCostMarkup = this.allowedComponents
+      .map(
+        (componentId) => `
+                <label>
+                  <input type="checkbox" value="${componentId}" ${this.selectedComponents.includes(componentId) ? 'checked' : ''} />
+                  <span>${toLabel(componentId)}</span>
+                  <strong class="craft-cost-chip">+${calculateSpellCost({ base: this.selectedBase || this.allowedBases[0], element: null, components: [componentId] }).breakdown.components[0]?.cost ?? 0}</strong>
+                </label>
+              `,
+      )
+      .join('');
+
     this.el.innerHTML = `
       <header class="spell-crafting-header">
         <h3>Spell Crafting</h3>
@@ -165,7 +200,7 @@ export class SpellCraftingWindow {
           <span>Base</span>
           <select class="craft-base-select">
             ${this.allowedBases
-              .map((baseId) => `<option value="${baseId}" ${this.selectedBase === baseId ? 'selected' : ''}>${SpellRegistry[baseId]?.name ?? toLabel(baseId)}</option>`)
+              .map((baseId) => `<option value="${baseId}" ${this.selectedBase === baseId ? 'selected' : ''}>${SpellRegistry[baseId]?.name ?? toLabel(baseId)} (${costSummary.breakdown.base})</option>`)
               .join('')}
           </select>
         </label>
@@ -174,26 +209,21 @@ export class SpellCraftingWindow {
           <select class="craft-element-select">
             <option value="">None</option>
             ${this.allowedElements
-              .map((element) => `<option value="${element}" ${this.selectedElement === element ? 'selected' : ''}>${toLabel(element)}</option>`)
+              .map((element) => `<option value="${element}" ${this.selectedElement === element ? 'selected' : ''}>${toLabel(element)} (+${calculateSpellCost({ base: this.selectedBase || this.allowedBases[0], element, components: [] }).breakdown.element})</option>`)
               .join('')}
           </select>
         </label>
         <fieldset class="craft-components">
           <legend>Components</legend>
-          ${this.allowedComponents
-            .map(
-              (componentId) => `
-                <label>
-                  <input type="checkbox" value="${componentId}" ${this.selectedComponents.includes(componentId) ? 'checked' : ''} />
-                  <span>${toLabel(componentId)}</span>
-                </label>
-              `,
-            )
-            .join('')}
+          ${componentCostMarkup}
         </fieldset>
       </div>
-      <button type="button" class="craft-button">CRAFT</button>
-      <p class="craft-feedback ${this.feedbackType}">${this.feedback || ''}</p>
+      <div class="craft-cost-summary ${costSummary.withinLimit ? '' : 'over-limit'}">
+        <p><strong>Cost:</strong> ${costSummary.totalCost} / ${costSummary.maxCost}</p>
+        <p><strong>Selected:</strong> base ${costSummary.breakdown.base}, element ${costSummary.breakdown.element}, components ${costSummary.breakdown.components.map((part) => `${toLabel(part.id)} +${part.cost}`).join(', ') || 'none'}</p>
+      </div>
+      <button type="button" class="craft-button" ${craftDisabled ? 'disabled' : ''}>CRAFT</button>
+      <p class="craft-feedback ${this.feedbackType} ${costSummary.withinLimit ? '' : 'error'}">${this.feedback || (!costSummary.withinLimit ? `Spell exceeds crafting limit (${costSummary.totalCost}/${costSummary.maxCost}).` : '')}</p>
     `;
 
     const baseSelect = this.el.querySelector('.craft-base-select');
@@ -203,15 +233,18 @@ export class SpellCraftingWindow {
 
     baseSelect?.addEventListener('change', (event) => {
       this.selectedBase = event.target.value;
+      this.render();
     });
 
     elementSelect?.addEventListener('change', (event) => {
       this.selectedElement = event.target.value;
+      this.render();
     });
 
     componentInputs.forEach((input) => {
       input.addEventListener('change', (event) => {
         this.toggleComponent(event.target.value, event.target.checked);
+        this.render();
       });
     });
 

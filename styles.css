@@ -554,6 +554,35 @@ body {
   overflow-y: auto;
 }
 
+.craft-components label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.craft-cost-chip {
+  font-size: 11px;
+  color: #e7c977;
+}
+
+.craft-cost-summary {
+  margin: 8px 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.craft-cost-summary.over-limit {
+  border-color: rgba(255, 120, 120, 0.55);
+  background: rgba(255, 120, 120, 0.08);
+}
+
+.craft-cost-summary p {
+  margin: 2px 0;
+}
+
 .craft-button {
   width: 100%;
   background: #1a2a3d;
@@ -561,6 +590,11 @@ body {
   border: 1px solid var(--panel-border);
   padding: 8px;
   cursor: pointer;
+}
+
+.craft-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .craft-feedback {
