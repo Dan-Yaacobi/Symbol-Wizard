@@ -504,6 +504,10 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
 
     if (enemy.hitFlashTimer > 0) {
       renderColor = '#f4f7ff';
+    } else if (enemy.isChargingShot) {
+      renderColor = '#ffb893';
+    } else if (enemy.aggroFlashTimer > 0) {
+      renderColor = '#ff7a7a';
     }
 
     drawSprite(renderer, camera, enemy, renderColor);
