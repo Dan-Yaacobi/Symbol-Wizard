@@ -165,7 +165,7 @@ const uiRoot = document.getElementById('uiPanels') ?? (() => {
   return fallback;
 })();
 const spellbook = new SpellbookWindow({ root: uiRoot, abilitySystem, input });
-new SpellCraftingWindow({
+const spellCraftingWindow = new SpellCraftingWindow({
   root: uiRoot,
   spellbook,
   onCrafted: (spell) => {
@@ -175,6 +175,7 @@ new SpellCraftingWindow({
     return true;
   },
 });
+let isCraftingUIOpen = false;
 
 const prefabEditor = new PrefabEditorScreen();
 await prefabEditor.initialize();
@@ -188,6 +189,7 @@ let f6Latch = false;
 let f7Latch = false;
 let f8Latch = false;
 let f9Latch = false;
+let craftingToggleLatch = false;
 
 const objectEditorButton = document.createElement('button');
 objectEditorButton.type = 'button';
@@ -617,10 +619,12 @@ function handlePlayer(dt) {
   let moveX = 0;
   let moveY = 0;
 
-  if (input.isDown('w')) moveY -= 1;
-  if (input.isDown('s')) moveY += 1;
-  if (input.isDown('a')) moveX -= 1;
-  if (input.isDown('d')) moveX += 1;
+  const gameplayInputBlocked = dialogueManager.isOpen || isCraftingUIOpen;
+
+  if (!gameplayInputBlocked && input.isDown('w')) moveY -= 1;
+  if (!gameplayInputBlocked && input.isDown('s')) moveY += 1;
+  if (!gameplayInputBlocked && input.isDown('a')) moveX -= 1;
+  if (!gameplayInputBlocked && input.isDown('d')) moveX += 1;
 
   const magnitude = Math.hypot(moveX, moveY) || 1;
   moveX /= magnitude;
@@ -657,7 +661,7 @@ function handlePlayer(dt) {
   player.castTimer = Math.max(0, (player.castTimer ?? 0) - dt);
   player.castCooldown = runtimeConfig.get('player.castDuration');
 
-  if (!dialogueManager.isOpen) {
+  if (!dialogueManager.isOpen && !isCraftingUIOpen) {
     const interactDown = input.isDown('e');
     if (interactDown && !interactLatch) {
       tryInteractInFront(player, worldObjects);
@@ -673,6 +677,9 @@ function handlePlayer(dt) {
       }
       slotPressLatch[i] = down;
     }
+  } else {
+    interactLatch = false;
+    for (let i = 0; i < 4; i += 1) slotPressLatch[i] = false;
   }
 }
 
@@ -718,6 +725,13 @@ function tick(now) {
   }
 
   player.speed = runtimeConfig.get('player.speed');
+
+  const craftingToggleDown = input.isDown('c');
+  if (craftingToggleDown && !craftingToggleLatch) {
+    isCraftingUIOpen = !isCraftingUIOpen;
+    spellCraftingWindow.toggle();
+  }
+  craftingToggleLatch = craftingToggleDown;
   player.frameDurations.walk = runtimeConfig.get('sprites.playerWalkFrameDuration');
   player.frameDurations.idle = runtimeConfig.get('sprites.playerIdleFrameDuration');
   palette.player = runtimeConfig.get('palette.playerPrimary');
