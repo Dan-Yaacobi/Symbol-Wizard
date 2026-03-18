@@ -843,7 +843,7 @@ function tick(now) {
   if (!dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
     handlePlayer(dt);
     if (enemyAiEnabled) {
-      updateEnemies(enemies, player, dt, projectiles, runtimeConfig, { map, tileSize: 1 });
+      updateEnemies(enemies, player, dt, projectiles, runtimeConfig, { map, tileSize: 1, system: abilitySystem });
       updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem, runtimeConfig);
     } else {
       for (const enemy of enemies) {
