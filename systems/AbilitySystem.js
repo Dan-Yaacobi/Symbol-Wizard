@@ -1,4 +1,5 @@
 import { Projectile } from '../entities/Projectile.js';
+import { activateEnemyAggro } from './AISystem.js';
 import { visualPalette } from '../data/VisualTheme.js';
 import { castSpell, updateSpellInstances } from './spells/SpellCaster.js';
 import { elementInteractionSystem } from './ElementInteractionSystem.js';
@@ -423,6 +424,7 @@ export class AbilitySystem {
 
   damageEnemy(enemy, amount, hitContext = {}) {
     if (!enemy || !enemy.alive) return false;
+    activateEnemyAggro(enemy, this.player);
     const scaled = amount * this.getDamageMultiplier(enemy);
     const damage = Math.max(0, scaled);
     enemy.hp -= damage;

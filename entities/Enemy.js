@@ -224,6 +224,8 @@ export class Enemy extends Entity {
       hitKnockbackTimer: 0,
       aggroMemoryTimer: 0,
       isAggroed: false,
+      aggroLocked: false,
+      target: null,
       aggroRadius: def.aggroRadius ?? 8,
       flankAngleOffset: Math.random() * Math.PI * 2,
       flankDirection: Math.random() < 0.5 ? -1 : 1,
