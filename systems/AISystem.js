@@ -71,11 +71,28 @@ function move(enemy, dirX, dirY, dt, speedMultiplier = 1, jitter = 0, collisionM
   enemy.targetY = nextPosition.y;
 }
 
-export function activateEnemyAggro(enemy, player = null) {
+export function activateEnemyAggro(enemy, player = null, system = null) {
   if (!enemy || enemy.alive === false) return false;
+
+  const wasAggroed = enemy.isAggroed;
+
   enemy.isAggroed = true;
   enemy.aggroLocked = true;
+
   if (player) enemy.target = player;
+
+  if (!wasAggroed) {
+    enemy.aggroFlashTimer = 0.3;
+
+    system?.spawnEffect?.({
+      type: 'aggro-flash',
+      x: enemy.x,
+      y: enemy.y,
+      color: '#ff4d4d',
+      ttl: 0.2,
+    });
+  }
+
   return true;
 }
 
@@ -126,7 +143,7 @@ function createEnemyProjectile(enemy, player) {
   return projectile;
 }
 
-export function updateEnemies(enemies, player, dt, projectiles = [], config = null, collisionContext = null) {
+export function updateEnemies(enemies, player, dt, projectiles = [], config = null, collisionContext = null, system = null) {
   const detectRadius = config?.get?.('enemies.detectRadius') ?? config?.get?.('enemies.aggroRange') ?? 8;
   const aggroChainRadius = config?.get?.('enemies.aggroChainRadius') ?? 8;
   const attackRangeMult = config?.get?.('enemies.attackRangeMultiplier') ?? 1;
@@ -152,6 +169,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     aliveEnemies.push(enemy);
 
     if (enemy.hitFlashTimer > 0) enemy.hitFlashTimer = Math.max(0, enemy.hitFlashTimer - dt);
+    if (enemy.aggroFlashTimer > 0) enemy.aggroFlashTimer = Math.max(0, enemy.aggroFlashTimer - dt);
 
     if (enemy.hitKnockbackTimer > 0) {
       applyPush(enemy, enemy.hitKnockbackX * dt, enemy.hitKnockbackY * dt, collisionMap, tileSize);
@@ -181,7 +199,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     const enemyDetectRadius = enemy.aggroRadius ?? detectRadius;
     const wasAggroed = Boolean(enemy.isAggroed);
     const shouldDetectPlayer = distance <= enemyDetectRadius;
-    if (shouldDetectPlayer) activateEnemyAggro(enemy, player);
+    if (shouldDetectPlayer) activateEnemyAggro(enemy, player, system);
     enemy.isAggroed = Boolean(enemy.isAggroed || enemy.aggroLocked || shouldDetectPlayer);
     if (enemy.isAggroed && !wasAggroed) {
       if (player) enemy.target = player;
@@ -196,7 +214,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       const nx = nearby.targetX - source.targetX;
       const ny = nearby.targetY - source.targetY;
       if (Math.hypot(nx, ny) > aggroChainRadius) continue;
-      activateEnemyAggro(nearby, player);
+      activateEnemyAggro(nearby, player, system);
       newlyAggroed.push(nearby);
     }
   }
@@ -224,6 +242,8 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
         const arrivalThreshold = enemy.orbitRepositionThreshold ?? rangedOrbitArrivalThreshold;
         const playerDriftThreshold = enemy.orbitPlayerDriftThreshold ?? rangedOrbitPlayerDriftThreshold ?? Math.max(1, orbitRadius * 0.2);
         const targetRange = Math.max(enemy.attackRange ?? rangedAttackRange, rangedAttackRange);
+        const minShootDistance = enemy.minShootDistance ?? 6;
+        const preferredDistance = enemy.preferredDistance ?? 8;
 
         if (!enemy.orbitPhase) {
           enterOrbitReposition(enemy, player);
@@ -237,9 +257,28 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
         switch (enemy.orbitPhase) {
           case 'shoot': {
             stopEnemy(enemy);
-            if ((enemy.attackTimer ?? 0) <= 0) {
-              fireOrbitShot(enemy, player, projectiles, rangedCooldown);
+
+            if (!enemy.isChargingShot) {
+              enemy.isChargingShot = true;
+              enemy.chargeTimer = 0;
             }
+
+            enemy.chargeTimer += dt;
+
+            system?.spawnEffect?.({
+              type: 'charge',
+              x: enemy.x,
+              y: enemy.y,
+              color: '#ffb893',
+              ttl: 0.1,
+            });
+
+            if (enemy.chargeTimer >= (enemy.chargeDuration ?? 0.35)) {
+              fireOrbitShot(enemy, player, projectiles, rangedCooldown);
+              enemy.isChargingShot = false;
+              enemy.chargeTimer = 0;
+            }
+
             break;
           }
           case 'wait': {
@@ -258,19 +297,22 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
             }
 
             const orbitTarget = getOrbitTarget(enemy, player);
+            const preferredOrbitRadius = enemy.preferredDistance ?? preferredDistance;
             const targetDx = orbitTarget.x - enemy.x;
             const targetDy = orbitTarget.y - enemy.y;
             const targetDistance = Math.hypot(targetDx, targetDy);
-            const orbitDistanceError = Math.abs(distance - orbitRadius);
+            const orbitDistanceError = Math.abs(distance - preferredOrbitRadius);
 
-            if (distance > targetRange * 1.35) {
-              move(enemy, dx, dy, dt, speedMult);
+            if (distance < minShootDistance) {
+              move(enemy, -dx, -dy, dt, speedMult, 0, collisionMap, tileSize);
+            } else if (distance > targetRange * 1.35) {
+              move(enemy, dx, dy, dt, speedMult, 0, collisionMap, tileSize);
             } else if (targetDistance <= arrivalThreshold || orbitDistanceError <= arrivalThreshold * 0.5) {
               enemy.orbitWaitDuration = enemy.orbitWaitDuration ?? rangedOrbitWaitDuration;
               enemy.orbitPhase = 'shoot';
               stopEnemy(enemy);
             } else {
-              move(enemy, targetDx, targetDy, dt, speedMult);
+              move(enemy, targetDx, targetDy, dt, speedMult, 0, collisionMap, tileSize);
             }
             break;
           }

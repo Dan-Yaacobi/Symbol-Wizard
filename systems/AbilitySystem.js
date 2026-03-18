@@ -424,7 +424,7 @@ export class AbilitySystem {
 
   damageEnemy(enemy, amount, hitContext = {}) {
     if (!enemy || !enemy.alive) return false;
-    activateEnemyAggro(enemy, this.player);
+    activateEnemyAggro(enemy, this.player, this);
     const scaled = amount * this.getDamageMultiplier(enemy);
     const damage = Math.max(0, scaled);
     enemy.hp -= damage;

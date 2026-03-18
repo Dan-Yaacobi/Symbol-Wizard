@@ -23,6 +23,16 @@ function createConfig() {
   };
 }
 
+function createEffectRecorder() {
+  const effects = [];
+  return {
+    effects,
+    spawnEffect(effect) {
+      effects.push(effect);
+    },
+  };
+}
+
 function createAbilitySystem(player, enemies) {
   return new AbilitySystem({
     definitions: [],
@@ -41,18 +51,25 @@ function testAggroPersistsAfterDetection() {
   const enemy = new Enemy('spider', 2, 0);
   const config = createConfig();
 
-  updateEnemies([enemy], player, 0.016, [], config, null);
+  const firstEffectSystem = createEffectRecorder();
+  updateEnemies([enemy], player, 0.016, [], config, null, firstEffectSystem);
+
   assert.equal(enemy.isAggroed, true);
   assert.equal(enemy.aggroLocked, true);
   assert.equal(enemy.target, player);
+  assert.equal(enemy.aggroFlashTimer, 0.3);
+  assert.equal(firstEffectSystem.effects.some((effect) => effect.type === 'aggro-flash'), true);
 
   player.x = 50;
   player.y = 0;
-  updateEnemies([enemy], player, 0.016, [], config, null);
+  const secondEffectSystem = createEffectRecorder();
+  updateEnemies([enemy], player, 0.016, [], config, null, secondEffectSystem);
 
   assert.equal(enemy.isAggroed, true);
   assert.equal(enemy.aggroLocked, true);
   assert.equal(enemy.target, player);
+  assert.equal(enemy.aggroFlashTimer < 0.3 && enemy.aggroFlashTimer > 0, true);
+  assert.equal(secondEffectSystem.effects.some((effect) => effect.type === 'aggro-flash'), false);
 }
 
 function testDamageImmediatelyActivatesAggro() {
@@ -68,11 +85,39 @@ function testDamageImmediatelyActivatesAggro() {
   assert.equal(enemy.isAggroed, true);
   assert.equal(enemy.aggroLocked, true);
   assert.equal(enemy.target, player);
+  assert.equal(enemy.aggroFlashTimer, 0.3);
+  assert.equal(system.effects.some((effect) => effect.type === 'aggro-flash'), true);
+}
+
+function testRangedEnemiesChargeBeforeShooting() {
+  const player = { x: 8, y: 0, statusEffects: new Map(), activeStatuses: [] };
+  const enemy = new Enemy('wasp', 0, 0);
+  const config = createConfig();
+  const effectSystem = createEffectRecorder();
+  const projectiles = [];
+
+  enemy.isAggroed = true;
+  enemy.aggroLocked = true;
+  enemy.target = player;
+  enemy.orbitPhase = 'shoot';
+  enemy.attackTimer = 0;
+  enemy.chargeDuration = 0.35;
+
+  updateEnemies([enemy], player, 0.1, projectiles, config, null, effectSystem);
+  assert.equal(enemy.isChargingShot, true);
+  assert.equal(projectiles.length, 0);
+  assert.equal(effectSystem.effects.some((effect) => effect.type === 'charge'), true);
+
+  updateEnemies([enemy], player, 0.3, projectiles, config, null, effectSystem);
+  assert.equal(projectiles.length, 1);
+  assert.equal(enemy.isChargingShot, false);
+  assert.equal(enemy.orbitPhase, 'wait');
 }
 
 function run() {
   testAggroPersistsAfterDetection();
   testDamageImmediatelyActivatesAggro();
+  testRangedEnemiesChargeBeforeShooting();
   console.log('Enemy aggro tests passed.');
 }
 
