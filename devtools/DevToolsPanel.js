@@ -5,7 +5,7 @@ const ENEMY_TUNING_LAYOUT = [
     type: 'spider',
     label: 'Spider',
     fields: [
-      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 30, step: 0.1 },
+      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 60, step: 0.1 },
       { key: 'hp', label: 'HP', min: 1, max: 200, step: 1 },
       { key: 'speed', label: 'Speed', min: 1, max: 30, step: 0.1 },
       { key: 'attackRange', label: 'Attack Range', min: 1, max: 20, step: 0.1 },
@@ -22,7 +22,7 @@ const ENEMY_TUNING_LAYOUT = [
     type: 'wasp',
     label: 'Wasp',
     fields: [
-      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 30, step: 0.1 },
+      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 60, step: 0.1 },
       { key: 'hp', label: 'HP', min: 1, max: 200, step: 1 },
       { key: 'speed', label: 'Speed', min: 1, max: 30, step: 0.1 },
       { key: 'attackRange', label: 'Attack Range', min: 1, max: 20, step: 0.1 },
@@ -43,7 +43,7 @@ const ENEMY_TUNING_LAYOUT = [
     type: 'swarm_bug',
     label: 'Swarm Bug',
     fields: [
-      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 30, step: 0.1 },
+      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 60, step: 0.1 },
       { key: 'hp', label: 'HP', min: 1, max: 200, step: 1 },
       { key: 'speed', label: 'Speed', min: 1, max: 30, step: 0.1 },
       { key: 'attackRange', label: 'Attack Range', min: 1, max: 20, step: 0.1 },
@@ -60,7 +60,7 @@ const ENEMY_TUNING_LAYOUT = [
     type: 'forest_beetle',
     label: 'Forest Beetle',
     fields: [
-      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 30, step: 0.1 },
+      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 60, step: 0.1 },
       { key: 'hp', label: 'HP', min: 1, max: 200, step: 1 },
       { key: 'speed', label: 'Speed', min: 1, max: 30, step: 0.1 },
       { key: 'attackRange', label: 'Attack Range', min: 1, max: 20, step: 0.1 },
@@ -77,7 +77,7 @@ const ENEMY_TUNING_LAYOUT = [
     type: 'forest_mantis',
     label: 'Forest Mantis',
     fields: [
-      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 30, step: 0.1 },
+      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 60, step: 0.1 },
       { key: 'hp', label: 'HP', min: 1, max: 200, step: 1 },
       { key: 'speed', label: 'Speed', min: 1, max: 30, step: 0.1 },
       { key: 'attackRange', label: 'Attack Range', min: 1, max: 20, step: 0.1 },

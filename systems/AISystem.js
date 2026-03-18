@@ -1,6 +1,19 @@
 import { Projectile } from '../entities/Projectile.js';
 import { ENEMY_BEHAVIOR } from '../entities/Enemy.js';
-import { applyPush, resolveWallOverlap } from './EnemyCollisionSystem.js';
+import { applyPush, attemptMoveWithCollision, resolveWallOverlap } from './EnemyCollisionSystem.js';
+
+const ENEMY_POSITION_SMOOTHING = 0.2;
+
+function ensureTargetPosition(enemy) {
+  if (!Number.isFinite(enemy.targetX)) enemy.targetX = enemy.x;
+  if (!Number.isFinite(enemy.targetY)) enemy.targetY = enemy.y;
+}
+
+function interpolateEnemyPosition(enemy, smoothingFactor = ENEMY_POSITION_SMOOTHING) {
+  ensureTargetPosition(enemy);
+  enemy.x += (enemy.targetX - enemy.x) * smoothingFactor;
+  enemy.y += (enemy.targetY - enemy.y) * smoothingFactor;
+}
 
 function resetMeleeState(enemy) {
   enemy.isWindingUp = false;
@@ -46,12 +59,24 @@ function applyMeleeLogic(enemy, dt, cooldownMultiplier = 1) {
   }
 }
 
-function move(enemy, dirX, dirY, dt, speedMultiplier = 1, jitter = 0) {
+function move(enemy, dirX, dirY, dt, speedMultiplier = 1, jitter = 0, collisionMap = null, tileSize = 1) {
+  ensureTargetPosition(enemy);
   const len = Math.hypot(dirX, dirY) || 1;
   enemy.vx = (dirX / len) * enemy.speed * speedMultiplier + jitter;
   enemy.vy = (dirY / len) * enemy.speed * speedMultiplier;
-  enemy.x += enemy.vx * dt;
-  enemy.y += enemy.vy * dt;
+
+  const nextPosition = { ...enemy, x: enemy.targetX, y: enemy.targetY };
+  attemptMoveWithCollision(nextPosition, enemy.vx * dt, enemy.vy * dt, collisionMap, tileSize);
+  enemy.targetX = nextPosition.x;
+  enemy.targetY = nextPosition.y;
+}
+
+export function activateEnemyAggro(enemy, player = null) {
+  if (!enemy || enemy.alive === false) return false;
+  enemy.isAggroed = true;
+  enemy.aggroLocked = true;
+  if (player) enemy.target = player;
+  return true;
 }
 
 
@@ -84,10 +109,11 @@ function fireOrbitShot(enemy, player, projectiles, rangedCooldown) {
 }
 
 function createEnemyProjectile(enemy, player) {
-  const dx = player.x - enemy.x;
-  const dy = player.y - enemy.y;
+  ensureTargetPosition(enemy);
+  const dx = player.x - enemy.targetX;
+  const dy = player.y - enemy.targetY;
   const len = Math.hypot(dx, dy) || 1;
-  const projectile = new Projectile(enemy.x, enemy.y, dx / len, dy / len);
+  const projectile = new Projectile(enemy.targetX, enemy.targetY, dx / len, dy / len);
   projectile.faction = 'enemy';
   projectile.projectileType = enemy.projectileType ?? 'enemyProjectile';
   projectile.damage = enemy.attackDamage ?? 2;
@@ -102,8 +128,6 @@ function createEnemyProjectile(enemy, player) {
 
 export function updateEnemies(enemies, player, dt, projectiles = [], config = null, collisionContext = null) {
   const detectRadius = config?.get?.('enemies.detectRadius') ?? config?.get?.('enemies.aggroRange') ?? 8;
-  const chaseRadius = config?.get?.('enemies.chaseRadius') ?? config?.get?.('enemies.disengageRange') ?? 18;
-  const aggroMemory = config?.get?.('enemies.aggroMemory') ?? 2.5;
   const aggroChainRadius = config?.get?.('enemies.aggroChainRadius') ?? 8;
   const attackRangeMult = config?.get?.('enemies.attackRangeMultiplier') ?? 1;
   const speedMult = config?.get?.('enemies.moveSpeedMultiplier') ?? 1;
@@ -124,6 +148,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
 
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
+    ensureTargetPosition(enemy);
     aliveEnemies.push(enemy);
 
     if (enemy.hitFlashTimer > 0) enemy.hitFlashTimer = Math.max(0, enemy.hitFlashTimer - dt);
@@ -131,6 +156,8 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     if (enemy.hitKnockbackTimer > 0) {
       applyPush(enemy, enemy.hitKnockbackX * dt, enemy.hitKnockbackY * dt, collisionMap, tileSize);
       resolveWallOverlap(enemy, collisionMap);
+      enemy.targetX = enemy.x;
+      enemy.targetY = enemy.y;
       enemy.hitKnockbackTimer = Math.max(0, enemy.hitKnockbackTimer - dt);
       if (enemy.hitKnockbackTimer === 0) {
         enemy.hitKnockbackX = 0;
@@ -140,25 +167,24 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
 
     if (enemy.frozen) {
       stopEnemy(enemy);
+      enemy.targetX = enemy.x;
+      enemy.targetY = enemy.y;
       resetMeleeState(enemy);
       continue;
     }
 
     enemy.attackTimer = Math.max(0, (enemy.attackTimer ?? 0) - dt);
 
-    const dx = player.x - enemy.x;
-    const dy = player.y - enemy.y;
+    const dx = player.x - enemy.targetX;
+    const dy = player.y - enemy.targetY;
     const distance = Math.hypot(dx, dy);
     const enemyDetectRadius = enemy.aggroRadius ?? detectRadius;
-    if (distance <= enemyDetectRadius) {
-      enemy.aggroMemoryTimer = aggroMemory;
-    } else {
-      enemy.aggroMemoryTimer = Math.max(0, (enemy.aggroMemoryTimer ?? 0) - dt);
-    }
-
     const wasAggroed = Boolean(enemy.isAggroed);
-    enemy.isAggroed = distance <= enemyDetectRadius || (enemy.aggroMemoryTimer ?? 0) > 0;
+    const shouldDetectPlayer = distance <= enemyDetectRadius;
+    if (shouldDetectPlayer) activateEnemyAggro(enemy, player);
+    enemy.isAggroed = Boolean(enemy.isAggroed || enemy.aggroLocked || shouldDetectPlayer);
     if (enemy.isAggroed && !wasAggroed) {
+      if (player) enemy.target = player;
       newlyAggroed.push(enemy);
     }
   }
@@ -167,28 +193,29 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     const source = newlyAggroed[i];
     for (const nearby of aliveEnemies) {
       if (nearby === source || nearby.isAggroed) continue;
-      const nx = nearby.x - source.x;
-      const ny = nearby.y - source.y;
+      const nx = nearby.targetX - source.targetX;
+      const ny = nearby.targetY - source.targetY;
       if (Math.hypot(nx, ny) > aggroChainRadius) continue;
-      nearby.isAggroed = true;
-      nearby.aggroMemoryTimer = Math.max(nearby.aggroMemoryTimer ?? 0, aggroMemory);
+      activateEnemyAggro(nearby, player);
       newlyAggroed.push(nearby);
     }
   }
 
   for (const enemy of aliveEnemies) {
-    const dx = player.x - enemy.x;
-    const dy = player.y - enemy.y;
+    const dx = player.x - enemy.targetX;
+    const dy = player.y - enemy.targetY;
     const distance = Math.hypot(dx, dy);
     const attackRange = (enemy.attackRange ?? 3) * attackRangeMult;
     const inAttackRange = distance <= attackRange;
 
-    if (!enemy.isAggroed || distance > chaseRadius) {
-      enemy.isAggroed = false;
+    if (!enemy.isAggroed) {
       stopEnemy(enemy);
       resetMeleeState(enemy);
+      interpolateEnemyPosition(enemy);
       continue;
     }
+
+    if (player) enemy.target = player;
 
     switch (enemy.behavior) {
       case ENEMY_BEHAVIOR.RANGED: {
@@ -253,7 +280,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       case ENEMY_BEHAVIOR.TANK: {
         if (!inAttackRange) {
           resetMeleeState(enemy);
-          move(enemy, dx, dy, dt, speedMult * tankSpeedMultiplier);
+          move(enemy, dx, dy, dt, speedMult * tankSpeedMultiplier, 0, collisionMap, tileSize);
         } else {
           applyMeleeLogic(enemy, dt, cooldownMult);
         }
@@ -262,7 +289,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       case ENEMY_BEHAVIOR.SWARM: {
         if (!inAttackRange) {
           resetMeleeState(enemy);
-          move(enemy, dx, dy, dt, speedMult);
+          move(enemy, dx, dy, dt, speedMult, 0, collisionMap, tileSize);
         } else {
           applyMeleeLogic(enemy, dt, cooldownMult);
         }
@@ -271,12 +298,12 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       case ENEMY_BEHAVIOR.FLANKER: {
         if (!inAttackRange) {
           resetMeleeState(enemy);
-          const angleToPlayer = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+          const angleToPlayer = Math.atan2(enemy.targetY - player.y, enemy.targetX - player.x);
           enemy.flankAngleOffset = (enemy.flankAngleOffset ?? 0) + dt * (enemy.flankOrbitSpeed ?? 1.2) * (enemy.flankDirection ?? 1);
           const orbitAngle = angleToPlayer + (enemy.flankDirection ?? 1) * (Math.PI / 2) + enemy.flankAngleOffset;
           const targetX = player.x + Math.cos(orbitAngle) * flankerOffsetDistance;
           const targetY = player.y + Math.sin(orbitAngle) * flankerOffsetDistance;
-          move(enemy, targetX - enemy.x, targetY - enemy.y, dt, speedMult);
+          move(enemy, targetX - enemy.targetX, targetY - enemy.targetY, dt, speedMult, 0, collisionMap, tileSize);
         } else {
           applyMeleeLogic(enemy, dt, cooldownMult);
         }
@@ -286,13 +313,15 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       default: {
         if (!inAttackRange) {
           resetMeleeState(enemy);
-          const jitter = enemy.enemyType === 'spider' ? Math.sin(performance.now() * 0.01 + enemy.x) * 0.3 : 0;
-          move(enemy, dx, dy, dt, speedMult, jitter);
+          const jitter = enemy.enemyType === 'spider' ? Math.sin(performance.now() * 0.01 + enemy.targetX) * 0.3 : 0;
+          move(enemy, dx, dy, dt, speedMult, jitter, collisionMap, tileSize);
         } else {
           applyMeleeLogic(enemy, dt, cooldownMult);
         }
         break;
       }
     }
+
+    interpolateEnemyPosition(enemy);
   }
 }
