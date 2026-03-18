@@ -195,6 +195,8 @@ export class Enemy extends Entity {
       behavior: def.behavior,
       x,
       y,
+      targetX: x,
+      targetY: y,
       radius: def.radius ?? 1.6,
       hp: def.hp,
       maxHp: def.hp,
