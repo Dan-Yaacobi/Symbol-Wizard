@@ -33,7 +33,10 @@ const ENEMY_TUNING_LAYOUT = [
       { key: 'attackHitTime', label: 'Attack Hit Time', min: 0.01, max: 5, step: 0.01 },
       { key: 'hitKnockback', label: 'Hit Knockback', min: 0, max: 30, step: 0.1 },
       { key: 'radius', label: 'Radius', min: 0.5, max: 5, step: 0.05 },
-      { key: 'retreatDistance', label: 'Retreat Distance', min: 0.5, max: 20, step: 0.1 },
+      { key: 'orbitRadius', label: 'Orbit Radius', min: 1, max: 20, step: 0.1 },
+      { key: 'orbitRepositionThreshold', label: 'Orbit Arrival Threshold', min: 0.1, max: 5, step: 0.05 },
+      { key: 'orbitPlayerDriftThreshold', label: 'Orbit Drift Threshold', min: 0.1, max: 10, step: 0.1 },
+      { key: 'orbitWaitDuration', label: 'Orbit Wait Duration', min: 0, max: 3, step: 0.05 },
     ],
   },
   {

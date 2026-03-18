@@ -31,7 +31,10 @@ export const ENEMY_TYPE_DEFS = {
     speed: 13,
     attackDamage: 2,
     attackRange: 10,
-    retreatDistance: 4,
+    orbitRadius: 8,
+    orbitRepositionThreshold: 0.75,
+    orbitPlayerDriftThreshold: 1.5,
+    orbitWaitDuration: 0.35,
     attackCooldown: 1.2,
     attackWindup: 0.4,
     attackDuration: 0.3,
@@ -102,6 +105,10 @@ export const ENEMY_TUNABLE_PARAMS = [
   'radius',
   'aggroRadius',
   'retreatDistance',
+  'orbitRadius',
+  'orbitRepositionThreshold',
+  'orbitPlayerDriftThreshold',
+  'orbitWaitDuration',
   'flankOrbitSpeed',
 ];
 
@@ -168,6 +175,10 @@ export function applyEnemyTuningToEnemy(enemy) {
   enemy.attackDamage = def.attackDamage ?? enemy.attackDamage;
   enemy.attackRange = def.attackRange ?? enemy.attackRange;
   enemy.retreatDistance = def.retreatDistance ?? 4;
+  enemy.orbitRadius = def.orbitRadius ?? 8;
+  enemy.orbitRepositionThreshold = def.orbitRepositionThreshold ?? 0.75;
+  enemy.orbitPlayerDriftThreshold = def.orbitPlayerDriftThreshold ?? 1.5;
+  enemy.orbitWaitDuration = def.orbitWaitDuration ?? 0.35;
   enemy.attackCooldown = def.attackCooldown ?? enemy.attackCooldown;
   enemy.attackWindup = def.attackWindup ?? 0.4;
   enemy.attackDuration = def.attackDuration ?? 0.3;
@@ -204,6 +215,15 @@ export class Enemy extends Entity {
       attackDamage: def.attackDamage,
       attackRange: def.attackRange,
       retreatDistance: def.retreatDistance ?? 4,
+      orbitRadius: def.orbitRadius ?? 8,
+      orbitRepositionThreshold: def.orbitRepositionThreshold ?? 0.75,
+      orbitPlayerDriftThreshold: def.orbitPlayerDriftThreshold ?? 1.5,
+      orbitWaitDuration: def.orbitWaitDuration ?? 0.35,
+      orbitAngle: Math.random() * Math.PI * 2,
+      orbitTargetPlayerX: x,
+      orbitTargetPlayerY: y,
+      orbitPhase: 'reposition',
+      orbitWaitTimer: 0,
       attackCooldown: def.attackCooldown,
       attackTimer: 0,
       attackWindup: def.attackWindup ?? 0.4,
