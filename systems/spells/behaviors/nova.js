@@ -15,7 +15,13 @@ export function executeBehavior(instance, context) {
 
   targets.forEach(target => {
     // apply base damage
-    system.applyDamage(target, damage);
+    system.applySpellDamage(target, damage, {
+      eventName: 'onHit',
+      instance,
+      sourceX: origin?.x ?? target.x,
+      sourceY: origin?.y ?? target.y,
+      hitParticleColor: instance.parameters?.hitParticleColor,
+    });
 
     // trigger spell system
     instance.handleEvent('onHit', {

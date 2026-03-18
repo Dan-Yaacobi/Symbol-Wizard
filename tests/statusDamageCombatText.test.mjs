@@ -61,9 +61,85 @@ function testPoisonTickDamageUsesDefaultValue() {
   assert.equal(enemy.hp, 7);
 }
 
+
+
+function createEnemy(x, y, hp, statuses = [], extras = {}) {
+  return {
+    x,
+    y,
+    hp,
+    alive: true,
+    statusEffects: new Map(statuses),
+    activeStatuses: [],
+    ...extras,
+  };
+}
+
+function testFireAmplifiesDamageAgainstBurningTargets() {
+  const reports = [];
+  const enemy = createEnemy(2, 2, 20, [['burn', { duration: 2 }]]);
+  const system = createAbilitySystem((entity, damage) => reports.push({ entity, damage }));
+  system.enemies.push(enemy);
+
+  system.applySpellDamage(enemy, 4, {
+    eventName: 'onHit',
+    instance: { currentElement: 'fire', base: { element: 'fire' }, parameters: {} },
+    sourceX: 0,
+    sourceY: 0,
+  });
+
+  assert.equal(enemy.hp, 14);
+  assert.equal(reports.at(-1).damage, 6);
+}
+
+function testLightningChainsFromShockedTargets() {
+  const reports = [];
+  const primary = createEnemy(2, 2, 20, [['shock', { duration: 2 }]]);
+  const nearby = createEnemy(4, 2, 12, []);
+  const far = createEnemy(20, 20, 12, []);
+  const system = createAbilitySystem((entity, damage) => reports.push({ entity, damage }));
+  system.enemies.push(primary, nearby, far);
+
+  system.applySpellDamage(primary, 4, {
+    eventName: 'onHit',
+    instance: { currentElement: 'lightning', base: { element: 'lightning' }, parameters: {} },
+    sourceX: 0,
+    sourceY: 0,
+  });
+
+  assert.equal(primary.hp, 16);
+  assert.equal(nearby.hp, 10);
+  assert.equal(far.hp, 12);
+  assert.equal(reports.filter((entry) => entry.entity === nearby).length, 1);
+}
+
+function testLightningReactsToFrozenTargets() {
+  const reports = [];
+  const enemy = createEnemy(3, 3, 20, [], { frozen: true });
+  const system = createAbilitySystem((entity, damage) => reports.push({ entity, damage }));
+  system.enemies.push(enemy);
+  system.activeFreeze = { shatterDamage: 0, targets: new Set([enemy]) };
+
+  const result = system.applySpellDamage(enemy, 4, {
+    eventName: 'onHit',
+    instance: { currentElement: 'lightning', base: { element: 'lightning' }, parameters: {} },
+    sourceX: 0,
+    sourceY: 0,
+  });
+
+  assert.equal(enemy.hp, 14);
+  assert.equal(enemy.frozen, false);
+  assert.equal(enemy.statusEffects.has('shock'), true);
+  assert.equal(result.resolution.metadata.reactedToFrozen, true);
+  assert.equal(reports.at(-1).damage, 6);
+}
+
 function run() {
   testStatusTickDamageReportsFloatingText();
   testPoisonTickDamageUsesDefaultValue();
+  testFireAmplifiesDamageAgainstBurningTargets();
+  testLightningChainsFromShockedTargets();
+  testLightningReactsToFrozenTargets();
   console.log('Status damage combat text tests passed.');
 }
 
