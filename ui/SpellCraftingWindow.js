@@ -1,33 +1,6 @@
+import { CraftingOptions, getCraftableBaseSpellIds } from '../data/CraftingOptions.js';
 import { SpellRegistry } from '../data/spells.js';
 import { craftSpell, calculateSpellCost } from '../systems/spells/SpellCrafting.js';
-import { ElementRegistry } from '../systems/spells/ElementSystem.js';
-import { ComponentRegistry } from '../systems/spells/components/index.js';
-
-const DESIGN_DOC_BASE_SPELLS = ['magic-bolt'];
-const DESIGN_DOC_ELEMENTS = ['fire', 'frost', 'electric', 'earth'];
-const DESIGN_DOC_COMPONENTS = [
-  'explode_on_hit',
-  'spawn_zone_on_hit',
-  'emit_projectiles',
-  'spawn_on_expire',
-  'split',
-  'multi_cast',
-  'chain',
-  'fork',
-  'ring',
-  'cone',
-  'spiral',
-  'wave',
-  'pierce',
-  'bounce',
-  'pull',
-  'push',
-  'orbit_attach',
-  'delay',
-  'grow',
-  'ramp',
-  'pulse',
-];
 
 function toLabel(value) {
   return String(value)
@@ -57,6 +30,7 @@ export class SpellCraftingWindow {
     this.spellbook = spellbook;
     this.onCrafted = onCrafted;
 
+    this.selectedBehavior = '';
     this.selectedBase = '';
     this.selectedElement = '';
     this.selectedComponents = [];
@@ -64,20 +38,30 @@ export class SpellCraftingWindow {
     this.feedbackType = '';
     this.visible = false;
 
-    this.allowedBases = Object.values(SpellRegistry)
-      .filter((spell) => spell?.behavior)
-      .map((spell) => spell.id)
-      .filter((id) => DESIGN_DOC_BASE_SPELLS.includes(id));
-
-    this.allowedElements = Object.keys(ElementRegistry).filter((element) => DESIGN_DOC_ELEMENTS.includes(element));
-
-    this.allowedComponents = Object.keys(ComponentRegistry).filter((componentId) => DESIGN_DOC_COMPONENTS.includes(componentId));
+    this.allowedBehaviors = [...CraftingOptions.behaviors];
+    this.allowedBases = getCraftableBaseSpellIds();
+    this.allowedElements = [...CraftingOptions.elements];
+    this.allowedComponents = [...CraftingOptions.components];
 
     this.el = document.createElement('section');
     this.el.className = 'spell-crafting-window hidden';
     this.root.appendChild(this.el);
 
-    this.selectedBase = this.allowedBases[0] ?? '';
+    this.selectedBehavior = this.allowedBehaviors[0] ?? '';
+    this.selectedBase = this.getVisibleBases()[0] ?? '';
+  }
+
+  getVisibleBases() {
+    const visibleBases = getCraftableBaseSpellIds(this.selectedBehavior || null);
+    if (visibleBases.length > 0) return visibleBases;
+    return [...this.allowedBases];
+  }
+
+  ensureValidBaseSelection() {
+    const visibleBases = this.getVisibleBases();
+    if (visibleBases.includes(this.selectedBase)) return visibleBases;
+    this.selectedBase = visibleBases[0] ?? '';
+    return visibleBases;
   }
 
   isOpen() {
@@ -152,6 +136,7 @@ export class SpellCraftingWindow {
       return { valid: false, message: 'One or more selected components are invalid.' };
     }
 
+    this.ensureValidBaseSelection();
     const costSummary = this.getCostSummary();
     if (!costSummary.withinLimit) {
       return { valid: false, message: `Spell exceeds crafting limit (${costSummary.totalCost}/${costSummary.maxCost}).` };
@@ -204,11 +189,23 @@ export class SpellCraftingWindow {
   render() {
     if (!this.visible) return;
 
+    const visibleBases = this.ensureValidBaseSelection();
     const costSummary = this.getCostSummary();
     const craftDisabled = !costSummary.withinLimit;
     const baseCost = costSummary.breakdown.base ?? 0;
 
-    const baseMarkup = this.allowedBases
+    const behaviorMarkup = this.allowedBehaviors
+      .map((behaviorId) => {
+        const selected = this.selectedBehavior === behaviorId;
+        return `
+          <button type="button" class="craft-option-button ${selected ? 'selected' : ''}" data-behavior="${behaviorId}">
+            <span>${toLabel(behaviorId)}</span>
+          </button>
+        `;
+      })
+      .join('');
+
+    const baseMarkup = visibleBases
       .map((baseId) => {
         const selected = this.selectedBase === baseId;
         return `
@@ -253,13 +250,19 @@ export class SpellCraftingWindow {
       </header>
       <div class="spell-crafting-layout">
         <section class="craft-section">
-          <h4>1. Base Spell Selection</h4>
+          <h4>1. Behavior Selection</h4>
+          <div class="craft-option-list craft-option-list--compact">
+            ${behaviorMarkup}
+          </div>
+        </section>
+        <section class="craft-section">
+          <h4>2. Base Spell Selection</h4>
           <div class="craft-option-list craft-option-list--compact">
             ${baseMarkup}
           </div>
         </section>
         <section class="craft-section">
-          <h4>2. Element Selection</h4>
+          <h4>3. Element Selection</h4>
           <div class="craft-option-list craft-option-list--compact">
             <button type="button" class="craft-option-button ${this.selectedElement === '' ? 'selected' : ''}" data-element="">
               <span>None</span>
@@ -269,13 +272,13 @@ export class SpellCraftingWindow {
           </div>
         </section>
         <section class="craft-section">
-          <h4>3. Component List</h4>
+          <h4>4. Component List</h4>
           <div class="craft-option-list craft-option-list--scroll">
             ${componentMarkup}
           </div>
         </section>
         <section class="craft-section craft-section--summary">
-          <h4>4. Craft Button</h4>
+          <h4>5. Craft Button</h4>
           <div class="craft-cost-summary ${costSummary.withinLimit ? '' : 'over-limit'}">
             <p><strong>Cost:</strong> ${costSummary.totalCost} / ${costSummary.maxCost}</p>
             <p><strong>Selected:</strong> base ${costSummary.breakdown.base}, element ${costSummary.breakdown.element}, components ${costSummary.breakdown.components.map((part) => `${toLabel(part.id)} +${part.cost}`).join(', ') || 'none'}</p>
@@ -285,6 +288,14 @@ export class SpellCraftingWindow {
         </section>
       </div>
     `;
+
+    this.el.querySelectorAll('[data-behavior]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.selectedBehavior = button.dataset.behavior ?? '';
+        this.selectedBase = this.getVisibleBases()[0] ?? '';
+        this.render();
+      });
+    });
 
     this.el.querySelectorAll('[data-base]').forEach((button) => {
       button.addEventListener('click', () => {

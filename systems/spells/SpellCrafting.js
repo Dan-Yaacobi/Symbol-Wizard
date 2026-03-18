@@ -7,6 +7,8 @@ export const MAX_CRAFTING_COST = 5;
 
 export const BASE_SPELL_COSTS = Object.freeze({
   'magic-bolt': 1,
+  beam_test: 1,
+  zone_test: 1,
 });
 
 export const ELEMENT_COSTS = Object.freeze({

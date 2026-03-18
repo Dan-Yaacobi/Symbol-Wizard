@@ -74,6 +74,18 @@ function testElementsStayStatusFocused() {
   assert.equal('spawnZoneDamage' in poison.config, false);
 }
 
+
+function testAdditionalBaseBehaviorsAreCraftable() {
+  const beamSpell = craftSpell({ base: 'beam_test', element: 'arcane' });
+  const zoneSpell = craftSpell({ base: 'zone_test', components: ['apply_status_on_hit'] });
+
+  assert.equal(beamSpell.behavior, 'beam');
+  assert.equal(beamSpell.cost, 1);
+  assert.equal(zoneSpell.behavior, 'zone');
+  assert.deepEqual(zoneSpell.components, ['apply_status_on_hit']);
+  assert.equal(zoneSpell.cost, 2);
+}
+
 function testCalculateSpellCostBreakdown() {
   const summary = calculateSpellCost({
     base: 'magic-bolt',
@@ -103,6 +115,7 @@ function run() {
   testBaseWithComponent();
   testBaseElementAndComponent();
   testElementsStayStatusFocused();
+  testAdditionalBaseBehaviorsAreCraftable();
   testCalculateSpellCostBreakdown();
   testOverBudgetCraftingFails();
   console.log('Spell crafting tests passed.');
