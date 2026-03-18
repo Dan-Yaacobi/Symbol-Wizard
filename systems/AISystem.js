@@ -54,6 +54,35 @@ function move(enemy, dirX, dirY, dt, speedMultiplier = 1, jitter = 0) {
   enemy.y += enemy.vy * dt;
 }
 
+
+function setOrbitTarget(enemy, player, angle = Math.random() * Math.PI * 2) {
+  enemy.orbitAngle = angle;
+  enemy.orbitTargetPlayerX = player.x;
+  enemy.orbitTargetPlayerY = player.y;
+}
+
+function getOrbitTarget(enemy, player) {
+  const orbitRadius = enemy.orbitRadius ?? 8;
+  const orbitAngle = enemy.orbitAngle ?? 0;
+  return {
+    x: player.x + Math.cos(orbitAngle) * orbitRadius,
+    y: player.y + Math.sin(orbitAngle) * orbitRadius,
+  };
+}
+
+function enterOrbitReposition(enemy, player, angle = Math.random() * Math.PI * 2) {
+  enemy.orbitPhase = 'reposition';
+  enemy.orbitWaitTimer = 0;
+  setOrbitTarget(enemy, player, angle);
+}
+
+function fireOrbitShot(enemy, player, projectiles, rangedCooldown) {
+  projectiles.push(createEnemyProjectile(enemy, player));
+  enemy.attackTimer = Math.max(enemy.attackCooldown ?? rangedCooldown, rangedCooldown);
+  enemy.orbitPhase = 'wait';
+  enemy.orbitWaitTimer = enemy.orbitWaitDuration ?? 0.35;
+}
+
 function createEnemyProjectile(enemy, player) {
   const dx = player.x - enemy.x;
   const dy = player.y - enemy.y;
@@ -81,6 +110,10 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
   const cooldownMult = config?.get?.('enemies.attackCooldownMultiplier') ?? 1;
   const rangedAttackRange = config?.get?.('enemies.rangedAttackRange') ?? 10;
   const rangedCooldown = config?.get?.('enemies.rangedCooldown') ?? 1.2;
+  const rangedOrbitRadius = config?.get?.('enemies.rangedOrbitRadius') ?? 8;
+  const rangedOrbitArrivalThreshold = config?.get?.('enemies.rangedOrbitArrivalThreshold') ?? 0.75;
+  const rangedOrbitPlayerDriftThreshold = config?.get?.('enemies.rangedOrbitPlayerDriftThreshold') ?? 1.5;
+  const rangedOrbitWaitDuration = config?.get?.('enemies.rangedOrbitWaitDuration') ?? 0.35;
   const tankSpeedMultiplier = config?.get?.('enemies.tankSpeedMultiplier') ?? 0.6;
   const flankerOffsetDistance = config?.get?.('enemies.flankerOffsetDistance') ?? 5;
   const collisionMap = collisionContext?.map ?? null;
@@ -160,18 +193,59 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     switch (enemy.behavior) {
       case ENEMY_BEHAVIOR.RANGED: {
         resetMeleeState(enemy);
-        const retreatDistance = enemy.retreatDistance ?? 4;
+        const orbitRadius = enemy.orbitRadius ?? rangedOrbitRadius;
+        const arrivalThreshold = enemy.orbitRepositionThreshold ?? rangedOrbitArrivalThreshold;
+        const playerDriftThreshold = enemy.orbitPlayerDriftThreshold ?? rangedOrbitPlayerDriftThreshold ?? Math.max(1, orbitRadius * 0.2);
         const targetRange = Math.max(enemy.attackRange ?? rangedAttackRange, rangedAttackRange);
 
-        if (distance < retreatDistance) {
-          move(enemy, -dx, -dy, dt, speedMult);
-        } else if (distance > targetRange) {
-          move(enemy, dx, dy, dt, speedMult);
-        } else {
-          stopEnemy(enemy);
-          if ((enemy.attackTimer ?? 0) <= 0) {
-            projectiles.push(createEnemyProjectile(enemy, player));
-            enemy.attackTimer = Math.max(enemy.attackCooldown ?? rangedCooldown, rangedCooldown);
+        if (!enemy.orbitPhase) {
+          enterOrbitReposition(enemy, player);
+        }
+
+        const playerMovedSinceLock = Math.hypot(
+          player.x - (enemy.orbitTargetPlayerX ?? player.x),
+          player.y - (enemy.orbitTargetPlayerY ?? player.y),
+        );
+
+        switch (enemy.orbitPhase) {
+          case 'shoot': {
+            stopEnemy(enemy);
+            if ((enemy.attackTimer ?? 0) <= 0) {
+              fireOrbitShot(enemy, player, projectiles, rangedCooldown);
+            }
+            break;
+          }
+          case 'wait': {
+            stopEnemy(enemy);
+            enemy.orbitWaitTimer = Math.max(0, (enemy.orbitWaitTimer ?? 0) - dt);
+            if ((enemy.orbitWaitTimer ?? 0) <= 0) {
+              enterOrbitReposition(enemy, player);
+            }
+            break;
+          }
+          case 'reposition':
+          default: {
+            if (playerMovedSinceLock >= playerDriftThreshold) {
+              enemy.orbitTargetPlayerX = player.x;
+              enemy.orbitTargetPlayerY = player.y;
+            }
+
+            const orbitTarget = getOrbitTarget(enemy, player);
+            const targetDx = orbitTarget.x - enemy.x;
+            const targetDy = orbitTarget.y - enemy.y;
+            const targetDistance = Math.hypot(targetDx, targetDy);
+            const orbitDistanceError = Math.abs(distance - orbitRadius);
+
+            if (distance > targetRange * 1.35) {
+              move(enemy, dx, dy, dt, speedMult);
+            } else if (targetDistance <= arrivalThreshold || orbitDistanceError <= arrivalThreshold * 0.5) {
+              enemy.orbitWaitDuration = enemy.orbitWaitDuration ?? rangedOrbitWaitDuration;
+              enemy.orbitPhase = 'shoot';
+              stopEnemy(enemy);
+            } else {
+              move(enemy, targetDx, targetDy, dt, speedMult);
+            }
+            break;
           }
         }
         break;
