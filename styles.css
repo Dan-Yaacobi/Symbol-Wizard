@@ -521,53 +521,96 @@ body {
 
 .spell-crafting-window {
   width: 100%;
-  min-height: 112px;
   border: 2px solid var(--panel-border);
   background: var(--panel);
-  padding: 8px;
+  padding: 10px;
   box-sizing: border-box;
 }
 
+.spell-crafting-header {
+  margin-bottom: 10px;
+}
+
 .spell-crafting-header h3 {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
 }
 
-.spell-crafting-selectors {
+.spell-crafting-header p {
+  margin: 0;
+}
+
+.spell-crafting-layout {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  align-items: start;
-  margin-bottom: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
-.spell-crafting-selectors label,
-.craft-components {
+.craft-section {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.craft-components {
-  border: 1px solid var(--panel-border);
-  padding: 4px;
-  max-height: 88px;
+.craft-section h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.craft-section--summary {
+  grid-column: span 2;
+}
+
+.craft-option-list {
+  display: grid;
+  gap: 6px;
+}
+
+.craft-option-list--compact {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
+.craft-option-list--scroll {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  max-height: 180px;
   overflow-y: auto;
 }
 
-.craft-components label {
+.craft-option-button {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.craft-option-button.selected {
+  border-color: #8ec5ff;
+  background: rgba(87, 140, 255, 0.18);
+  color: #eef6ff;
+}
+
+.craft-option-button--component {
+  align-items: flex-start;
 }
 
 .craft-cost-chip {
   font-size: 11px;
   color: #e7c977;
+  flex-shrink: 0;
 }
 
 .craft-cost-summary {
-  margin: 8px 0;
+  margin: 0;
   padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
@@ -599,7 +642,7 @@ body {
 
 .craft-feedback {
   min-height: 18px;
-  margin: 6px 0 0;
+  margin: 0;
 }
 
 .craft-feedback.success {
@@ -608,4 +651,14 @@ body {
 
 .craft-feedback.error {
   color: #ff9e9e;
+}
+
+@media (max-width: 900px) {
+  .spell-crafting-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .craft-section--summary {
+    grid-column: span 1;
+  }
 }
