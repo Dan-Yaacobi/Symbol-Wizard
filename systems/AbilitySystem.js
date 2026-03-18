@@ -1,6 +1,7 @@
 import { Projectile } from '../entities/Projectile.js';
 import { visualPalette } from '../data/VisualTheme.js';
 import { castSpell, updateSpellInstances } from './spells/SpellCaster.js';
+import { elementInteractionSystem } from './ElementInteractionSystem.js';
 
 const STATUS_TICK_DAMAGE = {
   burn: 2,
@@ -23,6 +24,7 @@ export class AbilitySystem {
     this.effects = [];
     this.activeSpellInstances = [];
     this.activeFreeze = null;
+    this.elementInteractionSystem = elementInteractionSystem;
 
     for (const spell of definitions) {
       this.cooldowns.set(spell.id, 0);
@@ -100,7 +102,13 @@ export class AbilitySystem {
           const tickDamage = this.getStatusTickDamage(type, status, target);
           if (tickDamage > 0) {
             console.log('[STATUS DAMAGE]', type, tickDamage);
-            this.applyDamage(target, tickDamage);
+            this.applySpellDamage(target, tickDamage, {
+              eventName: 'onTick',
+              instance: { currentElement: type, base: { element: type } },
+              sourceX: target.x,
+              sourceY: target.y,
+              hitParticleColor: type === 'burn' ? '#ffb36b' : '#9be36d',
+            });
           }
 
           this.spawnEffect({
@@ -180,13 +188,19 @@ export class AbilitySystem {
 
   endFreeze(freezeData) {
     for (const enemy of freezeData.targets) {
-      if (!enemy.alive) continue;
-      enemy.frozen = false;
-      enemy.freezeTint = null;
-      enemy.freezeGlow = null;
-
-      if (freezeData.shatterDamage > 0) this.damageEnemy(enemy, freezeData.shatterDamage);
+      this.endFreezeOnTarget(enemy, freezeData);
     }
+  }
+
+  endFreezeOnTarget(enemy, freezeData = this.activeFreeze) {
+    if (!enemy) return false;
+    enemy.frozen = false;
+    enemy.freezeTint = null;
+    enemy.freezeGlow = null;
+    freezeData?.targets?.delete?.(enemy);
+
+    if (enemy.alive && (freezeData?.shatterDamage ?? 0) > 0) this.damageEnemy(enemy, freezeData.shatterDamage);
+    return true;
   }
 
   applyTimeFreeze({ freezeDuration, cooldownReduction, shatterDamage, vulnerabilityMultiplier, radiusPadding, chainFreeze }) {
@@ -343,6 +357,33 @@ export class AbilitySystem {
       sourceY: Number.isFinite(target?.y) ? target.y : this.player?.y ?? 0,
       particleColor: '#ffd2ad',
       strongHit: amount >= 8,
+    });
+  }
+
+  applySpellDamage(target, amount, context = {}) {
+    if (!target || target.alive === false) return { damageApplied: false, resolution: { triggeredRules: [] } };
+    const eventName = context.eventName ?? 'onHit';
+    const instance = context.instance ?? null;
+
+    if (!instance) {
+      return {
+        damageApplied: this.damageEnemy(target, amount, {
+          sourceX: context.sourceX ?? target.x,
+          sourceY: context.sourceY ?? target.y,
+          particleColor: context.hitParticleColor ?? '#ffd2ad',
+          strongHit: amount >= 8,
+          knockbackDistance: context.knockbackDistance,
+        }),
+        resolution: { triggeredRules: [] },
+      };
+    }
+
+    return this.elementInteractionSystem.apply(eventName, {
+      ...context,
+      system: this,
+      instance,
+      target,
+      baseDamage: amount,
     });
   }
 

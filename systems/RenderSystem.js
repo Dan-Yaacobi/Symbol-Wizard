@@ -11,6 +11,7 @@ const STATUS_STYLE = {
   burn: { icon: '🔥', tint: '#ff7a6a', effectColor: '#ff9a6a' },
   poison: { icon: '☠', tint: '#7edb7e', effectColor: '#87e48e' },
   slow: { icon: '~', tint: '#78b9ff', effectColor: '#8bc8ff' },
+  shock: { icon: '⚡', tint: '#ffe76a', effectColor: '#fff09a' },
 };
 
 function blendHexColors(base, tint, amount = 0.28) {

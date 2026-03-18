@@ -115,13 +115,12 @@ export function updateProjectiles(
           const baseDamage = isCritical ? p.damage * 2 : p.damage;
           const multiplier = abilitySystem?.getDamageMultiplier(enemy) ?? 1;
           const damage = baseDamage * multiplier;
-          enemy.hp -= damage;
-          combatTextSystem?.spawnDamageText(enemy, damage, isCritical);
-          abilitySystem?.registerHitFeedback?.(enemy, {
+          abilitySystem?.applySpellDamage?.(enemy, damage, {
+            eventName: 'onHit',
+            instance: p.spellInstance,
             sourceX: p.x,
             sourceY: p.y,
-            particleColor: p.hitParticleColor,
-            strongHit: isCritical || damage >= 8,
+            hitParticleColor: p.hitParticleColor,
           });
           triggerProjectileHit(p, {
             x: p.x,

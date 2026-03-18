@@ -35,7 +35,13 @@ export function executeBehavior(instance, context) {
     const perpendicular = Math.abs(relX * dirY - relY * dirX);
     if (perpendicular > hitRadius + (target.radius ?? 1)) continue;
 
-    system.applyDamage(target, damage);
+    system.applySpellDamage(target, damage, {
+      eventName: 'onHit',
+      instance,
+      sourceX: origin?.x ?? target.x,
+      sourceY: origin?.y ?? target.y,
+      hitParticleColor: instance.parameters?.hitParticleColor,
+    });
     instance.handleEvent('onHit', {
       x: target.x,
       y: target.y,

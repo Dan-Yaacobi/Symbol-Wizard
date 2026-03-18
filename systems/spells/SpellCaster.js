@@ -76,7 +76,13 @@ function updateZoneBehavior(instance, dt, context = {}) {
     zoneState.tickAccumulator -= tickInterval;
     const targets = system.getEntitiesInRadius(zoneState.x, zoneState.y, zoneState.radius);
     for (const target of targets) {
-      system.applyDamage(target, zoneState.damage);
+      system.applySpellDamage(target, zoneState.damage, {
+        eventName: 'onTick',
+        instance,
+        sourceX: zoneState.x,
+        sourceY: zoneState.y,
+        hitParticleColor: instance.parameters?.hitParticleColor,
+      });
       instance.handleEvent('onTick', {
         ...context,
         x: zoneState.x,

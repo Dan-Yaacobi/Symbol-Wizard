@@ -35,7 +35,13 @@ export function executeBehavior(instance, context) {
 
   for (let hitIndex = 0; hitIndex < chainCount && currentTarget; hitIndex += 1) {
     visited.add(currentTarget);
-    system.applyDamage(currentTarget, damage);
+    system.applySpellDamage(currentTarget, damage, {
+      eventName: 'onHit',
+      instance,
+      sourceX: origin?.x ?? currentTarget.x,
+      sourceY: origin?.y ?? currentTarget.y,
+      hitParticleColor: instance.parameters?.hitParticleColor,
+    });
 
     instance.handleEvent('onHit', {
       x: currentTarget.x,

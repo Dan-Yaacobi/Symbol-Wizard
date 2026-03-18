@@ -59,7 +59,13 @@ export function updateOrbitBehavior(instance, dt, context = {}) {
       if (orbitState.recentHits.has(target)) continue;
       if (!target?.alive) continue;
 
-      system.applyDamage(target, orbitState.damage);
+      system.applySpellDamage(target, orbitState.damage, {
+        eventName: 'onHit',
+        instance,
+        sourceX: orb.x,
+        sourceY: orb.y,
+        hitParticleColor: instance.parameters?.hitParticleColor,
+      });
       orbitState.recentHits.set(target, orbitState.hitCooldown);
 
       instance.handleEvent('onHit', {
