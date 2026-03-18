@@ -97,32 +97,16 @@ export function activateEnemyAggro(enemy, player = null, system = null) {
 }
 
 
-function setOrbitTarget(enemy, player, angle = Math.random() * Math.PI * 2) {
-  enemy.orbitAngle = angle;
-  enemy.orbitTargetPlayerX = player.x;
-  enemy.orbitTargetPlayerY = player.y;
-}
-
-function getOrbitTarget(enemy, player) {
-  const orbitRadius = enemy.orbitRadius ?? 8;
-  const orbitAngle = enemy.orbitAngle ?? 0;
-  return {
-    x: player.x + Math.cos(orbitAngle) * orbitRadius,
-    y: player.y + Math.sin(orbitAngle) * orbitRadius,
-  };
-}
-
-function enterOrbitReposition(enemy, player, angle = Math.random() * Math.PI * 2) {
+function enterOrbitReposition(enemy) {
   enemy.orbitPhase = 'reposition';
   enemy.orbitWaitTimer = 0;
-  setOrbitTarget(enemy, player, angle);
 }
 
-function fireOrbitShot(enemy, player, projectiles, rangedCooldown) {
+function fireOrbitShot(enemy, player, projectiles, rangedCooldown, rangedOrbitWaitDuration) {
   projectiles.push(createEnemyProjectile(enemy, player));
   enemy.attackTimer = Math.max(enemy.attackCooldown ?? rangedCooldown, rangedCooldown);
   enemy.orbitPhase = 'wait';
-  enemy.orbitWaitTimer = enemy.orbitWaitDuration ?? 0.35;
+  enemy.orbitWaitTimer = enemy.orbitWaitDuration ?? rangedOrbitWaitDuration;
 }
 
 function createEnemyProjectile(enemy, player) {
@@ -153,9 +137,6 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
   const cooldownMult = config?.get?.('enemies.attackCooldownMultiplier') ?? 1;
   const rangedAttackRange = config?.get?.('enemies.rangedAttackRange') ?? 10;
   const rangedCooldown = config?.get?.('enemies.rangedCooldown') ?? 1.2;
-  const rangedOrbitRadius = config?.get?.('enemies.rangedOrbitRadius') ?? 8;
-  const rangedOrbitArrivalThreshold = config?.get?.('enemies.rangedOrbitArrivalThreshold') ?? 0.75;
-  const rangedOrbitPlayerDriftThreshold = config?.get?.('enemies.rangedOrbitPlayerDriftThreshold') ?? 1.5;
   const rangedOrbitWaitDuration = config?.get?.('enemies.rangedOrbitWaitDuration') ?? 0.35;
   const tankSpeedMultiplier = config?.get?.('enemies.tankSpeedMultiplier') ?? 0.6;
   const flankerOffsetDistance = config?.get?.('enemies.flankerOffsetDistance') ?? 5;
@@ -275,21 +256,13 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     switch (enemy.behavior) {
       case ENEMY_BEHAVIOR.RANGED: {
         resetMeleeState(enemy);
-        const orbitRadius = enemy.orbitRadius ?? rangedOrbitRadius;
-        const arrivalThreshold = enemy.orbitRepositionThreshold ?? rangedOrbitArrivalThreshold;
-        const playerDriftThreshold = enemy.orbitPlayerDriftThreshold ?? rangedOrbitPlayerDriftThreshold ?? Math.max(1, orbitRadius * 0.2);
-        const targetRange = Math.max(enemy.attackRange ?? rangedAttackRange, rangedAttackRange);
-        const minShootDistance = enemy.minShootDistance ?? 6;
-        const preferredDistance = enemy.preferredDistance ?? 8;
+        const targetRange = enemy.attackRange ?? rangedAttackRange;
+        const minDistance = enemy.minShootDistance ?? targetRange * 0.6;
+        const preferredDistance = enemy.preferredDistance ?? targetRange;
 
         if (!enemy.orbitPhase) {
-          enterOrbitReposition(enemy, player);
+          enterOrbitReposition(enemy);
         }
-
-        const playerMovedSinceLock = Math.hypot(
-          player.x - (enemy.orbitTargetPlayerX ?? player.x),
-          player.y - (enemy.orbitTargetPlayerY ?? player.y),
-        );
 
         switch (enemy.orbitPhase) {
           case 'shoot': {
@@ -311,7 +284,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
             });
 
             if (enemy.chargeTimer >= (enemy.chargeDuration ?? 0.35)) {
-              fireOrbitShot(enemy, player, projectiles, rangedCooldown);
+              fireOrbitShot(enemy, player, projectiles, rangedCooldown, rangedOrbitWaitDuration);
               enemy.isChargingShot = false;
               enemy.chargeTimer = 0;
             }
@@ -322,37 +295,35 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
             stopEnemy(enemy);
             enemy.orbitWaitTimer = Math.max(0, (enemy.orbitWaitTimer ?? 0) - dt);
             if ((enemy.orbitWaitTimer ?? 0) <= 0) {
-              enterOrbitReposition(enemy, player);
+              enterOrbitReposition(enemy);
             }
             break;
           }
-          case 'reposition':
-          default: {
-            if (playerMovedSinceLock >= playerDriftThreshold) {
-              enemy.orbitTargetPlayerX = player.x;
-              enemy.orbitTargetPlayerY = player.y;
-            }
+          case 'reposition': {
+            const dx = player.x - enemy.targetX;
+            const dy = player.y - enemy.targetY;
+            const distance = Math.hypot(dx, dy);
 
-            const orbitTarget = getOrbitTarget(enemy, player);
-            const preferredOrbitRadius = enemy.preferredDistance ?? preferredDistance;
-            const targetDx = orbitTarget.x - enemy.x;
-            const targetDy = orbitTarget.y - enemy.y;
-            const targetDistance = Math.hypot(targetDx, targetDy);
-            const orbitDistanceError = Math.abs(distance - preferredOrbitRadius);
-
-            if (distance < minShootDistance) {
+            // too close → run away
+            if (distance < minDistance) {
               move(enemy, -dx, -dy, dt, speedMult, 0, collisionMap, tileSize);
-            } else if (distance > targetRange * 1.35) {
-              move(enemy, dx, dy, dt, speedMult, 0, collisionMap, tileSize);
-            } else if (targetDistance <= arrivalThreshold || orbitDistanceError <= arrivalThreshold * 0.5) {
-              enemy.orbitWaitDuration = enemy.orbitWaitDuration ?? rangedOrbitWaitDuration;
-              enemy.orbitPhase = 'shoot';
-              stopEnemy(enemy);
-            } else {
-              move(enemy, targetDx, targetDy, dt, speedMult, 0, collisionMap, tileSize);
+              break;
             }
+
+            // too far → move closer
+            if (distance > targetRange) {
+              move(enemy, dx, dy, dt, speedMult, 0, collisionMap, tileSize);
+              break;
+            }
+
+            // good distance → shoot
+            enemy.orbitPhase = 'shoot';
+            stopEnemy(enemy);
             break;
           }
+          default:
+            enemy.orbitPhase = 'reposition';
+            break;
         }
         break;
       }
