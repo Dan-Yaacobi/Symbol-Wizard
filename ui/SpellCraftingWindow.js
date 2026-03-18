@@ -62,6 +62,7 @@ export class SpellCraftingWindow {
     this.selectedComponents = [];
     this.feedback = '';
     this.feedbackType = '';
+    this.visible = false;
 
     this.allowedBases = Object.values(SpellRegistry)
       .filter((spell) => spell?.behavior)
@@ -73,11 +74,36 @@ export class SpellCraftingWindow {
     this.allowedComponents = Object.keys(ComponentRegistry).filter((componentId) => DESIGN_DOC_COMPONENTS.includes(componentId));
 
     this.el = document.createElement('section');
-    this.el.className = 'spell-crafting-window';
+    this.el.className = 'spell-crafting-window hidden';
     this.root.appendChild(this.el);
 
     this.selectedBase = this.allowedBases[0] ?? '';
+  }
+
+  isOpen() {
+    return this.visible;
+  }
+
+  open() {
+    if (this.visible) return;
+    this.visible = true;
+    this.el.classList.remove('hidden');
     this.render();
+  }
+
+  close() {
+    if (!this.visible) return;
+    this.visible = false;
+    this.el.classList.add('hidden');
+    this.el.innerHTML = '';
+  }
+
+  toggle() {
+    if (this.visible) {
+      this.close();
+      return;
+    }
+    this.open();
   }
 
   setFeedback(message, type) {
@@ -101,17 +127,15 @@ export class SpellCraftingWindow {
     }
   }
 
-  toggleComponent(componentId, checked) {
+  toggleComponent(componentId) {
     if (!this.allowedComponents.includes(componentId)) return;
 
-    if (checked) {
-      if (!this.selectedComponents.includes(componentId)) {
-        this.selectedComponents = [...this.selectedComponents, componentId];
-      }
+    if (this.selectedComponents.includes(componentId)) {
+      this.selectedComponents = this.selectedComponents.filter((id) => id !== componentId);
       return;
     }
 
-    this.selectedComponents = this.selectedComponents.filter((id) => id !== componentId);
+    this.selectedComponents = [...this.selectedComponents, componentId];
   }
 
   validateSelection() {
@@ -171,83 +195,120 @@ export class SpellCraftingWindow {
       this.spellbook?.render?.();
       this.render();
     } catch (error) {
+      console.info('[SpellCraftingWindow] Craft failed.', error);
       this.setFeedback(error instanceof Error ? error.message : 'Craft failed.', 'error');
       this.render();
     }
   }
 
   render() {
+    if (!this.visible) return;
+
     const costSummary = this.getCostSummary();
     const craftDisabled = !costSummary.withinLimit;
-    const componentCostMarkup = this.allowedComponents
-      .map(
-        (componentId) => `
-                <label>
-                  <input type="checkbox" value="${componentId}" ${this.selectedComponents.includes(componentId) ? 'checked' : ''} />
-                  <span>${toLabel(componentId)}</span>
-                  <strong class="craft-cost-chip">+${calculateSpellCost({ base: this.selectedBase || this.allowedBases[0], element: null, components: [componentId] }).breakdown.components[0]?.cost ?? 0}</strong>
-                </label>
-              `,
-      )
+    const baseCost = costSummary.breakdown.base ?? 0;
+
+    const baseMarkup = this.allowedBases
+      .map((baseId) => {
+        const selected = this.selectedBase === baseId;
+        return `
+          <button type="button" class="craft-option-button ${selected ? 'selected' : ''}" data-base="${baseId}">
+            <span>${SpellRegistry[baseId]?.name ?? toLabel(baseId)}</span>
+            <strong class="craft-cost-chip">${selected ? `+${baseCost}` : `+${calculateSpellCost({ base: baseId, element: null, components: [] }).breakdown.base}`}</strong>
+          </button>
+        `;
+      })
+      .join('');
+
+    const elementMarkup = this.allowedElements
+      .map((element) => {
+        const selected = this.selectedElement === element;
+        const elementCost = calculateSpellCost({ base: this.selectedBase || this.allowedBases[0], element, components: [] }).breakdown.element;
+        return `
+          <button type="button" class="craft-option-button ${selected ? 'selected' : ''}" data-element="${element}">
+            <span>${toLabel(element)}</span>
+            <strong class="craft-cost-chip">+${elementCost}</strong>
+          </button>
+        `;
+      })
+      .join('');
+
+    const componentMarkup = this.allowedComponents
+      .map((componentId) => {
+        const selected = this.selectedComponents.includes(componentId);
+        const componentCost = calculateSpellCost({ base: this.selectedBase || this.allowedBases[0], element: null, components: [componentId] }).breakdown.components[0]?.cost ?? 0;
+        return `
+          <button type="button" class="craft-option-button craft-option-button--component ${selected ? 'selected' : ''}" data-component="${componentId}" aria-pressed="${selected}">
+            <span>${toLabel(componentId)}</span>
+            <strong class="craft-cost-chip">+${componentCost}</strong>
+          </button>
+        `;
+      })
       .join('');
 
     this.el.innerHTML = `
       <header class="spell-crafting-header">
         <h3>Spell Crafting</h3>
+        <p>C to close • Crafting pauses movement and casting</p>
       </header>
-      <div class="spell-crafting-selectors">
-        <label>
-          <span>Base</span>
-          <select class="craft-base-select">
-            ${this.allowedBases
-              .map((baseId) => `<option value="${baseId}" ${this.selectedBase === baseId ? 'selected' : ''}>${SpellRegistry[baseId]?.name ?? toLabel(baseId)} (${costSummary.breakdown.base})</option>`)
-              .join('')}
-          </select>
-        </label>
-        <label>
-          <span>Element</span>
-          <select class="craft-element-select">
-            <option value="">None</option>
-            ${this.allowedElements
-              .map((element) => `<option value="${element}" ${this.selectedElement === element ? 'selected' : ''}>${toLabel(element)} (+${calculateSpellCost({ base: this.selectedBase || this.allowedBases[0], element, components: [] }).breakdown.element})</option>`)
-              .join('')}
-          </select>
-        </label>
-        <fieldset class="craft-components">
-          <legend>Components</legend>
-          ${componentCostMarkup}
-        </fieldset>
+      <div class="spell-crafting-layout">
+        <section class="craft-section">
+          <h4>1. Base Spell Selection</h4>
+          <div class="craft-option-list craft-option-list--compact">
+            ${baseMarkup}
+          </div>
+        </section>
+        <section class="craft-section">
+          <h4>2. Element Selection</h4>
+          <div class="craft-option-list craft-option-list--compact">
+            <button type="button" class="craft-option-button ${this.selectedElement === '' ? 'selected' : ''}" data-element="">
+              <span>None</span>
+              <strong class="craft-cost-chip">+0</strong>
+            </button>
+            ${elementMarkup}
+          </div>
+        </section>
+        <section class="craft-section">
+          <h4>3. Component List</h4>
+          <div class="craft-option-list craft-option-list--scroll">
+            ${componentMarkup}
+          </div>
+        </section>
+        <section class="craft-section craft-section--summary">
+          <h4>4. Craft Button</h4>
+          <div class="craft-cost-summary ${costSummary.withinLimit ? '' : 'over-limit'}">
+            <p><strong>Cost:</strong> ${costSummary.totalCost} / ${costSummary.maxCost}</p>
+            <p><strong>Selected:</strong> base ${costSummary.breakdown.base}, element ${costSummary.breakdown.element}, components ${costSummary.breakdown.components.map((part) => `${toLabel(part.id)} +${part.cost}`).join(', ') || 'none'}</p>
+          </div>
+          <button type="button" class="craft-button" ${craftDisabled ? 'disabled' : ''}>CRAFT</button>
+          <p class="craft-feedback ${this.feedbackType} ${costSummary.withinLimit ? '' : 'error'}">${this.feedback || (!costSummary.withinLimit ? `Spell exceeds crafting limit (${costSummary.totalCost}/${costSummary.maxCost}).` : '')}</p>
+        </section>
       </div>
-      <div class="craft-cost-summary ${costSummary.withinLimit ? '' : 'over-limit'}">
-        <p><strong>Cost:</strong> ${costSummary.totalCost} / ${costSummary.maxCost}</p>
-        <p><strong>Selected:</strong> base ${costSummary.breakdown.base}, element ${costSummary.breakdown.element}, components ${costSummary.breakdown.components.map((part) => `${toLabel(part.id)} +${part.cost}`).join(', ') || 'none'}</p>
-      </div>
-      <button type="button" class="craft-button" ${craftDisabled ? 'disabled' : ''}>CRAFT</button>
-      <p class="craft-feedback ${this.feedbackType} ${costSummary.withinLimit ? '' : 'error'}">${this.feedback || (!costSummary.withinLimit ? `Spell exceeds crafting limit (${costSummary.totalCost}/${costSummary.maxCost}).` : '')}</p>
     `;
 
-    const baseSelect = this.el.querySelector('.craft-base-select');
-    const elementSelect = this.el.querySelector('.craft-element-select');
-    const componentInputs = this.el.querySelectorAll('.craft-components input[type="checkbox"]');
-    const craftButton = this.el.querySelector('.craft-button');
-
-    baseSelect?.addEventListener('change', (event) => {
-      this.selectedBase = event.target.value;
-      this.render();
-    });
-
-    elementSelect?.addEventListener('change', (event) => {
-      this.selectedElement = event.target.value;
-      this.render();
-    });
-
-    componentInputs.forEach((input) => {
-      input.addEventListener('change', (event) => {
-        this.toggleComponent(event.target.value, event.target.checked);
+    this.el.querySelectorAll('[data-base]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.selectedBase = button.dataset.base ?? '';
         this.render();
       });
     });
 
-    craftButton?.addEventListener('click', () => this.onCraftClick());
+    this.el.querySelectorAll('[data-element]').forEach((button) => {
+      button.addEventListener('click', () => {
+        this.selectedElement = button.dataset.element ?? '';
+        this.render();
+      });
+    });
+
+    this.el.querySelectorAll('[data-component]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const componentId = button.dataset.component;
+        if (!componentId) return;
+        this.toggleComponent(componentId);
+        this.render();
+      });
+    });
+
+    this.el.querySelector('.craft-button')?.addEventListener('click', () => this.onCraftClick());
   }
 }
