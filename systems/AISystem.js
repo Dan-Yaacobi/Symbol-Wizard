@@ -54,6 +54,14 @@ function move(enemy, dirX, dirY, dt, speedMultiplier = 1, jitter = 0) {
   enemy.y += enemy.vy * dt;
 }
 
+export function activateEnemyAggro(enemy, player = null) {
+  if (!enemy || enemy.alive === false) return false;
+  enemy.isAggroed = true;
+  enemy.aggroLocked = true;
+  if (player) enemy.target = player;
+  return true;
+}
+
 function createEnemyProjectile(enemy, player) {
   const dx = player.x - enemy.x;
   const dy = player.y - enemy.y;
@@ -73,8 +81,6 @@ function createEnemyProjectile(enemy, player) {
 
 export function updateEnemies(enemies, player, dt, projectiles = [], config = null, collisionContext = null) {
   const detectRadius = config?.get?.('enemies.detectRadius') ?? config?.get?.('enemies.aggroRange') ?? 8;
-  const chaseRadius = config?.get?.('enemies.chaseRadius') ?? config?.get?.('enemies.disengageRange') ?? 18;
-  const aggroMemory = config?.get?.('enemies.aggroMemory') ?? 2.5;
   const aggroChainRadius = config?.get?.('enemies.aggroChainRadius') ?? 8;
   const attackRangeMult = config?.get?.('enemies.attackRangeMultiplier') ?? 1;
   const speedMult = config?.get?.('enemies.moveSpeedMultiplier') ?? 1;
@@ -117,15 +123,12 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     const dy = player.y - enemy.y;
     const distance = Math.hypot(dx, dy);
     const enemyDetectRadius = enemy.aggroRadius ?? detectRadius;
-    if (distance <= enemyDetectRadius) {
-      enemy.aggroMemoryTimer = aggroMemory;
-    } else {
-      enemy.aggroMemoryTimer = Math.max(0, (enemy.aggroMemoryTimer ?? 0) - dt);
-    }
-
     const wasAggroed = Boolean(enemy.isAggroed);
-    enemy.isAggroed = distance <= enemyDetectRadius || (enemy.aggroMemoryTimer ?? 0) > 0;
+    const shouldDetectPlayer = distance <= enemyDetectRadius;
+    if (shouldDetectPlayer) activateEnemyAggro(enemy, player);
+    enemy.isAggroed = Boolean(enemy.isAggroed || enemy.aggroLocked || shouldDetectPlayer);
     if (enemy.isAggroed && !wasAggroed) {
+      if (player) enemy.target = player;
       newlyAggroed.push(enemy);
     }
   }
@@ -137,8 +140,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       const nx = nearby.x - source.x;
       const ny = nearby.y - source.y;
       if (Math.hypot(nx, ny) > aggroChainRadius) continue;
-      nearby.isAggroed = true;
-      nearby.aggroMemoryTimer = Math.max(nearby.aggroMemoryTimer ?? 0, aggroMemory);
+      activateEnemyAggro(nearby, player);
       newlyAggroed.push(nearby);
     }
   }
@@ -150,12 +152,13 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     const attackRange = (enemy.attackRange ?? 3) * attackRangeMult;
     const inAttackRange = distance <= attackRange;
 
-    if (!enemy.isAggroed || distance > chaseRadius) {
-      enemy.isAggroed = false;
+    if (!enemy.isAggroed) {
       stopEnemy(enemy);
       resetMeleeState(enemy);
       continue;
     }
+
+    if (player) enemy.target = player;
 
     switch (enemy.behavior) {
       case ENEMY_BEHAVIOR.RANGED: {
