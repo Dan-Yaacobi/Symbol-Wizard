@@ -287,6 +287,20 @@ function drawAbilityEffect(renderer, camera, effect) {
     return;
   }
 
+  if (effect.type === 'swarm-link') {
+    const glyph = lifeRatio > 0.5 ? '⟡' : '·';
+    const ringRadius = 0.5 + (1 - lifeRatio) * 1.5;
+    const points = 6;
+    for (let i = 0; i < points; i += 1) {
+      const angle = (Math.PI * 2 * i) / points;
+      const x = effect.x + Math.cos(angle) * ringRadius;
+      const y = effect.y + Math.sin(angle) * ringRadius;
+      drawCell(renderer, { glyph: '·', fg: effect.color ?? '#ff6a6a', layer: renderLayers.effects }, Math.round(x) - camera.x, Math.round(y) - camera.y);
+    }
+    drawCell(renderer, { glyph, fg: effect.color ?? '#ff8d8d', layer: renderLayers.effects }, Math.round(effect.x) - camera.x, Math.round(effect.y) - camera.y);
+    return;
+  }
+
   if (effect.type === 'hit-particles') {
     for (const particle of effect.particles ?? []) {
       const lifeRatio = particle.life / Math.max(0.0001, particle.maxLife ?? particle.life ?? 1);

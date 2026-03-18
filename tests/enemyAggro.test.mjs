@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 
-import { Enemy } from '../entities/Enemy.js';
+import { Enemy, ENEMY_BEHAVIOR } from '../entities/Enemy.js';
 import { updateEnemies } from '../systems/AISystem.js';
 import { AbilitySystem } from '../systems/AbilitySystem.js';
 
-function createConfig() {
+function createConfig(overrides = {}) {
   return {
     get(key) {
       const values = {
@@ -17,6 +17,9 @@ function createConfig() {
         'enemies.tankSpeedMultiplier': 0.6,
         'enemies.flankerOffsetDistance': 5,
         'enemies.aggroChainRadius': 8,
+        'enemies.swarmAggroRadius': 10,
+        'enemies.swarmAggroChainDepth': 2,
+        ...overrides,
       };
       return values[key];
     },
@@ -114,9 +117,66 @@ function testRangedEnemiesChargeBeforeShooting() {
   assert.equal(enemy.orbitPhase, 'wait');
 }
 
+
+function testSwarmAggroChainsOnlyToNearbySwarmEnemies() {
+  const player = { x: 0, y: 0, statusEffects: new Map(), activeStatuses: [] };
+  const config = createConfig({
+    'enemies.aggroChainRadius': 3,
+  });
+  const system = { effects: [], spawnEffect(effect) { this.effects.push(effect); } };
+
+  const source = new Enemy('spider', 2, 0);
+  source.behavior = ENEMY_BEHAVIOR.SWARM;
+  source.aggroRadius = 5;
+  source.targetX = source.x;
+  source.targetY = source.y;
+
+  const nearbySwarm = new Enemy('spider', 9, 0);
+  nearbySwarm.behavior = ENEMY_BEHAVIOR.SWARM;
+  nearbySwarm.aggroRadius = 5;
+  nearbySwarm.targetX = nearbySwarm.x;
+  nearbySwarm.targetY = nearbySwarm.y;
+
+  const chainedSwarm = new Enemy('spider', 17, 0);
+  chainedSwarm.behavior = ENEMY_BEHAVIOR.SWARM;
+  chainedSwarm.aggroRadius = 5;
+  chainedSwarm.targetX = chainedSwarm.x;
+  chainedSwarm.targetY = chainedSwarm.y;
+
+  const nonSwarm = new Enemy('spider', 13, 2);
+  nonSwarm.behavior = ENEMY_BEHAVIOR.MELEE;
+  nonSwarm.aggroRadius = 5;
+  nonSwarm.targetX = nonSwarm.x;
+  nonSwarm.targetY = nonSwarm.y;
+
+  const outOfRangeSwarm = new Enemy('spider', 40, 0);
+  outOfRangeSwarm.behavior = ENEMY_BEHAVIOR.SWARM;
+  outOfRangeSwarm.aggroRadius = 5;
+  outOfRangeSwarm.targetX = outOfRangeSwarm.x;
+  outOfRangeSwarm.targetY = outOfRangeSwarm.y;
+
+  updateEnemies(
+    [source, nearbySwarm, chainedSwarm, nonSwarm, outOfRangeSwarm],
+    player,
+    0.016,
+    [],
+    config,
+    { map: null, tileSize: 1, system },
+  );
+
+  assert.equal(source.isAggroed, true);
+  assert.equal(nearbySwarm.isAggroed, true);
+  assert.equal(chainedSwarm.isAggroed, true);
+  assert.equal(nonSwarm.isAggroed, false);
+  assert.equal(outOfRangeSwarm.isAggroed, false);
+  assert.equal(system.effects.length, 2);
+  assert.deepEqual(system.effects.map((effect) => effect.type), ['swarm-link', 'swarm-link']);
+}
+
 function run() {
   testAggroPersistsAfterDetection();
   testDamageImmediatelyActivatesAggro();
+  testSwarmAggroChainsOnlyToNearbySwarmEnemies();
   testRangedEnemiesChargeBeforeShooting();
   console.log('Enemy aggro tests passed.');
 }

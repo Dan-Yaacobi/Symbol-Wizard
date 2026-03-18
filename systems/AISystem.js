@@ -146,6 +146,8 @@ function createEnemyProjectile(enemy, player) {
 export function updateEnemies(enemies, player, dt, projectiles = [], config = null, collisionContext = null, system = null) {
   const detectRadius = config?.get?.('enemies.detectRadius') ?? config?.get?.('enemies.aggroRange') ?? 8;
   const aggroChainRadius = config?.get?.('enemies.aggroChainRadius') ?? 8;
+  const swarmAggroRadius = config?.get?.('enemies.swarmAggroRadius') ?? 10;
+  const swarmAggroChainDepth = config?.get?.('enemies.swarmAggroChainDepth') ?? 2;
   const attackRangeMult = config?.get?.('enemies.attackRangeMultiplier') ?? 1;
   const speedMult = config?.get?.('enemies.moveSpeedMultiplier') ?? 1;
   const cooldownMult = config?.get?.('enemies.attackCooldownMultiplier') ?? 1;
@@ -159,6 +161,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
   const flankerOffsetDistance = config?.get?.('enemies.flankerOffsetDistance') ?? 5;
   const collisionMap = collisionContext?.map ?? null;
   const tileSize = collisionContext?.tileSize ?? 1;
+  const system = collisionContext?.system ?? null;
 
   const aliveEnemies = [];
   const newlyAggroed = [];
@@ -216,6 +219,40 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       if (Math.hypot(nx, ny) > aggroChainRadius) continue;
       activateEnemyAggro(nearby, player, system);
       newlyAggroed.push(nearby);
+    }
+  }
+
+  const visitedSwarmEnemies = new Set();
+
+  function propagateSwarmAggro(source, depth = 0) {
+    if (!source || depth > swarmAggroChainDepth) return;
+
+    visitedSwarmEnemies.add(source);
+
+    for (const other of aliveEnemies) {
+      if (visitedSwarmEnemies.has(other)) continue;
+      if (other.behavior !== ENEMY_BEHAVIOR.SWARM) continue;
+      if (other.isAggroed) continue;
+
+      const dx = other.targetX - source.targetX;
+      const dy = other.targetY - source.targetY;
+      if (Math.hypot(dx, dy) > swarmAggroRadius) continue;
+
+      activateEnemyAggro(other, player);
+      system?.spawnEffect?.({
+        type: 'swarm-link',
+        x: other.x,
+        y: other.y,
+        color: '#ff6a6a',
+        ttl: 0.15,
+      });
+      propagateSwarmAggro(other, depth + 1);
+    }
+  }
+
+  for (const enemy of newlyAggroed) {
+    if (enemy.behavior === ENEMY_BEHAVIOR.SWARM) {
+      propagateSwarmAggro(enemy, 0);
     }
   }
 
