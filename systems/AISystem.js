@@ -1,5 +1,6 @@
 import { Projectile } from '../entities/Projectile.js';
 import { ENEMY_BEHAVIOR } from '../entities/Enemy.js';
+import { applyPush, resolveWallOverlap } from './EnemyCollisionSystem.js';
 
 function resetMeleeState(enemy) {
   enemy.isWindingUp = false;
@@ -70,7 +71,7 @@ function createEnemyProjectile(enemy, player) {
   return projectile;
 }
 
-export function updateEnemies(enemies, player, dt, projectiles = [], config = null) {
+export function updateEnemies(enemies, player, dt, projectiles = [], config = null, collisionContext = null) {
   const detectRadius = config?.get?.('enemies.detectRadius') ?? config?.get?.('enemies.aggroRange') ?? 8;
   const chaseRadius = config?.get?.('enemies.chaseRadius') ?? config?.get?.('enemies.disengageRange') ?? 18;
   const aggroMemory = config?.get?.('enemies.aggroMemory') ?? 2.5;
@@ -82,6 +83,8 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
   const rangedCooldown = config?.get?.('enemies.rangedCooldown') ?? 1.2;
   const tankSpeedMultiplier = config?.get?.('enemies.tankSpeedMultiplier') ?? 0.6;
   const flankerOffsetDistance = config?.get?.('enemies.flankerOffsetDistance') ?? 5;
+  const collisionMap = collisionContext?.map ?? null;
+  const tileSize = collisionContext?.tileSize ?? 1;
 
   const aliveEnemies = [];
   const newlyAggroed = [];
@@ -93,8 +96,8 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     if (enemy.hitFlashTimer > 0) enemy.hitFlashTimer = Math.max(0, enemy.hitFlashTimer - dt);
 
     if (enemy.hitKnockbackTimer > 0) {
-      enemy.x += enemy.hitKnockbackX * dt;
-      enemy.y += enemy.hitKnockbackY * dt;
+      applyPush(enemy, enemy.hitKnockbackX * dt, enemy.hitKnockbackY * dt, collisionMap, tileSize);
+      resolveWallOverlap(enemy, collisionMap);
       enemy.hitKnockbackTimer = Math.max(0, enemy.hitKnockbackTimer - dt);
       if (enemy.hitKnockbackTimer === 0) {
         enemy.hitKnockbackX = 0;
