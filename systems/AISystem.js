@@ -143,7 +143,7 @@ function createEnemyProjectile(enemy, player) {
   return projectile;
 }
 
-export function updateEnemies(enemies, player, dt, projectiles = [], config = null, collisionContext = null, system = null) {
+export function updateEnemies(enemies, player, dt, projectiles = [], config = null, collisionContext = null) {
   const detectRadius = config?.get?.('enemies.detectRadius') ?? config?.get?.('enemies.aggroRange') ?? 8;
   const aggroChainRadius = config?.get?.('enemies.aggroChainRadius') ?? 8;
   const swarmAggroRadius = config?.get?.('enemies.swarmAggroRadius') ?? 10;
@@ -238,7 +238,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       const dy = other.targetY - source.targetY;
       if (Math.hypot(dx, dy) > swarmAggroRadius) continue;
 
-      activateEnemyAggro(other, player);
+      activateEnemyAggro(other, player, system);
       system?.spawnEffect?.({
         type: 'swarm-link',
         x: other.x,
