@@ -1,5 +1,5 @@
 import { Entity } from './Entity.js';
-import { createInventory } from '../systems/InventorySystem.js';
+import { addItem, createInventory, ensureInventory, getItemCount, hasItem, removeItem } from '../systems/InventorySystem.js';
 
 export class Player extends Entity {
   constructor(x, y) {
@@ -27,35 +27,24 @@ export class Player extends Entity {
       },
     });
 
-    this.inventory = new Map();
+    this.inventory = ensureInventory(this.inventory, { context: 'Player.constructor' });
     this.unlockedRecipes = new Set();
   }
 
   getItemCount(itemId) {
-    return this.inventory.get(itemId) ?? 0;
+    return getItemCount(this.inventory, itemId);
   }
 
   hasItem(itemId, amount = 1) {
-    return this.getItemCount(itemId) >= Math.max(0, amount);
+    return hasItem(this.inventory, itemId, Math.max(0, amount));
   }
 
   addItem(itemId, amount = 1) {
-    const normalizedAmount = Math.max(0, Number(amount) || 0);
-    if (!itemId || normalizedAmount <= 0) return this.getItemCount(itemId);
-    const nextAmount = this.getItemCount(itemId) + normalizedAmount;
-    this.inventory.set(itemId, nextAmount);
-    return nextAmount;
+    return addItem(this.inventory, itemId, amount);
   }
 
   removeItem(itemId, amount = 1) {
-    const normalizedAmount = Math.max(0, Number(amount) || 0);
-    if (!itemId || normalizedAmount <= 0) return true;
-    if (!this.hasItem(itemId, normalizedAmount)) return false;
-
-    const nextAmount = this.getItemCount(itemId) - normalizedAmount;
-    if (nextAmount <= 0) this.inventory.delete(itemId);
-    else this.inventory.set(itemId, nextAmount);
-    return true;
+    return removeItem(this.inventory, itemId, amount).success;
   }
 
   unlockRecipe(recipeId) {

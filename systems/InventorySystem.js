@@ -1,14 +1,35 @@
 import { assertItemDefinition } from '../data/ItemRegistry.js';
 
-export function createInventory(maxSlots = 24) {
+const DEFAULT_MAX_SLOTS = 24;
+let inventoryShapeWarningShown = false;
+
+export function createInventory(maxSlots = DEFAULT_MAX_SLOTS) {
+  const normalizedMaxSlots = Number.isFinite(Number(maxSlots)) ? Math.max(0, Math.floor(Number(maxSlots))) : DEFAULT_MAX_SLOTS;
   return {
     slots: [],
-    maxSlots,
+    maxSlots: normalizedMaxSlots,
   };
 }
 
+export function isInventory(value) {
+  return Boolean(value) && Array.isArray(value.slots) && Number.isFinite(value.maxSlots);
+}
+
+export function ensureInventory(inventory, options = {}) {
+  const { fallbackMaxSlots = DEFAULT_MAX_SLOTS, warn = false, context = 'InventorySystem' } = options;
+  if (isInventory(inventory)) return inventory;
+
+  if (warn && !inventoryShapeWarningShown && typeof console !== 'undefined' && typeof console.warn === 'function') {
+    inventoryShapeWarningShown = true;
+    console.warn(`[${context}] Invalid inventory shape encountered; using an empty fallback inventory.`, inventory);
+  }
+
+  return createInventory(fallbackMaxSlots);
+}
+
 function findSlotsByItemId(inventory, itemId) {
-  return inventory.slots.filter((slot) => slot?.itemId === itemId);
+  const safeInventory = ensureInventory(inventory, { warn: true, context: 'InventorySystem.findSlotsByItemId' });
+  return safeInventory.slots.filter((slot) => slot?.itemId === itemId);
 }
 
 export function getItemCount(inventory, itemId) {
@@ -22,13 +43,14 @@ export function hasItem(inventory, itemId, amount = 1) {
 export function addItem(inventory, itemId, amount = 1) {
   const item = assertItemDefinition(itemId);
   const requested = Math.max(0, Math.floor(amount));
-  if (!inventory || requested <= 0) return { success: false, added: 0, remaining: requested, slotsChanged: false };
+  const safeInventory = ensureInventory(inventory, { warn: true, context: 'InventorySystem.addItem' });
+  if (requested <= 0) return { success: false, added: 0, remaining: requested, slotsChanged: false };
 
   let remaining = requested;
   let slotsChanged = false;
 
   if (item.stackable) {
-    for (const slot of inventory.slots) {
+    for (const slot of safeInventory.slots) {
       if (slot.itemId !== itemId) continue;
       const capacity = Math.max(0, item.maxStack - slot.quantity);
       if (capacity <= 0) continue;
@@ -42,9 +64,9 @@ export function addItem(inventory, itemId, amount = 1) {
     }
   }
 
-  while (remaining > 0 && inventory.slots.length < inventory.maxSlots) {
+  while (remaining > 0 && safeInventory.slots.length < safeInventory.maxSlots) {
     const stackAmount = item.stackable ? Math.min(item.maxStack, remaining) : 1;
-    inventory.slots.push({ itemId, quantity: stackAmount });
+    safeInventory.slots.push({ itemId, quantity: stackAmount });
     remaining -= stackAmount;
     slotsChanged = true;
   }
@@ -59,20 +81,21 @@ export function addItem(inventory, itemId, amount = 1) {
 
 export function removeItem(inventory, itemId, amount = 1) {
   const requested = Math.max(0, Math.floor(amount));
-  if (!inventory || requested <= 0) return { success: false, removed: 0, remaining: requested, slotsChanged: false };
-  if (!hasItem(inventory, itemId, requested)) return { success: false, removed: 0, remaining: requested, slotsChanged: false };
+  const safeInventory = ensureInventory(inventory, { warn: true, context: 'InventorySystem.removeItem' });
+  if (requested <= 0) return { success: false, removed: 0, remaining: requested, slotsChanged: false };
+  if (!hasItem(safeInventory, itemId, requested)) return { success: false, removed: 0, remaining: requested, slotsChanged: false };
 
   let remaining = requested;
   let slotsChanged = false;
 
-  for (let index = inventory.slots.length - 1; index >= 0 && remaining > 0; index -= 1) {
-    const slot = inventory.slots[index];
+  for (let index = safeInventory.slots.length - 1; index >= 0 && remaining > 0; index -= 1) {
+    const slot = safeInventory.slots[index];
     if (slot.itemId !== itemId) continue;
     const removed = Math.min(slot.quantity, remaining);
     slot.quantity -= removed;
     remaining -= removed;
     slotsChanged = slotsChanged || removed > 0;
-    if (slot.quantity <= 0) inventory.slots.splice(index, 1);
+    if (slot.quantity <= 0) safeInventory.slots.splice(index, 1);
   }
 
   return {
