@@ -83,7 +83,7 @@ function buildParameters(recipe, finalStats, element) {
 function isEffectCompatible(recipe, effect) {
   if (!effect?.type) return false;
   if (recipe.behavior === 'zone' && ['pierce', 'bounce', 'split', 'emit_projectiles'].includes(effect.type)) return false;
-  if (recipe.behavior === 'beam' && ['pierce', 'bounce', 'split'].includes(effect.type)) return false;
+  if (recipe.behavior === 'beam' && ['pierce', 'bounce'].includes(effect.type)) return false;
   return true;
 }
 

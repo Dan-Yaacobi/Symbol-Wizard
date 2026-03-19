@@ -146,6 +146,76 @@ function testProjectileZoneOnHitAndPierceCoexist() {
   assert.equal(system.activeSpellInstances.length, 1);
 }
 
+function testBeamContinuousDamageHonorsPerTargetCooldown() {
+  const target = makeEnemy(4, 0);
+  const system = makeSystem([target]);
+  const beamSpell = {
+    id: 'beam-tick',
+    name: 'Beam Tick',
+    description: 'test',
+    behavior: 'beam',
+    targeting: 'cursor',
+    element: 'arcane',
+    components: [],
+    effects: [],
+    parameters: { damage: 2, duration: 0.35, width: 1.8, range: 8, tickInterval: 0.05, hitCooldownPerTarget: 0.15, color: '#fff' },
+    cost: 1,
+    cooldown: 0,
+    manaCost: 0,
+  };
+
+  const result = castSpell(beamSpell, {
+    system,
+    player: { x: 0, y: 0, facingX: 1, facingY: 0 },
+    targetPosition: { x: 8, y: 0 },
+    activeSpellInstances: system.activeSpellInstances,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(system.damageEvents.length, 1);
+
+  updateSpellInstances(system.activeSpellInstances, 0.1, { system, player: { x: 0, y: 0 } });
+  assert.equal(system.damageEvents.length, 1);
+
+  updateSpellInstances(system.activeSpellInstances, 0.05, { system, player: { x: 0, y: 0 } });
+  assert.equal(system.damageEvents.length, 2);
+
+  updateSpellInstances(system.activeSpellInstances, 0.15, { system, player: { x: 0, y: 0 } });
+  assert.equal(system.damageEvents.length, 3);
+}
+
+function testBeamForkSpawnsDistinctBranches() {
+  const system = makeSystem();
+  const beamSpell = {
+    id: 'beam-fork',
+    name: 'Beam Fork',
+    description: 'test',
+    behavior: 'beam',
+    targeting: 'cursor',
+    element: 'lightning',
+    components: [],
+    effects: [{ type: 'split', count: 3, spreadDegrees: 18 }],
+    parameters: { damage: 3, duration: 0.3, width: 1.8, range: 10, tickInterval: 0.05, color: '#fff' },
+    cost: 1,
+    cooldown: 0,
+    manaCost: 0,
+  };
+
+  const result = castSpell(beamSpell, {
+    system,
+    player: { x: 0, y: 0, facingX: 1, facingY: 0 },
+    targetPosition: { x: 10, y: 0 },
+    activeSpellInstances: system.activeSpellInstances,
+  });
+
+  assert.equal(result.ok, true);
+  const beamEffect = system.effects.find((effect) => effect.type === 'beam');
+  assert.ok(beamEffect);
+  assert.equal(beamEffect.branches.length, 3);
+  assert.notEqual(beamEffect.branches[0].toY, beamEffect.branches[1].toY);
+  assert.notEqual(beamEffect.branches[1].toY, beamEffect.branches[2].toY);
+}
+
 function testBeamZoneOnHitHooksThroughRuntime() {
   const target = makeEnemy(4, 0);
   const system = makeSystem([target]);
@@ -178,7 +248,8 @@ function testBeamZoneOnHitHooksThroughRuntime() {
 }
 
 function testBeamEmitProjectilesAugmentsInsteadOfReplacing() {
-  const system = makeSystem();
+  const target = makeEnemy(4, 0);
+  const system = makeSystem([target]);
   const beamSpell = {
     id: 'beam-emit',
     name: 'Beam Emit',
@@ -204,9 +275,6 @@ function testBeamEmitProjectilesAugmentsInsteadOfReplacing() {
   assert.equal(result.ok, true);
   assert.equal(system.activeSpellInstances.length, 1);
   assert.equal(system.activeSpellInstances[0].instance.base.behavior, 'beam');
-  assert.equal(system.spawnedProjectiles.length, 0);
-
-  updateSpellInstances(system.activeSpellInstances, 0.2, { system, player: { x: 0, y: 0 } });
   assert.ok(system.spawnedProjectiles.length >= 2);
 }
 
@@ -257,7 +325,7 @@ function testExplicitUnsupportedCombosAreRejected() {
     parameters: { damage: 3, duration: 0.2, width: 1, range: 5 },
     cost: 1,
   });
-  assert.equal(beamSplit.valid, false);
+  assert.equal(beamSplit.valid, true);
 
   const zoneEmit = validateSpell({
     id: 'zone-emit',
@@ -282,6 +350,8 @@ function run() {
   testZoneOnHitSpawnsZone();
   testExplodeDamagesNearbyEnemies();
   testProjectileZoneOnHitAndPierceCoexist();
+  testBeamContinuousDamageHonorsPerTargetCooldown();
+  testBeamForkSpawnsDistinctBranches();
   testBeamZoneOnHitHooksThroughRuntime();
   testBeamEmitProjectilesAugmentsInsteadOfReplacing();
   testZoneZoneOnHitCanCascadeWithDepthCap();
