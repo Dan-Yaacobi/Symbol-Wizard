@@ -1,4 +1,5 @@
 import { Entity } from './Entity.js';
+import { createInventory } from '../systems/InventorySystem.js';
 
 export class Player extends Entity {
   constructor(x, y) {
@@ -17,6 +18,7 @@ export class Player extends Entity {
       gold: 0,
       castCooldown: 0,
       castTimer: 0,
+      inventory: createInventory(24),
       animationState: 'idle',
       frameDurations: {
         idle: 0.45,
