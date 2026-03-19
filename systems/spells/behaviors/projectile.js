@@ -1,3 +1,5 @@
+import { SpellEffectSystem } from '../SpellEffectSystem.js';
+
 export function executeBehavior(instance, context) {
   const system = context?.system;
   const origin = context?.origin ?? context?.player;
@@ -26,7 +28,10 @@ export function executeBehavior(instance, context) {
     },
   });
 
-  if (projectile) projectile.spellInstance = instance;
+  if (projectile) {
+    projectile.spellInstance = instance;
+    SpellEffectSystem.initializeProjectile(projectile, instance);
+  }
 
   const projectileTtl = Number.isFinite(projectile?.ttl) ? projectile.ttl : null;
   const behaviorDuration = Number.isFinite(instance.parameters?.duration) ? instance.parameters.duration : null;
