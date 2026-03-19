@@ -11,14 +11,15 @@ const PICKUP_LIFETIME_MIN = 2.5;
 const PICKUP_LIFETIME_MAX = 3.0;
 const PICKUP_MERGE_WINDOW = 0.45;
 const PICKUP_WORLD_OFFSET_Y = 2;
-const PICKUP_SPAWN_OFFSET_X_RANGE = 0.6;
-const PICKUP_SPAWN_OFFSET_Y_RANGE = 0.3;
-const PICKUP_INITIAL_VX_RANGE = 0.3;
-const PICKUP_INITIAL_VY_MIN = -0.8;
-const PICKUP_INITIAL_VY_MAX = -0.4;
-const PICKUP_HORIZONTAL_DAMPING = 0.92;
-const PICKUP_MIN_SEPARATION = 0.8;
-const PICKUP_SEPARATION_FORCE = 0.02;
+const PICKUP_LANES = [-2, -1, 0, 1, 2];
+const PICKUP_LANE_SPACING = 0.6;
+const PICKUP_SPAWN_OFFSET_X_RANGE = 0.1;
+const PICKUP_SPAWN_OFFSET_Y_RANGE = 0.2;
+const PICKUP_INITIAL_VX_VARIANCE = 0.05;
+const PICKUP_LANE_VX_MULTIPLIER = 0.15;
+const PICKUP_INITIAL_VY_MIN = -0.9;
+const PICKUP_INITIAL_VY_MAX = -0.6;
+const PICKUP_MIN_VERTICAL_GAP = 1.0;
 const PICKUP_SCALE_VARIANCE_MIN = 0.95;
 const PICKUP_SCALE_VARIANCE_MAX = 1.05;
 const GROUP_DISTANCE_THRESHOLD = 1.5;
@@ -67,6 +68,7 @@ export class CombatTextSystem {
     this.pickupStackAnchorX = 0;
     this.pickupStackAnchorY = 0;
     this.nextId = 1;
+    this.nextPickupLaneIndex = 0;
   }
 
   spawnDamageText(entity, damage, isCritical = false, nowSeconds = performance.now() / 1000) {
@@ -130,6 +132,8 @@ export class CombatTextSystem {
 
     const baseX = entity.x;
     const baseY = entity.y - PICKUP_WORLD_OFFSET_Y;
+    const lane = PICKUP_LANES[this.nextPickupLaneIndex % PICKUP_LANES.length];
+    this.nextPickupLaneIndex = (this.nextPickupLaneIndex + 1) % PICKUP_LANES.length;
     const offsetX = this.#randomRange(-PICKUP_SPAWN_OFFSET_X_RANGE, PICKUP_SPAWN_OFFSET_X_RANGE);
     const offsetY = this.#randomRange(-PICKUP_SPAWN_OFFSET_Y_RANGE, PICKUP_SPAWN_OFFSET_Y_RANGE);
     const scale = this.#pickupStyle().fontScale * this.#randomRange(PICKUP_SCALE_VARIANCE_MIN, PICKUP_SCALE_VARIANCE_MAX);
@@ -144,11 +148,12 @@ export class CombatTextSystem {
       lifetime: this.#pickupLifetime(),
       opacity: 1,
       age: 0,
+      lane,
       anchorX: baseX,
       anchorY: baseY,
-      x: baseX + offsetX,
+      x: baseX + lane * PICKUP_LANE_SPACING + offsetX,
       y: baseY + offsetY,
-      vx: this.#randomRange(-PICKUP_INITIAL_VX_RANGE, PICKUP_INITIAL_VX_RANGE),
+      vx: lane * PICKUP_LANE_VX_MULTIPLIER + this.#randomRange(-PICKUP_INITIAL_VX_VARIANCE, PICKUP_INITIAL_VX_VARIANCE),
       vy: this.#randomRange(PICKUP_INITIAL_VY_MIN, PICKUP_INITIAL_VY_MAX),
       style: { ...this.#pickupStyle(), fontScale: scale },
     });
@@ -188,7 +193,6 @@ export class CombatTextSystem {
       entry.anchorY = this.pickupStackAnchorY;
       entry.x += (entry.vx ?? 0) * dt;
       entry.y += (entry.vy ?? 0) * dt;
-      entry.vx *= PICKUP_HORIZONTAL_DAMPING;
       entry.opacity = 1 - age / entry.lifetime;
       entry.age = age;
       this.pickupStack[pickupWriteIndex] = entry;
@@ -196,7 +200,7 @@ export class CombatTextSystem {
     }
     this.pickupStack.length = pickupWriteIndex;
 
-    this.#separatePickupEntries();
+    this.#enforcePickupLaneSpacing();
   }
 
   render(renderer, camera) {
@@ -279,26 +283,28 @@ export class CombatTextSystem {
     return min + Math.random() * (max - min);
   }
 
-  #separatePickupEntries() {
+  #enforcePickupLaneSpacing() {
+    const laneEntries = new Map();
+
     for (let i = 0; i < this.pickupStack.length; i += 1) {
-      const entryA = this.pickupStack[i];
-      for (let j = i + 1; j < this.pickupStack.length; j += 1) {
-        const entryB = this.pickupStack[j];
-        const dx = entryA.x - entryB.x;
-        const dy = entryA.y - entryB.y;
-        const distance = Math.hypot(dx, dy);
+      const entry = this.pickupStack[i];
+      const lane = Number.isFinite(entry.lane) ? entry.lane : 0;
+      const entries = laneEntries.get(lane) ?? [];
+      entries.push(entry);
+      laneEntries.set(lane, entries);
+    }
 
-        if (distance >= PICKUP_MIN_SEPARATION) continue;
+    for (const entries of laneEntries.values()) {
+      entries.sort((entryA, entryB) => entryA.createdAt - entryB.createdAt);
 
-        const normalizedX = distance > 0 ? dx / distance : (j - i) % 2 === 0 ? 1 : -1;
-        const normalizedY = distance > 0 ? dy / distance : -0.35;
-        const pushX = normalizedX * PICKUP_SEPARATION_FORCE;
-        const pushY = normalizedY * PICKUP_SEPARATION_FORCE;
+      for (let i = 1; i < entries.length; i += 1) {
+        const previousEntry = entries[i - 1];
+        const currentEntry = entries[i];
+        const maxY = previousEntry.y - PICKUP_MIN_VERTICAL_GAP;
 
-        entryA.x += pushX;
-        entryA.y += pushY;
-        entryB.x -= pushX;
-        entryB.y -= pushY;
+        if (currentEntry.y > maxY) {
+          currentEntry.y = maxY;
+        }
       }
     }
   }
