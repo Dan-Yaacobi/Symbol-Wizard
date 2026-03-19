@@ -577,6 +577,13 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     }
 
     drawSprite(renderer, camera, enemy, renderColor);
+
+    if (enemy.isWindingUp) {
+      const sx = Math.round(enemy.x) - camera.x;
+      const sy = Math.round(enemy.y) - camera.y;
+      drawCell(renderer, { glyph: '!', fg: '#ffd166' }, sx, sy);
+    }
+
     drawStatusIcon(renderer, camera, enemy);
 
     if (enemy.frozen) {

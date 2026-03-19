@@ -7,6 +7,7 @@ const ENEMY_VELOCITY_SMOOTHING = 0.2;
 const ENEMY_SEPARATION_RADIUS = 1.8;
 const ENEMY_SEPARATION_STRENGTH = 0.6;
 const ENEMY_PERSONAL_SPACE_PUSH = 0.2;
+const ENEMY_COLLISION_MIN_DISTANCE = 1;
 
 function ensureTargetPosition(enemy) {
   if (!Number.isFinite(enemy.targetX)) enemy.targetX = enemy.x;
@@ -24,6 +25,7 @@ function resetMeleeState(enemy) {
   enemy.isAttacking = false;
   enemy.attackElapsed = 0;
   enemy.attackDamageApplied = false;
+  enemy.windupTimer = 0;
 }
 
 function stopEnemy(enemy) {
@@ -34,9 +36,13 @@ function stopEnemy(enemy) {
 function applyMeleeLogic(enemy, dt, cooldownMultiplier = 1) {
   stopEnemy(enemy);
 
+  if ((enemy.postAttackSlowTimer ?? 0) > 0) {
+    enemy.postAttackSlowTimer = Math.max(0, enemy.postAttackSlowTimer - dt);
+  }
+
   if (enemy.isWindingUp) {
-    enemy.attackElapsed = (enemy.attackElapsed ?? 0) + dt;
-    if (enemy.attackElapsed >= (enemy.attackWindup ?? 0.4)) {
+    enemy.windupTimer = Math.max(0, (enemy.windupTimer ?? enemy.windupTime ?? enemy.attackWindup ?? 0.4) - dt);
+    if ((enemy.windupTimer ?? 0) <= 0) {
       enemy.isWindingUp = false;
       enemy.isAttacking = true;
       enemy.attackElapsed = 0;
@@ -56,8 +62,10 @@ function applyMeleeLogic(enemy, dt, cooldownMultiplier = 1) {
     return;
   }
 
-  if ((enemy.attackTimer ?? 0) <= 0) {
+  if ((enemy.attackTimer ?? 0) <= 0 && !enemy.isWindingUp) {
     enemy.isWindingUp = true;
+    enemy.windupTime = enemy.windupTime ?? enemy.attackWindup ?? 0.4;
+    enemy.windupTimer = enemy.windupTime;
     enemy.attackElapsed = 0;
     enemy.attackDamageApplied = false;
   }
@@ -69,8 +77,9 @@ function move(enemy, dirX, dirY, dt, speedMultiplier = 1, jitter = 0, collisionM
   void tileSize;
   ensureTargetPosition(enemy);
   const len = Math.hypot(dirX, dirY) || 1;
-  const targetVx = (dirX / len) * enemy.speed * speedMultiplier + jitter;
-  const targetVy = (dirY / len) * enemy.speed * speedMultiplier;
+  const recoilSlowMultiplier = (enemy.postAttackSlowTimer ?? 0) > 0 ? 0.35 : 1;
+  const targetVx = (dirX / len) * enemy.speed * speedMultiplier * recoilSlowMultiplier + jitter;
+  const targetVy = (dirY / len) * enemy.speed * speedMultiplier * recoilSlowMultiplier;
   enemy.vx += (targetVx - enemy.vx) * ENEMY_VELOCITY_SMOOTHING;
   enemy.vy += (targetVy - enemy.vy) * ENEMY_VELOCITY_SMOOTHING;
 
@@ -107,6 +116,39 @@ function commitEnemyVelocity(enemy, dt, collisionMap, tileSize) {
   attemptMoveWithCollision(nextPosition, enemy.vx * dt, enemy.vy * dt, collisionMap, tileSize);
   enemy.targetX = nextPosition.x;
   enemy.targetY = nextPosition.y;
+}
+
+function resolveEnemyCollisions(enemies, collisionMap) {
+  for (let i = 0; i < enemies.length; i += 1) {
+    const enemy = enemies[i];
+    if (!enemy?.alive) continue;
+
+    for (let j = i + 1; j < enemies.length; j += 1) {
+      const other = enemies[j];
+      if (!other?.alive) continue;
+
+      const dx = enemy.x - other.x;
+      const dy = enemy.y - other.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= 0 || dist >= ENEMY_COLLISION_MIN_DISTANCE) continue;
+
+      const overlap = ENEMY_COLLISION_MIN_DISTANCE - dist;
+      const nx = dx / dist;
+      const ny = dy / dist;
+
+      enemy.x += nx * overlap * 0.5;
+      enemy.y += ny * overlap * 0.5;
+      other.x -= nx * overlap * 0.5;
+      other.y -= ny * overlap * 0.5;
+
+      resolveWallOverlap(enemy, collisionMap);
+      resolveWallOverlap(other, collisionMap);
+      enemy.targetX = enemy.x;
+      enemy.targetY = enemy.y;
+      other.targetX = other.x;
+      other.targetY = other.y;
+    }
+  }
 }
 
 export function activateEnemyAggro(enemy, player = null, system = null) {
@@ -418,4 +460,6 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     commitEnemyVelocity(enemy, dt, collisionMap, tileSize);
     interpolateEnemyPosition(enemy);
   }
+
+  resolveEnemyCollisions(aliveEnemies, collisionMap);
 }
