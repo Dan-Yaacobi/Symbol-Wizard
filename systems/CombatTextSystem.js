@@ -15,6 +15,10 @@ const PICKUP_STACK_SPACING = 1.2;
 const PICKUP_LINE_HEIGHT_MULTIPLIER = 1.4;
 const PICKUP_STACK_PADDING = 2;
 const PICKUP_DRIFT_SPEED = 0.5;
+const GROUP_DISTANCE_THRESHOLD = 1.5;
+const GROUP_MERGE_WINDOW = 0.2;
+const GROUP_STACK_SPACING = 1.2;
+const GROUP_JITTER_RANGE = 0.2;
 const MAX_VISIBLE_PICKUP_TEXTS = 6;
 // Toggle to true while diagnosing combat-text lifecycle issues without spamming normal gameplay logs.
 
@@ -24,21 +28,24 @@ const COLOR_MAP = {
   green: visualTheme.colors.success,
   gold: visualTheme.colors.gold,
   white: visualTheme.colors.text,
+  yellow: '#ffe066',
 };
 
 const TEXT_STYLES = {
-  damage: { color: COLOR_MAP.red, fontScale: 2.45, fontWeight: '800' },
+  damage: { type: 'damage', mergeKey: 'damage', color: COLOR_MAP.red, fontScale: 2.45, fontWeight: '800' },
   critical: {
-    color: COLOR_MAP.magenta,
+    type: 'damage',
+    mergeKey: 'critical',
+    color: COLOR_MAP.yellow,
     fontScale: 3.05,
     fontWeight: '800',
     popAmplitude: 0.18,
     popDuration: 0.14,
   },
-  gold: { color: COLOR_MAP.gold, fontScale: 2.35, fontWeight: '700' },
-  heal: { color: COLOR_MAP.green, fontScale: 2.35, fontWeight: '700' },
-  info: { color: COLOR_MAP.white, fontScale: 2.2, fontWeight: '700' },
-  pickup: { color: COLOR_MAP.white, fontScale: 1.5, fontWeight: '700' },
+  gold: { type: 'gold', mergeKey: 'gold', color: COLOR_MAP.gold, fontScale: 2.35, fontWeight: '700' },
+  heal: { type: 'heal', mergeKey: 'heal', color: COLOR_MAP.green, fontScale: 2.35, fontWeight: '700' },
+  info: { type: 'info', mergeKey: 'info', color: COLOR_MAP.white, fontScale: 2.2, fontWeight: '700' },
+  pickup: { type: 'pickup', mergeKey: 'pickup', color: COLOR_MAP.white, fontScale: 1.5, fontWeight: '700' },
 };
 
 function isFiniteNumber(value) {
@@ -48,7 +55,8 @@ function isFiniteNumber(value) {
 export class CombatTextSystem {
   constructor(configRegistry = null) {
     this.configRegistry = configRegistry;
-    this.combatTexts = [];
+    this.textGroups = [];
+    this.combatTexts = this.textGroups;
     this.pickupStack = [];
     this.pickupStackAnchorX = 0;
     this.pickupStackAnchorY = 0;
@@ -56,50 +64,45 @@ export class CombatTextSystem {
     this.nextId = 1;
   }
 
-  spawnDamageText(entity, damage, isCritical = false) {
+  spawnDamageText(entity, damage, isCritical = false, nowSeconds = performance.now() / 1000) {
     if (!this.#hasValidEntityPosition(entity)) {
-      // Entity references can be stale if combat and cleanup happen in the same frame.
       console.warn('[CombatText] skipped damage text: invalid entity position.', entity);
       return;
     }
 
     const amount = Math.max(0, Math.round(damage));
     const text = isCritical ? `${amount}!` : `${amount}`;
-    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), text, isCritical ? this.#criticalStyle() : this.#damageStyle());
+    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), text, isCritical ? this.#criticalStyle() : this.#damageStyle(), nowSeconds);
   }
 
-  spawnGoldText(entity, amount) {
+  spawnGoldText(entity, amount, nowSeconds = performance.now() / 1000) {
     if (!this.#hasValidEntityPosition(entity)) {
-      // Entity references can be stale if combat and cleanup happen in the same frame.
       console.warn('[CombatText] skipped gold text: invalid entity position.', entity);
       return;
     }
 
     const value = Math.max(0, Math.round(amount));
-    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), `+${value}$`, this.#goldStyle());
+    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), `+${value}$`, this.#goldStyle(), nowSeconds);
   }
 
-  spawnHealText(entity, amount) {
+  spawnHealText(entity, amount, nowSeconds = performance.now() / 1000) {
     if (!this.#hasValidEntityPosition(entity)) {
-      // Entity references can be stale if combat and cleanup happen in the same frame.
       console.warn('[CombatText] skipped heal text: invalid entity position.', entity);
       return;
     }
 
     const value = Math.max(0, Math.round(amount));
-    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), `+${value}`, this.#healStyle());
+    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), `+${value}`, this.#healStyle(), nowSeconds);
   }
 
-  spawnInfoText(entity, text) {
+  spawnInfoText(entity, text, nowSeconds = performance.now() / 1000) {
     if (!this.#hasValidEntityPosition(entity)) {
-      // Entity references can be stale if combat and cleanup happen in the same frame.
       console.warn('[CombatText] skipped info text: invalid entity position.', entity);
       return;
     }
 
-    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), text, TEXT_STYLES.info);
+    this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), text, TEXT_STYLES.info, nowSeconds);
   }
-
 
   spawnPickupText(entity, itemId, quantity, nowSeconds = performance.now() / 1000) {
     if (!this.#hasValidEntityPosition(entity) || !itemId || !Number.isFinite(quantity) || quantity <= 0) return;
@@ -134,7 +137,7 @@ export class CombatTextSystem {
       lifetime: this.#pickupLifetime(),
       opacity: 1,
       stackIndex: this.pickupStack.length,
-      xJitter: (() => { const jitter = (Math.random() * 0.4) - 0.2; return jitter; })(),
+      xJitter: this.#randomJitter(GROUP_JITTER_RANGE),
       drift: 0,
       anchorX: this.pickupStackAnchorX,
       anchorY: this.pickupStackAnchorY,
@@ -155,19 +158,21 @@ export class CombatTextSystem {
 
     let writeIndex = 0;
 
-    for (let i = 0; i < this.combatTexts.length; i += 1) {
-      const entry = this.combatTexts[i];
-      const age = nowSeconds - entry.createdAt;
-      if (age >= entry.lifetime) continue;
+    for (let i = 0; i < this.textGroups.length; i += 1) {
+      const group = this.textGroups[i];
+      const age = nowSeconds - group.createdAt;
+      if (age >= group.lifetime) continue;
 
-      entry.y -= entry.velocityY * dt;
-      entry.opacity = 1 - age / entry.lifetime;
-      entry.age = age;
-      this.combatTexts[writeIndex] = entry;
+      group.y -= group.velocityY * dt;
+      group.opacity = 1 - age / group.lifetime;
+      group.age = age;
+      group.entries = group.entries.filter((entry) => nowSeconds - entry.time < group.lifetime);
+      if (group.entries.length <= 0) continue;
+      this.textGroups[writeIndex] = group;
       writeIndex += 1;
     }
 
-    this.combatTexts.length = writeIndex;
+    this.textGroups.length = writeIndex;
 
     let pickupWriteIndex = 0;
     this.pickupStackDrift += PICKUP_DRIFT_SPEED * dt;
@@ -194,7 +199,6 @@ export class CombatTextSystem {
 
   render(renderer, camera) {
     if (!renderer?.drawEffectText || !camera) {
-      // Render can be called during initialization/teardown, so fail gracefully.
       console.warn('[CombatText] skipped render: renderer or camera missing.');
       return;
     }
@@ -202,32 +206,37 @@ export class CombatTextSystem {
     const cameraX = isFiniteNumber(camera.x) ? camera.x : 0;
     const cameraY = isFiniteNumber(camera.y) ? camera.y : 0;
 
-    for (let i = 0; i < this.combatTexts.length; i += 1) {
-      const entry = this.combatTexts[i];
-      const screenX = Math.round(entry.x) - cameraX;
-      const screenY = Math.round(entry.y) - cameraY;
+    for (let i = 0; i < this.textGroups.length; i += 1) {
+      const group = this.textGroups[i];
+      const screenX = Math.round(group.x + (group.xJitter ?? 0)) - cameraX;
 
-      if (DEBUG_COMBAT_TEXT) {
-        console.debug('[CombatText] render', { id: entry.id, text: entry.text, screenX, screenY, opacity: entry.opacity });
+      for (let entryIndex = 0; entryIndex < group.entries.length; entryIndex += 1) {
+        const entry = group.entries[entryIndex];
+        const yOffset = entryIndex * -GROUP_STACK_SPACING;
+        const screenY = Math.round(group.y + yOffset) - cameraY;
+
+        if (DEBUG_COMBAT_TEXT) {
+          console.debug('[CombatText] render', { id: group.id, text: entry.text, screenX, screenY, opacity: group.opacity, entryIndex });
+        }
+
+        const drawStyle = this.#getAnimatedStyle(entry, group.age);
+        this.#drawOutlinedText(renderer, entry.text, drawStyle, screenX, screenY, group.opacity);
       }
-
-      const drawStyle = this.#getAnimatedStyle(entry);
-      this.#drawOutlinedText(renderer, entry.text, drawStyle, screenX, screenY, entry.opacity);
     }
 
     this.#renderPickupStack(renderer, camera);
   }
 
-  #getAnimatedStyle(entry) {
+  #getAnimatedStyle(entry, age = 0) {
     const baseScale = entry.style.fontScale;
     const popAmplitude = Number.isFinite(entry.style.popAmplitude) ? entry.style.popAmplitude : 0;
     const popDuration = Number.isFinite(entry.style.popDuration) ? entry.style.popDuration : 0;
 
-    if (popAmplitude <= 0 || popDuration <= 0 || entry.age >= popDuration) {
+    if (popAmplitude <= 0 || popDuration <= 0 || age >= popDuration) {
       return entry.style;
     }
 
-    const popProgress = Math.max(0, Math.min(1, entry.age / popDuration));
+    const popProgress = Math.max(0, Math.min(1, age / popDuration));
     const popMultiplier = 1 + Math.sin(popProgress * Math.PI) * popAmplitude;
 
     return {
@@ -235,7 +244,6 @@ export class CombatTextSystem {
       fontScale: baseScale * popMultiplier,
     };
   }
-
 
   #getConfig(path, fallback) {
     const value = this.configRegistry?.get?.(path);
@@ -306,7 +314,6 @@ export class CombatTextSystem {
     }
   }
 
-
   #drawOutlinedText(renderer, text, style, x, y, opacity) {
     const outlineOffsets = [[-1, 0], [1, 0], [0, -1], [0, 1]];
     for (const [offsetX, offsetY] of outlineOffsets) {
@@ -321,7 +328,6 @@ export class CombatTextSystem {
 
   #spawnText(x, y, text, style, nowSeconds = performance.now() / 1000) {
     if (!isFiniteNumber(x) || !isFiniteNumber(y)) {
-      // Defensive guard: never enqueue entries with invalid positions.
       console.warn('[CombatText] skipped spawn: invalid coordinates.', { x, y, text, style });
       return;
     }
@@ -332,11 +338,13 @@ export class CombatTextSystem {
       return;
     }
 
-    if (this.combatTexts.length >= MAX_ACTIVE_TEXTS) {
-      this.combatTexts.shift();
+    while (this.textGroups.length >= MAX_ACTIVE_TEXTS) {
+      this.textGroups.shift();
     }
 
     const resolvedStyle = {
+      type: style?.type ?? 'info',
+      mergeKey: style?.mergeKey ?? style?.type ?? 'info',
       color: style?.color ?? COLOR_MAP.white,
       fontScale: Number.isFinite(style?.fontScale) ? style.fontScale : 2,
       fontWeight: style?.fontWeight ?? '700',
@@ -347,27 +355,82 @@ export class CombatTextSystem {
     const minLifetime = this.#getConfig('combat.damageTextLifetimeMin', MIN_LIFETIME);
     const maxLifetime = Math.max(minLifetime, this.#getConfig('combat.damageTextLifetimeMax', MAX_LIFETIME));
     const lifetime = minLifetime + Math.random() * (maxLifetime - minLifetime);
-    const entry = {
-      id: `ct_${this.nextId}`,
+    const group = this.#findReusableGroup(x, y, nowSeconds);
+
+    if (group) {
+      this.#appendToGroup(group, safeText, resolvedStyle, nowSeconds);
+      group.createdAt = nowSeconds;
+      group.lifetime = lifetime;
+      group.opacity = 1;
+      return;
+    }
+
+    const entry = this.#createEntry(safeText, resolvedStyle, nowSeconds);
+    this.textGroups.push({
+      id: `ct_${this.nextId++}`,
       x,
       y,
-      anchorX: x,
-      anchorY: y,
-      text: safeText,
-      style: resolvedStyle,
+      entries: [entry],
       createdAt: nowSeconds,
       lifetime,
       velocityY: this.#getConfig('combat.damageTextSpeed', DEFAULT_UPWARD_SPEED),
       opacity: 1,
       age: 0,
-    };
+      xJitter: this.#randomJitter(GROUP_JITTER_RANGE),
+    });
+  }
 
-    this.combatTexts.push(entry);
+  #findReusableGroup(x, y, nowSeconds) {
+    for (let i = this.textGroups.length - 1; i >= 0; i -= 1) {
+      const group = this.textGroups[i];
+      const dx = group.x - x;
+      const dy = group.y - y;
+      const distance = Math.hypot(dx, dy);
+      if (distance < GROUP_DISTANCE_THRESHOLD && nowSeconds - group.createdAt <= GROUP_MERGE_WINDOW) {
+        return group;
+      }
+    }
+    return null;
+  }
 
-    if (DEBUG_COMBAT_TEXT) {
-      console.debug('[CombatText] spawned', entry);
+  #appendToGroup(group, text, style, nowSeconds) {
+    const mergeTarget = [...group.entries].reverse().find((entry) => entry.style.mergeKey === style.mergeKey && nowSeconds - entry.time <= GROUP_MERGE_WINDOW);
+    if (mergeTarget && this.#canMergeTextValue(mergeTarget.text, text)) {
+      mergeTarget.text = this.#mergeNumericText(mergeTarget.text, text, style.type === 'gold');
+      mergeTarget.time = nowSeconds;
+      mergeTarget.style = style;
+      return;
     }
 
-    this.nextId += 1;
+    group.entries.push(this.#createEntry(text, style, nowSeconds));
+  }
+
+  #createEntry(text, style, nowSeconds) {
+    return {
+      value: text,
+      text,
+      color: style.color,
+      time: nowSeconds,
+      style,
+    };
+  }
+
+  #canMergeTextValue(previousText, nextText) {
+    return Number.isFinite(this.#parseNumericText(previousText)) && Number.isFinite(this.#parseNumericText(nextText));
+  }
+
+  #mergeNumericText(previousText, nextText, isGold = false) {
+    const total = this.#parseNumericText(previousText) + this.#parseNumericText(nextText);
+    if (isGold) return `+${total}$`;
+    return previousText.endsWith('!') || nextText.endsWith('!') ? `${total}!` : `${total}`;
+  }
+
+  #parseNumericText(text) {
+    const match = String(text ?? '').match(/-?\d+/);
+    return match ? Number.parseInt(match[0], 10) : Number.NaN;
+  }
+
+  #randomJitter(range) {
+    return (Math.random() * (range * 2)) - range;
   }
 }
