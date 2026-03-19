@@ -522,13 +522,13 @@ body {
 .spell-crafting-window {
   width: 100%;
   border: 2px solid var(--panel-border);
-  background: var(--panel);
-  padding: 10px;
+  background: linear-gradient(180deg, rgba(16, 21, 34, 0.96), rgba(10, 13, 21, 0.96));
+  padding: 12px;
   box-sizing: border-box;
 }
 
 .spell-crafting-header {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .spell-crafting-header h3 {
@@ -537,60 +537,79 @@ body {
 
 .spell-crafting-header p {
   margin: 0;
+  color: rgba(232, 240, 255, 0.78);
 }
 
 .spell-crafting-layout {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 0.9fr) minmax(0, 1.2fr);
+  gap: 12px;
+}
+
+.spell-crafting-layout.charging .craft-result-banner,
+.spell-crafting-layout.charging .craft-result-card {
+  box-shadow: 0 0 0 1px rgba(255, 200, 90, 0.4), 0 0 18px rgba(255, 170, 60, 0.18);
+}
+
+.spell-crafting-layout.revealed .craft-result-card {
+  animation: craftRevealPulse 0.45s ease-out;
 }
 
 .craft-section {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
-  padding: 8px;
+  padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
 }
 
-.craft-section h4 {
+.craft-section h4,
+.craft-section h6,
+.craft-result-card h5 {
   margin: 0;
-  font-size: 13px;
 }
 
-.craft-section--summary {
-  grid-column: span 2;
+.craft-section-copy,
+.craft-muted,
+.craft-result-summary p,
+.craft-result-banner span {
+  margin: 0;
+  color: rgba(232, 240, 255, 0.72);
+}
+
+.craft-section--summary,
+.craft-section--result {
+  grid-column: span 3;
 }
 
 .craft-option-list {
   display: grid;
-  gap: 6px;
-}
-
-.craft-option-list--compact {
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-}
-
-.craft-option-list--scroll {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  max-height: 180px;
-  overflow-y: auto;
+  gap: 8px;
 }
 
 .craft-option-button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
-  padding: 8px;
+  padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(0, 0, 0, 0.18);
   color: var(--text);
   text-align: left;
   cursor: pointer;
+}
+
+.craft-option-button span,
+.craft-option-button small {
+  display: block;
+}
+
+.craft-option-button small {
+  color: rgba(232, 240, 255, 0.65);
 }
 
 .craft-option-button.selected {
@@ -599,39 +618,26 @@ body {
   color: #eef6ff;
 }
 
-.craft-option-button--component {
-  align-items: flex-start;
-}
-
-.craft-cost-chip {
-  font-size: 11px;
-  color: #e7c977;
-  flex-shrink: 0;
-}
-
-.craft-cost-summary {
-  margin: 0;
-  padding: 8px;
+.craft-result-banner,
+.craft-result-card {
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  background: rgba(7, 11, 20, 0.72);
+  padding: 10px;
 }
 
-.craft-cost-summary.over-limit {
-  border-color: rgba(255, 120, 120, 0.55);
-  background: rgba(255, 120, 120, 0.08);
-}
-
-.craft-cost-summary p {
-  margin: 2px 0;
+.craft-result-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .craft-button {
   width: 100%;
-  background: #1a2a3d;
+  background: linear-gradient(180deg, #274160, #1a2a3d);
   color: var(--text);
   border: 1px solid var(--panel-border);
-  padding: 8px;
+  padding: 10px;
   cursor: pointer;
 }
 
@@ -653,12 +659,121 @@ body {
   color: #ff9e9e;
 }
 
+.craft-feedback.info {
+  color: #ffe092;
+}
+
+.craft-result-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.craft-result-label {
+  margin: 0 0 4px;
+  color: rgba(232, 240, 255, 0.7);
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.craft-result-tags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.craft-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(144, 182, 255, 0.16);
+  border: 1px solid rgba(144, 182, 255, 0.24);
+  font-size: 11px;
+}
+
+.craft-tag--rarity {
+  margin-left: 8px;
+}
+
+.craft-result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.craft-effect-list,
+.craft-stat-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.craft-effect-list li,
+.craft-stat-row {
+  margin-bottom: 6px;
+}
+
+.craft-stat-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.craft-stat-row strong {
+  white-space: nowrap;
+}
+
+.craft-stat-row.positive strong {
+  color: #8ef7ad;
+}
+
+.craft-stat-row.negative strong {
+  color: #ff9e9e;
+}
+
+.craft-stat-row.neutral strong {
+  color: rgba(232, 240, 255, 0.88);
+}
+
+.spellbook-crafted-summary {
+  color: rgba(232, 240, 255, 0.78);
+}
+
+@keyframes craftRevealPulse {
+  0% {
+    transform: scale(0.985);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 18px rgba(142, 197, 255, 0.12);
+  }
+}
+
 @media (max-width: 900px) {
   .spell-crafting-layout {
     grid-template-columns: 1fr;
   }
 
-  .craft-section--summary {
+  .craft-section--summary,
+  .craft-section--result {
     grid-column: span 1;
+  }
+
+  .craft-result-grid,
+  .craft-result-heading {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .craft-result-tags {
+    justify-content: flex-start;
   }
 }

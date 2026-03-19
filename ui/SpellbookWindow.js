@@ -145,10 +145,15 @@ export class SpellbookWindow {
       if (Number.isFinite(selected.damage)) stats.push(`Damage: ${selected.damage}`);
       if (Number.isFinite(selected.cooldown)) stats.push(`Cooldown: ${selected.cooldown}s`);
       if (Number.isFinite(selected.range)) stats.push(`Range: ${selected.range}`);
+      if (selected.crafted) stats.push(`Profile: ${selected.profile?.name ?? 'Unknown'}`);
+      const effectSummary = selected.crafted
+        ? `Guaranteed: ${(selected.guaranteedEffects ?? []).map((effect) => effect.label).join(', ') || 'None'} • Bonus: ${(selected.bonusEffects ?? []).map((effect) => effect.label).join(', ') || 'None'}`
+        : '';
       right.innerHTML = `
         <div class="spellbook-details-icon">${selected.icon ?? '?'}</div>
         <h4>${selected.name}</h4>
         <p>${selected.description ?? ''}</p>
+        ${effectSummary ? `<p class="spellbook-crafted-summary">${effectSummary}</p>` : ''}
         <ul>${stats.map((s) => `<li>${s}</li>`).join('')}</ul>
       `;
     }

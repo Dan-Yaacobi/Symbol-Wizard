@@ -1,6 +1,5 @@
-import { CraftingOptions, getCraftableBaseSpellIds } from '../data/CraftingOptions.js';
-import { SpellRegistry } from '../data/spells.js';
-import { craftSpell, calculateSpellCost } from '../systems/spells/SpellCrafting.js';
+import { CraftingOptions } from '../data/CraftingOptions.js';
+import { craftSpell } from '../systems/spells/SpellCrafting.js';
 
 function toLabel(value) {
   return String(value)
@@ -9,19 +8,24 @@ function toLabel(value) {
     .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
-function buildCraftedSpellId(base, element, components) {
-  const sortedComponents = [...components].sort();
-  const elementToken = element || 'none';
-  const componentToken = sortedComponents.length > 0 ? sortedComponents.join('-') : 'none';
-  return `${base}__${elementToken}__${componentToken}`;
+function formatStatValue(value) {
+  if (!Number.isFinite(value)) return '—';
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.00$/, '');
 }
 
-function buildCraftedSpellName(baseSpellName, element, components) {
-  const tags = [];
-  if (element) tags.push(toLabel(element));
-  if (components.length > 0) tags.push(components.map(toLabel).join(', '));
-  if (tags.length === 0) return baseSpellName;
-  return `${baseSpellName} [${tags.join(' • ')}]`;
+function buildStatMarkup(label, baseValue, finalValue) {
+  const deltaClass = finalValue > baseValue ? 'positive' : (finalValue < baseValue ? 'negative' : 'neutral');
+  return `
+    <li class="craft-stat-row ${deltaClass}">
+      <span>${label}</span>
+      <strong>${formatStatValue(baseValue)} → ${formatStatValue(finalValue)}</strong>
+    </li>
+  `;
+}
+
+function effectMarkup(effect) {
+  const rarity = effect.rarity ? `<span class="craft-tag craft-tag--rarity">${toLabel(effect.rarity)}</span>` : '';
+  return `<li><span>${effect.label ?? toLabel(effect.type)}</span>${rarity}</li>`;
 }
 
 export class SpellCraftingWindow {
@@ -29,39 +33,30 @@ export class SpellCraftingWindow {
     this.root = root;
     this.spellbook = spellbook;
     this.onCrafted = onCrafted;
-
-    this.selectedBehavior = '';
-    this.selectedBase = '';
-    this.selectedElement = '';
-    this.selectedComponents = [];
+    this.visible = false;
     this.feedback = '';
     this.feedbackType = '';
-    this.visible = false;
+    this.craftState = 'idle';
+    this.activeCraftToken = 0;
+    this.lastCraftedSpell = null;
 
-    this.allowedBehaviors = [...CraftingOptions.behaviors];
-    this.allowedBases = getCraftableBaseSpellIds();
-    this.allowedElements = [...CraftingOptions.elements];
-    this.allowedComponents = [...CraftingOptions.components];
+    this.recipes = [...CraftingOptions.recipes];
+    this.selectedRecipeId = this.recipes[0]?.id ?? '';
+    this.selectedElement = this.getSelectedRecipe()?.validElements?.[0] ?? '';
 
     this.el = document.createElement('section');
     this.el.className = 'spell-crafting-window hidden';
     this.root.appendChild(this.el);
-
-    this.selectedBehavior = this.allowedBehaviors[0] ?? '';
-    this.selectedBase = this.getVisibleBases()[0] ?? '';
   }
 
-  getVisibleBases() {
-    const visibleBases = getCraftableBaseSpellIds(this.selectedBehavior || null);
-    if (visibleBases.length > 0) return visibleBases;
-    return [...this.allowedBases];
+  getSelectedRecipe() {
+    return this.recipes.find((recipe) => recipe.id === this.selectedRecipeId) ?? null;
   }
 
-  ensureValidBaseSelection() {
-    const visibleBases = this.getVisibleBases();
-    if (visibleBases.includes(this.selectedBase)) return visibleBases;
-    this.selectedBase = visibleBases[0] ?? '';
-    return visibleBases;
+  getSelectedElement() {
+    const recipe = this.getSelectedRecipe();
+    if (!recipe) return '';
+    return recipe.validElements.includes(this.selectedElement) ? this.selectedElement : (recipe.validElements[0] ?? '');
   }
 
   isOpen() {
@@ -95,92 +90,59 @@ export class SpellCraftingWindow {
     this.feedbackType = type;
   }
 
-  getCostSummary() {
-    if (!this.selectedBase) {
-      return { totalCost: 0, maxCost: 0, withinLimit: false, breakdown: { base: 0, element: 0, components: [] } };
-    }
-
-    try {
-      return calculateSpellCost({
-        base: this.selectedBase,
-        element: this.selectedElement || null,
-        components: this.selectedComponents,
-      });
-    } catch {
-      return { totalCost: 0, maxCost: 0, withinLimit: false, breakdown: { base: 0, element: 0, components: [] } };
-    }
+  selectRecipe(recipeId) {
+    const recipe = this.recipes.find((entry) => entry.id === recipeId);
+    if (!recipe) return;
+    this.selectedRecipeId = recipe.id;
+    this.selectedElement = recipe.validElements[0] ?? '';
+    this.render();
   }
 
-  toggleComponent(componentId) {
-    if (!this.allowedComponents.includes(componentId)) return;
-
-    if (this.selectedComponents.includes(componentId)) {
-      this.selectedComponents = this.selectedComponents.filter((id) => id !== componentId);
-      return;
-    }
-
-    this.selectedComponents = [...this.selectedComponents, componentId];
-  }
-
-  validateSelection() {
-    if (!this.selectedBase || !this.allowedBases.includes(this.selectedBase)) {
-      return { valid: false, message: 'Select a valid base spell.' };
-    }
-
-    if (this.selectedElement && !this.allowedElements.includes(this.selectedElement)) {
-      return { valid: false, message: 'Selected element is invalid.' };
-    }
-
-    const hasInvalidComponent = this.selectedComponents.some((component) => !this.allowedComponents.includes(component));
-    if (hasInvalidComponent) {
-      return { valid: false, message: 'One or more selected components are invalid.' };
-    }
-
-    this.ensureValidBaseSelection();
-    const costSummary = this.getCostSummary();
-    if (!costSummary.withinLimit) {
-      return { valid: false, message: `Spell exceeds crafting limit (${costSummary.totalCost}/${costSummary.maxCost}).` };
-    }
-
-    return { valid: true, message: 'ok' };
-  }
-
-  onCraftClick() {
-    const selectionCheck = this.validateSelection();
-    if (!selectionCheck.valid) {
-      this.setFeedback(selectionCheck.message, 'error');
+  async onCraftClick() {
+    const recipe = this.getSelectedRecipe();
+    if (!recipe) {
+      this.setFeedback('Choose a valid recipe.', 'error');
       this.render();
       return;
     }
 
-    try {
-      const spell = craftSpell({
-        base: this.selectedBase,
-        element: this.selectedElement || null,
-        components: this.selectedComponents,
-      });
+    const craftToken = ++this.activeCraftToken;
+    this.craftState = 'charging';
+    this.setFeedback(`Channeling ${recipe.name}...`, 'info');
+    this.render();
 
-      const craftedSpell = {
-        ...spell,
-        id: buildCraftedSpellId(this.selectedBase, this.selectedElement || null, this.selectedComponents),
-        name: buildCraftedSpellName(spell.name, this.selectedElement || null, this.selectedComponents),
-      };
+    await new Promise((resolve) => window.setTimeout(resolve, 220));
+    if (craftToken !== this.activeCraftToken) return;
+
+    try {
+      const craftedSpell = craftSpell({
+        recipeId: recipe.id,
+        element: this.getSelectedElement(),
+      });
 
       const added = this.onCrafted?.(craftedSpell);
       if (!added) {
-        this.setFeedback('Craft failed: spell already exists.', 'error');
+        this.craftState = 'idle';
+        this.setFeedback('Craft failed: spell could not be added to the spellbook.', 'error');
         this.render();
         return;
       }
 
-      this.setFeedback('Spell Crafted', 'success');
-      this.selectedElement = '';
-      this.selectedComponents = [];
-
+      this.lastCraftedSpell = craftedSpell;
+      this.craftState = 'revealed';
+      this.setFeedback(`Crafted ${craftedSpell.name}.`, 'success');
       this.spellbook?.render?.();
       this.render();
+
+      window.setTimeout(() => {
+        if (this.craftState === 'revealed') {
+          this.craftState = 'idle';
+          this.render();
+        }
+      }, 520);
     } catch (error) {
       console.info('[SpellCraftingWindow] Craft failed.', error);
+      this.craftState = 'idle';
       this.setFeedback(error instanceof Error ? error.message : 'Craft failed.', 'error');
       this.render();
     }
@@ -189,119 +151,103 @@ export class SpellCraftingWindow {
   render() {
     if (!this.visible) return;
 
-    const visibleBases = this.ensureValidBaseSelection();
-    const costSummary = this.getCostSummary();
-    const craftDisabled = !costSummary.withinLimit;
-    const baseCost = costSummary.breakdown.base ?? 0;
+    const recipe = this.getSelectedRecipe();
+    const selectedElement = this.getSelectedElement();
+    const canCraft = Boolean(recipe) && this.craftState !== 'charging';
+    const result = this.lastCraftedSpell;
+    const identityStats = result
+      ? Object.entries(result.finalStats)
+        .map(([key, finalValue]) => buildStatMarkup(toLabel(key), result.baseStats[key], finalValue))
+        .join('')
+      : '<li class="craft-stat-row neutral"><span>No craft rolled yet</span><strong>Craft to reveal stats</strong></li>';
 
-    const behaviorMarkup = this.allowedBehaviors
-      .map((behaviorId) => {
-        const selected = this.selectedBehavior === behaviorId;
-        return `
-          <button type="button" class="craft-option-button ${selected ? 'selected' : ''}" data-behavior="${behaviorId}">
-            <span>${toLabel(behaviorId)}</span>
-          </button>
-        `;
-      })
+    const recipeMarkup = this.recipes
+      .map((entry) => `
+        <button type="button" class="craft-option-button ${entry.id === this.selectedRecipeId ? 'selected' : ''}" data-recipe="${entry.id}">
+          <span>${entry.name}</span>
+          <small>${toLabel(entry.behavior)}</small>
+        </button>
+      `)
       .join('');
 
-    const baseMarkup = visibleBases
-      .map((baseId) => {
-        const selected = this.selectedBase === baseId;
-        return `
-          <button type="button" class="craft-option-button ${selected ? 'selected' : ''}" data-base="${baseId}">
-            <span>${SpellRegistry[baseId]?.name ?? toLabel(baseId)}</span>
-            <strong class="craft-cost-chip">${selected ? `+${baseCost}` : `+${calculateSpellCost({ base: baseId, element: null, components: [] }).breakdown.base}`}</strong>
-          </button>
-        `;
-      })
+    const elementMarkup = (recipe?.validElements ?? [])
+      .map((element) => `
+        <button type="button" class="craft-option-button ${element === selectedElement ? 'selected' : ''}" data-element="${element}">
+          <span>${toLabel(element)}</span>
+          <small>${recipe.validElements.length === 1 ? 'Fixed' : 'Valid'}</small>
+        </button>
+      `)
       .join('');
 
-    const elementMarkup = this.allowedElements
-      .map((element) => {
-        const selected = this.selectedElement === element;
-        const elementCost = calculateSpellCost({ base: this.selectedBase || this.allowedBases[0], element, components: [] }).breakdown.element;
-        return `
-          <button type="button" class="craft-option-button ${selected ? 'selected' : ''}" data-element="${element}">
-            <span>${toLabel(element)}</span>
-            <strong class="craft-cost-chip">+${elementCost}</strong>
-          </button>
-        `;
-      })
-      .join('');
-
-    const componentMarkup = this.allowedComponents
-      .map((componentId) => {
-        const selected = this.selectedComponents.includes(componentId);
-        const componentCost = calculateSpellCost({ base: this.selectedBase || this.allowedBases[0], element: null, components: [componentId] }).breakdown.components[0]?.cost ?? 0;
-        return `
-          <button type="button" class="craft-option-button craft-option-button--component ${selected ? 'selected' : ''}" data-component="${componentId}" aria-pressed="${selected}">
-            <span>${toLabel(componentId)}</span>
-            <strong class="craft-cost-chip">+${componentCost}</strong>
-          </button>
-        `;
-      })
-      .join('');
+    const guaranteedEffects = result?.guaranteedEffects?.map(effectMarkup).join('') ?? '<li><span>Recipe identity effect will appear here.</span></li>';
+    const bonusEffects = result?.bonusEffects?.length
+      ? result.bonusEffects.map(effectMarkup).join('')
+      : '<li><span>No bonus effects rolled.</span></li>';
 
     this.el.innerHTML = `
       <header class="spell-crafting-header">
         <h3>Spell Crafting</h3>
-        <p>C to close • Crafting pauses movement and casting</p>
+        <p>C to close • Fixed recipes with controlled randomness</p>
       </header>
-      <div class="spell-crafting-layout">
+      <div class="spell-crafting-layout spell-crafting-layout--overhauled ${this.craftState}">
         <section class="craft-section">
-          <h4>1. Behavior Selection</h4>
-          <div class="craft-option-list craft-option-list--compact">
-            ${behaviorMarkup}
-          </div>
+          <h4>1. Recipe Selection</h4>
+          <p class="craft-section-copy">Pick the spell archetype. Identity stays fixed; the roll shapes the stats and bonus effects.</p>
+          <div class="craft-option-list">${recipeMarkup}</div>
         </section>
         <section class="craft-section">
-          <h4>2. Base Spell Selection</h4>
-          <div class="craft-option-list craft-option-list--compact">
-            ${baseMarkup}
-          </div>
-        </section>
-        <section class="craft-section">
-          <h4>3. Element Selection</h4>
-          <div class="craft-option-list craft-option-list--compact">
-            <button type="button" class="craft-option-button ${this.selectedElement === '' ? 'selected' : ''}" data-element="">
-              <span>None</span>
-              <strong class="craft-cost-chip">+0</strong>
-            </button>
-            ${elementMarkup}
-          </div>
-        </section>
-        <section class="craft-section">
-          <h4>4. Component List</h4>
-          <div class="craft-option-list craft-option-list--scroll">
-            ${componentMarkup}
-          </div>
+          <h4>2. Element Selection</h4>
+          <p class="craft-section-copy">Choose from this recipe's valid element set.</p>
+          <div class="craft-option-list">${elementMarkup || '<p class="craft-muted">No elements available.</p>'}</div>
         </section>
         <section class="craft-section craft-section--summary">
-          <h4>5. Craft Button</h4>
-          <div class="craft-cost-summary ${costSummary.withinLimit ? '' : 'over-limit'}">
-            <p><strong>Cost:</strong> ${costSummary.totalCost} / ${costSummary.maxCost}</p>
-            <p><strong>Selected:</strong> base ${costSummary.breakdown.base}, element ${costSummary.breakdown.element}, components ${costSummary.breakdown.components.map((part) => `${toLabel(part.id)} +${part.cost}`).join(', ') || 'none'}</p>
+          <h4>3. Craft Action</h4>
+          <div class="craft-result-banner ${this.craftState}">
+            <strong>${recipe?.name ?? 'No Recipe Selected'}</strong>
+            <span>${recipe?.craftingSummary ?? 'Select a recipe to begin.'}</span>
           </div>
-          <button type="button" class="craft-button" ${craftDisabled ? 'disabled' : ''}>CRAFT</button>
-          <p class="craft-feedback ${this.feedbackType} ${costSummary.withinLimit ? '' : 'error'}">${this.feedback || (!costSummary.withinLimit ? `Spell exceeds crafting limit (${costSummary.totalCost}/${costSummary.maxCost}).` : '')}</p>
+          <button type="button" class="craft-button" ${canCraft ? '' : 'disabled'}>${this.craftState === 'charging' ? 'CRAFTING…' : 'CRAFT SPELL'}</button>
+          <p class="craft-feedback ${this.feedbackType}">${this.feedback || 'Crafting is immediate and repeatable. No resources are consumed in this prototype pass.'}</p>
+        </section>
+        <section class="craft-section craft-section--result">
+          <h4>4. Result Preview</h4>
+          <div class="craft-result-card ${result ? 'is-ready' : ''}">
+            <div class="craft-result-heading">
+              <div>
+                <p class="craft-result-label">Spell Identity</p>
+                <h5>${result?.name ?? recipe?.name ?? 'Awaiting Craft'}</h5>
+              </div>
+              <div class="craft-result-tags">
+                <span class="craft-tag">${toLabel(result?.recipeId ?? recipe?.id ?? 'recipe')}</span>
+                <span class="craft-tag">${toLabel(result?.element ?? (selectedElement || 'element'))}</span>
+                <span class="craft-tag">${result?.profile?.name ?? 'Profile Pending'}</span>
+              </div>
+            </div>
+            <div class="craft-result-grid">
+              <section>
+                <h6>Guaranteed Effects</h6>
+                <ul class="craft-effect-list">${guaranteedEffects}</ul>
+              </section>
+              <section>
+                <h6>Bonus Effects</h6>
+                <ul class="craft-effect-list">${bonusEffects}</ul>
+              </section>
+            </div>
+            <section>
+              <h6>Stat Roll Breakdown</h6>
+              <ul class="craft-stat-list">${identityStats}</ul>
+            </section>
+            <section class="craft-result-summary">
+              <h6>Roll Readout</h6>
+              <p>${result?.profile?.summary ?? 'The rolled profile summary will appear after crafting.'}</p>
+            </section>
+          </div>
         </section>
       </div>
     `;
 
-    this.el.querySelectorAll('[data-behavior]').forEach((button) => {
-      button.addEventListener('click', () => {
-        this.selectedBehavior = button.dataset.behavior ?? '';
-        this.selectedBase = this.getVisibleBases()[0] ?? '';
-        this.render();
-      });
-    });
-
-    this.el.querySelectorAll('[data-base]').forEach((button) => {
-      button.addEventListener('click', () => {
-        this.selectedBase = button.dataset.base ?? '';
-        this.render();
-      });
+    this.el.querySelectorAll('[data-recipe]').forEach((button) => {
+      button.addEventListener('click', () => this.selectRecipe(button.dataset.recipe ?? ''));
     });
 
     this.el.querySelectorAll('[data-element]').forEach((button) => {
@@ -311,15 +257,8 @@ export class SpellCraftingWindow {
       });
     });
 
-    this.el.querySelectorAll('[data-component]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const componentId = button.dataset.component;
-        if (!componentId) return;
-        this.toggleComponent(componentId);
-        this.render();
-      });
+    this.el.querySelector('.craft-button')?.addEventListener('click', () => {
+      void this.onCraftClick();
     });
-
-    this.el.querySelector('.craft-button')?.addEventListener('click', () => this.onCraftClick());
   }
 }
