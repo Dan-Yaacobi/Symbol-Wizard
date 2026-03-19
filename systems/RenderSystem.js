@@ -1,4 +1,5 @@
 import { getSpriteFrame, palette } from '../entities/SpriteLibrary.js';
+import { getItemDefinition } from '../data/ItemRegistry.js';
 import { glyphDensity, renderLayers, toRenderCell, toSafeGlyph, visualPalette, visualTheme } from '../data/VisualTheme.js';
 
 function getEntitySprite(entity) {
@@ -389,6 +390,17 @@ function drawWorldObject(renderer, camera, object, overrideTiles = null) {
 }
 
 
+
+function drawWorldDrop(renderer, camera, drop) {
+  const item = getItemDefinition(drop?.itemId);
+  const glyph = item?.icon ?? '*';
+  const fg = item?.type === 'rare' ? '#ffe07d' : '#f5f1de';
+  const bob = Math.sin((performance.now() / 1000) * 4 + (drop?.bobPhase ?? 0)) * 0.2;
+  const screenX = Math.round(drop.x) - camera.x;
+  const screenY = Math.round((drop.y ?? 0) + bob) - camera.y;
+  drawCell(renderer, { glyph, fg, layer: renderLayers.entities }, screenX, screenY);
+}
+
 function drawDebugOverlays(renderer, camera, player, enemies, projectiles, activeRoom, debugOptions = {}) {
   if (!debugOptions?.overlaysEnabled) return;
 
@@ -520,7 +532,7 @@ function drawDebugCursorOverlay(renderer, camera, mouse) {
 
   renderer.drawCell(toRenderCell({ glyph: '+', fg: '#53f7ff', layer: renderLayers.ui }), mouse.canvasCellX, mouse.canvasCellY);
 }
-export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, combatTextSystem = null, abilityEffects = [], mouse = null, debugOptions = {}, activeRoom = null) {
+export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, worldDrops = [], combatTextSystem = null, abilityEffects = [], mouse = null, debugOptions = {}, activeRoom = null) {
   renderer.renderBackground(map, camera);
 
   for (const object of worldObjects) {
@@ -587,6 +599,8 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     }
     drawCell(renderer, { glyph: '$', fg: palette.gold }, gx, gy);
   }
+
+  for (const drop of worldDrops) drawWorldDrop(renderer, camera, drop);
 
   const playerColor = getEntityTintColor(player, palette.player);
   drawSprite(renderer, camera, player, playerColor);

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { Player } from '../entities/Player.js';
+import { CombatTextSystem } from '../systems/CombatTextSystem.js';
 import { getItemDefinition, ItemRegistry } from '../data/ItemRegistry.js';
 import { addItem, createInventory, ensureInventory, getItemCount, hasItem, isInventory, removeItem } from '../systems/InventorySystem.js';
 import { awardEnemyDrops } from '../systems/LootSystem.js';
@@ -20,6 +21,8 @@ function testItemRegistryContainsCraftingFeeders() {
   assert.equal(getItemDefinition('wood')?.name, 'Wood');
   assert.equal(getItemDefinition('essence')?.type, 'currency');
   assert.equal(ItemRegistry.poison_gland?.tier, 2);
+  assert.equal(ItemRegistry.ember_dust?.icon, '•');
+  assert.equal(ItemRegistry.storm_shard?.icon, '⚡');
 }
 
 function testInventoryStacksAndCountsItems() {
@@ -51,7 +54,6 @@ function testInventoryFailsWhenFull() {
   assert.equal(result.remaining, 1);
 }
 
-
 function testPlayerKeepsCanonicalInventoryShape() {
   const player = new Player(0, 0);
 
@@ -70,29 +72,39 @@ function testEnsureInventoryProvidesSafeFallback() {
   assert.deepEqual(fallback, { slots: [], maxSlots: 8 });
 }
 
-function testEnemyDropsGoDirectlyIntoInventoryAndShowFeedback() {
+function testEnemyDropsSpawnOnGroundInsteadOfDirectInventoryInsertion() {
   const player = new Player(0, 0);
-  const infoTexts = [];
-  const combatTextSystem = { spawnInfoText(entity, text) { infoTexts.push({ entity, text }); } };
 
   withMockedRandom([0.0, 0.6, 0.9], () => {
-    const result = awardEnemyDrops(player, { enemyType: 'spider' }, combatTextSystem);
-    assert.deepEqual(result.added, [
-      { itemId: 'essence', quantity: 2 },
+    const result = awardEnemyDrops(player, { enemyType: 'spider', x: 12, y: 18 });
+    assert.deepEqual(result.added, []);
+    assert.deepEqual(result.rejected, []);
+    assert.deepEqual(result.drops, [
+      { type: 'item', itemId: 'essence', quantity: 2, x: 12, y: 18 },
     ]);
   });
 
-  withMockedRandom([0.0, 0.2, 0.0, 0.0], () => {
-    const result = awardEnemyDrops(player, { enemyType: 'spider' }, combatTextSystem);
-    assert.deepEqual(result.added, [
-      { itemId: 'essence', quantity: 1 },
-      { itemId: 'spider_eye', quantity: 1 },
-    ]);
-  });
+  assert.equal(getItemCount(player.inventory, 'essence'), 0);
+}
 
-  assert.equal(getItemCount(player.inventory, 'essence'), 3);
-  assert.equal(getItemCount(player.inventory, 'spider_eye'), 1);
-  assert.deepEqual(infoTexts.map((entry) => entry.text), ['+2 Essence', '+1 Essence', '+1 Spider Eye']);
+function testPickupCombatTextMergesNearbyItemBursts() {
+  const combatTextSystem = new CombatTextSystem();
+
+  combatTextSystem.spawnPickupText('stone', 2, 10);
+  combatTextSystem.spawnPickupText('stone', 3, 10.2);
+  combatTextSystem.spawnPickupText('ember_dust', 1, 10.25);
+
+  assert.equal(combatTextSystem.pickupStack.length, 2);
+  assert.deepEqual(
+    combatTextSystem.pickupStack.map(({ itemId, quantity }) => ({ itemId, quantity })),
+    [
+      { itemId: 'stone', quantity: 5 },
+      { itemId: 'ember_dust', quantity: 1 },
+    ],
+  );
+
+  combatTextSystem.update(0.1, 12.5);
+  assert.equal(combatTextSystem.pickupStack.length, 0);
 }
 
 function run() {
@@ -101,7 +113,8 @@ function run() {
   testInventoryFailsWhenFull();
   testPlayerKeepsCanonicalInventoryShape();
   testEnsureInventoryProvidesSafeFallback();
-  testEnemyDropsGoDirectlyIntoInventoryAndShowFeedback();
+  testEnemyDropsSpawnOnGroundInsteadOfDirectInventoryInsertion();
+  testPickupCombatTextMergesNearbyItemBursts();
   console.log('Inventory and enemy drop tests passed.');
 }
 
