@@ -166,8 +166,72 @@ function buildDescription(recipe, profile, guaranteedEffects, bonusEffects) {
 
 let craftedSpellCounter = 0;
 
+function cloneRecipe(recipe) {
+  return {
+    ...recipe,
+    validElements: [...(recipe.validElements ?? [])],
+    ingredients: (recipe.ingredients ?? []).map((ingredient) => ({ ...ingredient })),
+  };
+}
+
 export function getCraftableSpellRecipes() {
-  return SPELL_CRAFT_RECIPES.map((recipe) => ({ ...recipe, validElements: [...recipe.validElements] }));
+  return SPELL_CRAFT_RECIPES.map((recipe) => cloneRecipe(recipe));
+}
+
+export function getUnlockedSpellCraftRecipes(unlockedRecipeIds = null) {
+  if (!(unlockedRecipeIds instanceof Set)) return getCraftableSpellRecipes();
+  return SPELL_CRAFT_RECIPES.filter((recipe) => unlockedRecipeIds.has(recipe.id)).map((recipe) => cloneRecipe(recipe));
+}
+
+export function getRecipeCraftingState({ recipeId, player } = {}) {
+  const recipe = getSpellCraftRecipe(recipeId);
+  if (!recipe) return { recipe: null, unlocked: false, canCraft: false, ingredients: [] };
+
+  const ingredients = (recipe.ingredients ?? []).map((ingredient) => ({
+    ...ingredient,
+    owned: typeof player?.getItemCount === 'function' ? player.getItemCount(ingredient.itemId) : 0,
+    hasEnough: typeof player?.hasItem === 'function' ? player.hasItem(ingredient.itemId, ingredient.amount) : false,
+  }));
+  const unlocked = typeof player?.hasUnlockedRecipe === 'function' ? player.hasUnlockedRecipe(recipe.id) : true;
+  return {
+    recipe: cloneRecipe(recipe),
+    unlocked,
+    canCraft: unlocked && ingredients.every((ingredient) => ingredient.hasEnough),
+    ingredients,
+  };
+}
+
+export function craftRecipeSpell({ recipeId, player, addSpell, element = null, random = Math.random } = {}) {
+  const craftingState = getRecipeCraftingState({ recipeId, player });
+  const recipe = craftingState.recipe;
+  if (!recipe) throw new Error(`Unknown spell recipe: ${String(recipeId)}`);
+  if (!craftingState.unlocked) throw new Error(`${recipe.name} is still locked.`);
+
+  const missing = craftingState.ingredients.filter((ingredient) => !ingredient.hasEnough);
+  if (missing.length > 0) {
+    const summary = missing.map((ingredient) => `${ingredient.amount - ingredient.owned} ${ingredient.itemId}`).join(', ');
+    throw new Error(`Missing ingredients: ${summary}.`);
+  }
+
+  const consumed = [];
+  for (const ingredient of recipe.ingredients ?? []) {
+    const removed = player?.removeItem?.(ingredient.itemId, ingredient.amount);
+    if (!removed) {
+      for (const entry of consumed) player?.addItem?.(entry.itemId, entry.amount);
+      throw new Error(`Failed to consume ${ingredient.itemId}.`);
+    }
+    consumed.push(ingredient);
+  }
+
+  try {
+    const craftedSpell = craftSpell({ recipeId: recipe.id, element, random });
+    const added = addSpell?.(craftedSpell);
+    if (!added) throw new Error('Craft failed: spell could not be added to the player.');
+    return craftedSpell;
+  } catch (error) {
+    for (const entry of consumed) player?.addItem?.(entry.itemId, entry.amount);
+    throw error;
+  }
 }
 
 export function craftSpell({ recipeId, element = null, random = Math.random } = {}) {

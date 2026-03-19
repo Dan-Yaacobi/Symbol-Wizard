@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { craftSpell, getCraftableSpellRecipes } from '../systems/spells/SpellCrafting.js';
+import { Player } from '../entities/Player.js';
+import { craftSpell, craftRecipeSpell, getCraftableSpellRecipes, getRecipeCraftingState } from '../systems/spells/SpellCrafting.js';
 import { castSpell } from '../systems/spells/SpellCaster.js';
 
 function sequenceRng(values) {
@@ -47,6 +48,11 @@ function testRecipesExposeFixedIdentity() {
     'Arcane Orb',
   ]);
   assert.ok(recipes.every((recipe) => recipe.validElements.length >= 1));
+  assert.deepEqual(recipes.find((recipe) => recipe.id === 'frost_beam')?.ingredients, [
+    { itemId: 'frost_core', amount: 1 },
+    { itemId: 'essence', amount: 5 },
+    { itemId: 'stone', amount: 10 },
+  ]);
 }
 
 function testCraftVariationAcrossRolls() {
@@ -113,6 +119,47 @@ function testProfileModifiersChangeStatsFromBaseToFinal() {
   assert.ok(spell.finalStats.cooldown > spell.baseStats.cooldown);
 }
 
+function testRecipeCraftingConsumesItemsAndAddsSpell() {
+  const player = new Player(0, 0);
+  player.unlockRecipe('frost_beam');
+  player.addItem('frost_core', 1);
+  player.addItem('essence', 5);
+  player.addItem('stone', 10);
+  const spells = [];
+
+  const craftedSpell = craftRecipeSpell({
+    recipeId: 'frost_beam',
+    player,
+    addSpell: (spell) => {
+      spells.push(spell);
+      return true;
+    },
+    random: sequenceRng([0.2, 0.3, 0.4, 0.5, 0.6, 0.7]),
+  });
+
+  assert.equal(craftedSpell.recipeId, 'frost_beam');
+  assert.equal(spells.length, 1);
+  assert.equal(player.hasItem('frost_core', 1), false);
+  assert.equal(player.getItemCount('essence'), 0);
+  assert.equal(player.getItemCount('stone'), 0);
+}
+
+function testRecipeCraftingStateReportsMissingIngredients() {
+  const player = new Player(0, 0);
+  player.unlockRecipe('frost_beam');
+  player.addItem('essence', 2);
+
+  const state = getRecipeCraftingState({ recipeId: 'frost_beam', player });
+
+  assert.equal(state.unlocked, true);
+  assert.equal(state.canCraft, false);
+  assert.deepEqual(state.ingredients.map(({ itemId, owned, hasEnough }) => ({ itemId, owned, hasEnough })), [
+    { itemId: 'frost_core', owned: 0, hasEnough: false },
+    { itemId: 'essence', owned: 2, hasEnough: false },
+    { itemId: 'stone', owned: 0, hasEnough: false },
+  ]);
+}
+
 function run() {
   testRecipesExposeFixedIdentity();
   testCraftVariationAcrossRolls();
@@ -120,6 +167,8 @@ function run() {
   testBonusEffectsStayWithinValidPoolAndRemainUnique();
   testCraftedSpellRemainsRuntimeCastable();
   testProfileModifiersChangeStatsFromBaseToFinal();
+  testRecipeCraftingConsumesItemsAndAddsSpell();
+  testRecipeCraftingStateReportsMissingIngredients();
   console.log('Spell crafting tests passed.');
 }
 
