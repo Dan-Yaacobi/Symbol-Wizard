@@ -395,9 +395,8 @@ function drawWorldDrop(renderer, camera, drop) {
   const item = getItemDefinition(drop?.itemId);
   const glyph = item?.icon ?? '*';
   const fg = item?.type === 'rare' ? '#ffe07d' : '#f5f1de';
-  const bob = Math.sin((performance.now() / 1000) * 4 + (drop?.bobPhase ?? 0)) * 0.2;
   const screenX = Math.round(drop.x) - camera.x;
-  const screenY = Math.round((drop.y ?? 0) + bob) - camera.y;
+  const screenY = Math.round(drop.y ?? 0) - camera.y;
   drawCell(renderer, { glyph, fg, layer: renderLayers.entities }, screenX, screenY);
 }
 
