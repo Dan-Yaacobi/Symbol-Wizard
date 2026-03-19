@@ -65,7 +65,7 @@ function buildParameters(recipe, finalStats, element) {
     parameters.duration = finalStats.duration;
   }
 
-  if (recipe.behavior === 'zone') {
+  if (['zone', 'aura', 'nova'].includes(recipe.behavior)) {
     parameters.radius = finalStats.radius;
     parameters.duration = finalStats.duration;
     parameters.tickInterval = finalStats.tickInterval;
@@ -82,8 +82,8 @@ function buildParameters(recipe, finalStats, element) {
 
 function isEffectCompatible(recipe, effect) {
   if (!effect?.type) return false;
-  if (recipe.behavior === 'zone' && ['pierce', 'bounce', 'split', 'emit_projectiles'].includes(effect.type)) return false;
-  if (recipe.behavior === 'beam' && ['pierce', 'bounce'].includes(effect.type)) return false;
+  if (['zone', 'aura', 'nova'].includes(recipe.behavior) && ['pierce', 'bounce', 'split', 'emit_projectiles'].includes(effect.type)) return false;
+  if (recipe.behavior === 'beam' && ['pierce', 'bounce', 'split'].includes(effect.type)) return false;
   return true;
 }
 

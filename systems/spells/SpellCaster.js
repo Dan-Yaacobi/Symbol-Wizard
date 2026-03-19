@@ -73,14 +73,19 @@ function dispatchSpellEvent(instance, hook, payload = {}) {
   return eventPayload;
 }
 
-function updateZoneBehavior(instance, dt, context = {}) {
-  if (instance?.base?.behavior !== 'zone') return;
+function updateAreaBehavior(instance, dt, context = {}) {
+  if (!['zone', 'aura', 'nova'].includes(instance?.base?.behavior)) return;
   const system = context?.system;
   const zoneState = instance.state?.zone;
   if (!system || !zoneState) return;
 
+  if (zoneState.followSource && zoneState.source) {
+    if (Number.isFinite(zoneState.source.x)) zoneState.x = zoneState.source.x;
+    if (Number.isFinite(zoneState.source.y)) zoneState.y = zoneState.source.y;
+  }
+
   zoneState.tickAccumulator = (zoneState.tickAccumulator ?? 0) + dt;
-  const tickInterval = Math.max(0.05, zoneState.tickInterval ?? 0.25);
+  const tickInterval = Math.max(0.05, zoneState.tickInterval ?? zoneState.tickRate ?? 0.25);
   while (zoneState.tickAccumulator >= tickInterval) {
     zoneState.tickAccumulator -= tickInterval;
     dispatchSpellEvent(instance, 'onTick', {
@@ -91,6 +96,8 @@ function updateZoneBehavior(instance, dt, context = {}) {
       system,
       sourceX: zoneState.x,
       sourceY: zoneState.y,
+      radius: zoneState.radius,
+      damage: zoneState.damage,
     });
     const targets = system.getEntitiesInRadius(zoneState.x, zoneState.y, zoneState.radius);
     for (const target of targets) {
@@ -110,6 +117,7 @@ function updateZoneBehavior(instance, dt, context = {}) {
         sourceX: zoneState.x,
         sourceY: zoneState.y,
         damage: zoneState.damage,
+        radius: zoneState.radius,
       });
     }
   }
@@ -204,15 +212,23 @@ export function updateSpellInstances(activeSpellInstances, dt, context = {}) {
     instance.state.age += dt;
     instance.state.tickTimer += dt;
 
-    updateZoneBehavior(instance, dt, context);
+    updateAreaBehavior(instance, dt, context);
     updateOrbitBehavior(instance, dt, context);
-    updateBeamBehavior(instance, dt, context);
-    if (!['zone', 'projectile'].includes(instance.base.behavior)) {
+    if (!['zone', 'aura', 'nova', 'projectile'].includes(instance.base.behavior)) {
       dispatchSpellEvent(instance, 'onTick', { ...context, dt });
     }
 
     if (instance.state.hasHit || instance.state.age >= instance.state.lifetime) {
-      dispatchSpellEvent(instance, 'onExpire', context);
+      const expireContext = { ...context };
+      if (['zone', 'aura', 'nova'].includes(instance.base.behavior) && instance.state.zone) {
+        expireContext.x = instance.state.zone.x;
+        expireContext.y = instance.state.zone.y;
+        expireContext.sourceX = instance.state.zone.x;
+        expireContext.sourceY = instance.state.zone.y;
+        expireContext.radius = instance.state.zone.radius;
+        expireContext.damage = instance.state.zone.damage;
+      }
+      dispatchSpellEvent(instance, 'onExpire', expireContext);
       activeSpellInstances.splice(i, 1);
     }
   }

@@ -18,7 +18,7 @@ function collectEffectTypes(spell) {
   ].map(normalizeEffectType).filter(Boolean));
 }
 
-const VALID_BEHAVIORS = new Set(['projectile', 'zone', 'beam', 'burst', 'summon', 'orbit', 'chain', 'nova']);
+const VALID_BEHAVIORS = new Set(['projectile', 'zone', 'beam', 'burst', 'summon', 'orbit', 'chain', 'aura', 'nova']);
 
 function validateBehaviorParameters(behavior, parameters, cost, overload) {
   if (behavior === 'projectile') {
@@ -42,8 +42,13 @@ function validateBehaviorParameters(behavior, parameters, cost, overload) {
     return { valid: false, reason: 'invalid-chain-count', message: 'Chain spells require a numeric parameters.chainCount.', cost, overload };
   }
 
-  if (behavior === 'nova' && !Number.isFinite(parameters?.count)) {
-    return { valid: false, reason: 'invalid-nova-count', message: 'Nova spells require a numeric parameters.count.', cost, overload };
+  if (['zone', 'aura', 'nova'].includes(behavior)) {
+    if (!Number.isFinite(parameters?.radius)) {
+      return { valid: false, reason: `invalid-${behavior}-radius`, message: `${behavior[0].toUpperCase()}${behavior.slice(1)} spells require a numeric parameters.radius.`, cost, overload };
+    }
+    if (!Number.isFinite(parameters?.duration)) {
+      return { valid: false, reason: `invalid-${behavior}-duration`, message: `${behavior[0].toUpperCase()}${behavior.slice(1)} spells require a numeric parameters.duration.`, cost, overload };
+    }
   }
 
   return { valid: true, reason: 'ok', message: 'ok', cost, overload };
@@ -51,10 +56,10 @@ function validateBehaviorParameters(behavior, parameters, cost, overload) {
 
 function validateCompatibility(spell, cost, overload) {
   const effects = collectEffectTypes(spell);
-  if (spell.behavior === 'zone') {
+  if (['zone', 'aura', 'nova'].includes(spell.behavior)) {
     for (const effectType of ['pierce', 'bounce', 'split', 'emit_projectiles']) {
       if (effects.has(effectType)) {
-        return { valid: false, reason: `unsupported-zone-${effectType}`, message: `Zone spells do not support ${effectType}.`, cost, overload };
+        return { valid: false, reason: `unsupported-${spell.behavior}-${effectType}`, message: `${spell.behavior[0].toUpperCase()}${spell.behavior.slice(1)} spells do not support ${effectType}.`, cost, overload };
       }
     }
   }

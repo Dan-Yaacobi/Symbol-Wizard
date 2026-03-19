@@ -13,26 +13,6 @@ const projectileSprite = [
   ],
 ];
 
-function castFireBurst({ player, system, spellLevel = 1 }) {
-  const radius = 6 + spellLevel * 0.6;
-  const damage = 4 + spellLevel * 2;
-
-  system.spawnEffect({ type: 'burst', x: player.x, y: player.y, radius, color: '#f3b178', ttl: 0.22 });
-
-  for (const enemy of system.enemies) {
-    if (!enemy.alive) continue;
-    const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-    if (dist <= radius) {
-      system.damageEnemy(enemy, damage, {
-        sourceX: player.x,
-        sourceY: player.y,
-        strongHit: true,
-        particleColor: '#ffd3a8',
-      });
-    }
-  }
-}
-
 function castBlink({ player, target, system, spellLevel = 1 }) {
   const maxRange = 8 + spellLevel * 1.5;
   const dx = target.x - player.x;
@@ -219,12 +199,25 @@ export const SpellRegistry = {
     id: 'fire-burst',
     name: 'Fire Burst',
     icon: '#',
-    description: 'Release a fiery blast around the caster.',
+    description: 'Release a fiery blast that radiates from the caster while it is active.',
+    behavior: 'aura',
+    targeting: 'self',
+    element: 'fire',
+    components: [],
+    parameters: {
+      damage: 6,
+      radius: 5.5,
+      duration: 0.45,
+      tickRate: 0.15,
+      tickInterval: 0.15,
+      color: '#f3b178',
+      hitParticleColor: '#ffd3a8',
+    },
+    cost: 20,
     damage: 6,
     range: 7,
     cooldown: 2.4,
     manaCost: 16,
-    cast: castFireBurst,
   },
   blink: {
     id: 'blink',

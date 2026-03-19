@@ -4,6 +4,7 @@ import { executeBehavior as executeBeam } from './beam.js';
 import { executeBehavior as executeChain } from './chain.js';
 import { executeBehavior as executeOrbit } from './orbit.js';
 import { executeBehavior as executeNova } from './nova.js';
+import { executeBehavior as executeAura } from './aura.js';
 
 const behaviorMap = {
   projectile: executeProjectile,
@@ -19,6 +20,7 @@ const behaviorMap = {
     return false;
   },
   orbit: executeOrbit,
+  aura: executeAura,
   nova: executeNova,
 };
 

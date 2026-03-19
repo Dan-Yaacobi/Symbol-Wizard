@@ -1,3 +1,4 @@
+import { castSpell } from '../systems/spells/SpellCaster.js';
 import { visualTheme } from './VisualTheme.js';
 
 const projectileSprite = [
@@ -49,31 +50,35 @@ function castMagicBolt({ player, target, system, abilityLevel }) {
   }
 }
 
-function castFireBurst({ player, system, abilityLevel }) {
-  const radius = 6 + abilityLevel * 0.6;
-  const damage = 4 + abilityLevel * 2;
 
-  system.spawnEffect({
-    type: 'burst',
-    x: player.x,
-    y: player.y,
-    radius,
-    color: '#f3b178',
-    ttl: 0.22,
+function castFireBurst({ player, system, abilityLevel = 1 }) {
+  const radius = 5.5 + ((abilityLevel - 1) * 0.6);
+  const damage = 6 + ((abilityLevel - 1) * 2);
+
+  return castSpell({
+    id: 'fire-burst',
+    name: 'Fire Burst',
+    description: 'Release a fiery blast that radiates from the caster while it is active.',
+    behavior: 'aura',
+    targeting: 'self',
+    element: 'fire',
+    components: [],
+    parameters: {
+      damage,
+      radius,
+      duration: 0.45,
+      tickRate: 0.15,
+      tickInterval: 0.15,
+      color: '#f3b178',
+      hitParticleColor: '#ffd3a8',
+    },
+    cost: 20,
+  }, {
+    player,
+    origin: player,
+    system,
+    activeSpellInstances: system?.activeSpellInstances,
   });
-
-  for (const enemy of system.enemies) {
-    if (!enemy.alive) continue;
-    const dist = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-    if (dist <= radius) {
-      system.damageEnemy(enemy, damage, {
-        sourceX: player.x,
-        sourceY: player.y,
-        strongHit: true,
-        particleColor: '#ffd3a8',
-      });
-    }
-  }
 }
 
 function castBlink({ player, target, system, abilityLevel }) {
