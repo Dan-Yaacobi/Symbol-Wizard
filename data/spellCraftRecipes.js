@@ -29,6 +29,10 @@ function buildProfileModifiers(modifiers) {
   return Object.freeze(modifiers);
 }
 
+function ingredient(itemId, amount) {
+  return Object.freeze({ itemId, amount });
+}
+
 export const SPELL_CRAFT_PROFILES = Object.freeze({
   fast: {
     id: 'fast',
@@ -84,6 +88,11 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     behavior: 'projectile',
     icon: '*',
     validElements: ['fire'],
+    ingredients: [
+      ingredient('fire_core', 1),
+      ingredient('essence', 4),
+      ingredient('ember_dust', 6),
+    ],
     craftingSummary: 'A direct pyromancy bolt that always scorches on impact.',
     guaranteedEffects: {
       fire: [{ type: 'status', label: 'Burn', statusType: 'burn', duration: 2.4 }],
@@ -123,6 +132,11 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     behavior: 'beam',
     icon: '|',
     validElements: ['frost'],
+    ingredients: [
+      ingredient('frost_core', 1),
+      ingredient('essence', 5),
+      ingredient('stone', 10),
+    ],
     craftingSummary: 'A freezing line attack that always slows whatever it touches.',
     guaranteedEffects: {
       frost: [{ type: 'status', label: 'Slow', statusType: 'slow', duration: 2.8 }],
@@ -160,6 +174,11 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     behavior: 'beam',
     icon: '|',
     validElements: ['lightning'],
+    ingredients: [
+      ingredient('lightning_core', 1),
+      ingredient('essence', 6),
+      ingredient('storm_shard', 4),
+    ],
     craftingSummary: 'A charged beam that always shocks and may arc unpredictably.',
     guaranteedEffects: {
       lightning: [{ type: 'status', label: 'Shock', statusType: 'shock', duration: 1.4 }],
@@ -197,6 +216,11 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     behavior: 'zone',
     icon: 'o',
     validElements: ['poison'],
+    ingredients: [
+      ingredient('poison_gland', 1),
+      ingredient('essence', 4),
+      ingredient('moss', 8),
+    ],
     craftingSummary: 'A toxic field that always poisons enemies caught inside.',
     guaranteedEffects: {
       poison: [{ type: 'status', label: 'Poison', statusType: 'poison', duration: 3.2 }],
@@ -234,6 +258,11 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     behavior: 'projectile',
     icon: '✦',
     validElements: ['arcane'],
+    ingredients: [
+      ingredient('arcane_shard', 1),
+      ingredient('essence', 7),
+      ingredient('crystal_dust', 5),
+    ],
     craftingSummary: 'A stable orb of raw magic that always carries unstable arcane force.',
     guaranteedEffects: {
       arcane: [{ type: 'identity', label: 'Unstable Arcana', statusType: null, duration: 0 }],

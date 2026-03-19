@@ -26,5 +26,46 @@ export class Player extends Entity {
         cast: 0.08,
       },
     });
+
+    this.inventory = new Map();
+    this.unlockedRecipes = new Set();
+  }
+
+  getItemCount(itemId) {
+    return this.inventory.get(itemId) ?? 0;
+  }
+
+  hasItem(itemId, amount = 1) {
+    return this.getItemCount(itemId) >= Math.max(0, amount);
+  }
+
+  addItem(itemId, amount = 1) {
+    const normalizedAmount = Math.max(0, Number(amount) || 0);
+    if (!itemId || normalizedAmount <= 0) return this.getItemCount(itemId);
+    const nextAmount = this.getItemCount(itemId) + normalizedAmount;
+    this.inventory.set(itemId, nextAmount);
+    return nextAmount;
+  }
+
+  removeItem(itemId, amount = 1) {
+    const normalizedAmount = Math.max(0, Number(amount) || 0);
+    if (!itemId || normalizedAmount <= 0) return true;
+    if (!this.hasItem(itemId, normalizedAmount)) return false;
+
+    const nextAmount = this.getItemCount(itemId) - normalizedAmount;
+    if (nextAmount <= 0) this.inventory.delete(itemId);
+    else this.inventory.set(itemId, nextAmount);
+    return true;
+  }
+
+  unlockRecipe(recipeId) {
+    if (!recipeId) return false;
+    const sizeBefore = this.unlockedRecipes.size;
+    this.unlockedRecipes.add(recipeId);
+    return this.unlockedRecipes.size > sizeBefore;
+  }
+
+  hasUnlockedRecipe(recipeId) {
+    return this.unlockedRecipes.has(recipeId);
   }
 }

@@ -70,6 +70,14 @@ let activeRoom = startRoom;
 let map = activeRoom.tiles;
 const player = new Player(Math.floor(ROOM_W / 2), Math.floor(ROOM_H / 2));
 player.facing = { x: 0, y: 1 };
+['fire_bolt', 'frost_beam', 'lightning_beam'].forEach((recipeId) => player.unlockRecipe(recipeId));
+player.addItem('essence', 20);
+player.addItem('stone', 20);
+player.addItem('frost_core', 2);
+player.addItem('fire_core', 2);
+player.addItem('ember_dust', 12);
+player.addItem('lightning_core', 1);
+player.addItem('storm_shard', 8);
 const enemies = [];
 let enemyAiEnabled = true;
 let applyEnemyTuningToExistingEnemies = false;
@@ -179,6 +187,7 @@ const spellbook = new SpellbookWindow({ root: uiRoot, abilitySystem, input });
 const spellCraftingWindow = new SpellCraftingWindow({
   root: uiRoot,
   spellbook,
+  player,
   onCrafted: (spell) => {
     if (!spell?.id || abilitySystem.definitions.has(spell.id)) return false;
     abilitySystem.definitions.set(spell.id, spell);
