@@ -232,8 +232,8 @@ export class SpellEffectSystem {
     if (!instance || !system) return;
 
     const behavior = instance.base?.behavior;
-    if (behavior === 'zone') {
-      console.warn(`[SpellSystem] emit_projectiles is unsupported for zone spells (spell: ${instance.base?.id ?? 'unknown'}).`);
+    if (['zone', 'aura', 'nova'].includes(behavior)) {
+      console.warn(`[SpellSystem] emit_projectiles is unsupported for area spells (spell: ${instance.base?.id ?? 'unknown'}).`);
       return;
     }
 
