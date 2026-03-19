@@ -4,6 +4,7 @@ import { applyElementModifiers, composeSpellWithElement } from './ElementSystem.
 import { getBehaviorExecutor } from './behaviors/index.js';
 import { resolveComponent } from './components/index.js';
 import { updateOrbitBehavior } from './behaviors/orbit.js';
+import { updateBeamBehavior } from './behaviors/beam.js';
 import { SpellEffectSystem } from './SpellEffectSystem.js';
 
 export function resolveTarget(context = {}) {
@@ -205,6 +206,7 @@ export function updateSpellInstances(activeSpellInstances, dt, context = {}) {
 
     updateZoneBehavior(instance, dt, context);
     updateOrbitBehavior(instance, dt, context);
+    updateBeamBehavior(instance, dt, context);
     if (!['zone', 'projectile'].includes(instance.base.behavior)) {
       dispatchSpellEvent(instance, 'onTick', { ...context, dt });
     }

@@ -237,7 +237,7 @@ export class SpellEffectSystem {
       return;
     }
 
-    const trigger = effect.trigger ?? (behavior === 'beam' ? 'onTick' : 'onCast');
+    const trigger = effect.trigger ?? (behavior === 'beam' ? 'onHit' : 'onCast');
     if (hook !== trigger) return;
 
     const timerStore = context?.projectile?.effectState?.emitTimers ?? (instance.state.emitTimers ??= {});
@@ -247,6 +247,11 @@ export class SpellEffectSystem {
       timerStore[timerKey] = (timerStore[timerKey] ?? 0) + (context.dt ?? 0);
       if (timerStore[timerKey] + 1e-9 < interval) return;
       timerStore[timerKey] = 0;
+    } else if (hook === 'onHit') {
+      const eventTime = Number.isFinite(instance.state?.age) ? instance.state.age : 0;
+      const lastEmit = timerStore[timerKey] ?? Number.NEGATIVE_INFINITY;
+      if ((eventTime - lastEmit) + 1e-9 < interval) return;
+      timerStore[timerKey] = eventTime;
     }
 
     let originX = null;
@@ -262,10 +267,10 @@ export class SpellEffectSystem {
     } else if (behavior === 'beam') {
       const beam = instance.state?.beam;
       if (!beam) return;
-      originX = beam.originX;
-      originY = beam.originY;
-      dirX = beam.dirX;
-      dirY = beam.dirY;
+      originX = Number.isFinite(context?.x) ? context.x : beam.originX;
+      originY = Number.isFinite(context?.y) ? context.y : beam.originY;
+      dirX = context?.beamBranch?.dirX ?? beam.dirX;
+      dirY = context?.beamBranch?.dirY ?? beam.dirY;
     } else {
       const cast = instance.state?.cast;
       if (!cast) return;
