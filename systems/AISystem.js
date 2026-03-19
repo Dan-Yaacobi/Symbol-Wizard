@@ -3,6 +3,10 @@ import { ENEMY_BEHAVIOR } from '../entities/Enemy.js';
 import { applyPush, attemptMoveWithCollision, resolveWallOverlap } from './EnemyCollisionSystem.js';
 
 const ENEMY_POSITION_SMOOTHING = 0.2;
+const ENEMY_VELOCITY_SMOOTHING = 0.2;
+const ENEMY_SEPARATION_RADIUS = 1.8;
+const ENEMY_SEPARATION_STRENGTH = 0.6;
+const ENEMY_PERSONAL_SPACE_PUSH = 0.2;
 
 function ensureTargetPosition(enemy) {
   if (!Number.isFinite(enemy.targetX)) enemy.targetX = enemy.x;
@@ -60,11 +64,45 @@ function applyMeleeLogic(enemy, dt, cooldownMultiplier = 1) {
 }
 
 function move(enemy, dirX, dirY, dt, speedMultiplier = 1, jitter = 0, collisionMap = null, tileSize = 1) {
+  void dt;
+  void collisionMap;
+  void tileSize;
   ensureTargetPosition(enemy);
   const len = Math.hypot(dirX, dirY) || 1;
-  enemy.vx = (dirX / len) * enemy.speed * speedMultiplier + jitter;
-  enemy.vy = (dirY / len) * enemy.speed * speedMultiplier;
+  const targetVx = (dirX / len) * enemy.speed * speedMultiplier + jitter;
+  const targetVy = (dirY / len) * enemy.speed * speedMultiplier;
+  enemy.vx += (targetVx - enemy.vx) * ENEMY_VELOCITY_SMOOTHING;
+  enemy.vy += (targetVy - enemy.vy) * ENEMY_VELOCITY_SMOOTHING;
 
+}
+
+function applyEnemySeparation(enemy, neighbors) {
+  for (const other of neighbors) {
+    if (other === enemy || !other.alive) continue;
+    const dx = enemy.targetX - other.targetX;
+    const dy = enemy.targetY - other.targetY;
+    const dist = Math.hypot(dx, dy);
+    if (dist <= 0 || dist >= ENEMY_SEPARATION_RADIUS) continue;
+    const force = (ENEMY_SEPARATION_RADIUS - dist) * ENEMY_SEPARATION_STRENGTH;
+    enemy.vx += (dx / dist) * force;
+    enemy.vy += (dy / dist) * force;
+  }
+}
+
+function applyPlayerPersonalSpace(enemy, player) {
+  if (!enemy.isAggroed || !player) return;
+  const dx = enemy.targetX - player.x;
+  const dy = enemy.targetY - player.y;
+  const distanceToPlayer = Math.hypot(dx, dy);
+  if (distanceToPlayer >= (enemy.personalSpaceDistance ?? enemy.preferredDistance ?? 2)) return;
+
+  enemy.vx *= 0.5;
+  enemy.vy *= 0.5;
+  enemy.vx += dx * ENEMY_PERSONAL_SPACE_PUSH;
+  enemy.vy += dy * ENEMY_PERSONAL_SPACE_PUSH;
+}
+
+function commitEnemyVelocity(enemy, dt, collisionMap, tileSize) {
   const nextPosition = { ...enemy, x: enemy.targetX, y: enemy.targetY };
   attemptMoveWithCollision(nextPosition, enemy.vx * dt, enemy.vy * dt, collisionMap, tileSize);
   enemy.targetX = nextPosition.x;
@@ -127,7 +165,7 @@ function createEnemyProjectile(enemy, player) {
   return projectile;
 }
 
-export function updateEnemies(enemies, player, dt, projectiles = [], config = null, collisionContext = null) {
+export function updateEnemies(enemies, player, dt, projectiles = [], config = null, collisionContext = null, effectSystemOverride = null) {
   const detectRadius = config?.get?.('enemies.detectRadius') ?? config?.get?.('enemies.aggroRange') ?? 8;
   const aggroChainRadius = config?.get?.('enemies.aggroChainRadius') ?? 8;
   const swarmAggroRadius = config?.get?.('enemies.swarmAggroRadius') ?? 10;
@@ -142,7 +180,8 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
   const flankerOffsetDistance = config?.get?.('enemies.flankerOffsetDistance') ?? 5;
   const collisionMap = collisionContext?.map ?? null;
   const tileSize = collisionContext?.tileSize ?? 1;
-  const system = collisionContext?.system ?? null;
+  const system = collisionContext?.system ?? effectSystemOverride ?? null;
+  const aggroEffectSystem = effectSystemOverride ?? null;
 
   const aliveEnemies = [];
   const newlyAggroed = [];
@@ -177,13 +216,15 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
 
     enemy.attackTimer = Math.max(0, (enemy.attackTimer ?? 0) - dt);
 
+    const targetPlayerX = player.x + (enemy.offsetX ?? 0);
+    const targetPlayerY = player.y + (enemy.offsetY ?? 0);
     const dx = player.x - enemy.targetX;
     const dy = player.y - enemy.targetY;
     const distance = Math.hypot(dx, dy);
     const enemyDetectRadius = enemy.aggroRadius ?? detectRadius;
     const wasAggroed = Boolean(enemy.isAggroed);
     const shouldDetectPlayer = distance <= enemyDetectRadius;
-    if (shouldDetectPlayer) activateEnemyAggro(enemy, player, system);
+    if (shouldDetectPlayer) activateEnemyAggro(enemy, player, aggroEffectSystem);
     enemy.isAggroed = Boolean(enemy.isAggroed || enemy.aggroLocked || shouldDetectPlayer);
     if (enemy.isAggroed && !wasAggroed) {
       if (player) enemy.target = player;
@@ -198,7 +239,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       const nx = nearby.targetX - source.targetX;
       const ny = nearby.targetY - source.targetY;
       if (Math.hypot(nx, ny) > aggroChainRadius) continue;
-      activateEnemyAggro(nearby, player, system);
+      activateEnemyAggro(nearby, player, aggroEffectSystem);
       newlyAggroed.push(nearby);
     }
   }
@@ -219,7 +260,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       const dy = other.targetY - source.targetY;
       if (Math.hypot(dx, dy) > swarmAggroRadius) continue;
 
-      activateEnemyAggro(other, player, system);
+      activateEnemyAggro(other, player, aggroEffectSystem);
       system?.spawnEffect?.({
         type: 'swarm-link',
         x: other.x,
@@ -238,11 +279,13 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
   }
 
   for (const enemy of aliveEnemies) {
-    const dx = player.x - enemy.targetX;
-    const dy = player.y - enemy.targetY;
-    const distance = Math.hypot(dx, dy);
+    const targetPlayerX = player.x + (enemy.offsetX ?? 0);
+    const targetPlayerY = player.y + (enemy.offsetY ?? 0);
+    const dx = targetPlayerX - enemy.targetX;
+    const dy = targetPlayerY - enemy.targetY;
+    const distanceToPlayer = Math.hypot(player.x - enemy.targetX, player.y - enemy.targetY);
     const attackRange = (enemy.attackRange ?? 3) * attackRangeMult;
-    const inAttackRange = distance <= attackRange;
+    const inAttackRange = distanceToPlayer <= attackRange;
 
     if (!enemy.isAggroed) {
       stopEnemy(enemy);
@@ -258,8 +301,6 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
         resetMeleeState(enemy);
         const targetRange = enemy.attackRange ?? rangedAttackRange;
         const minDistance = enemy.minShootDistance ?? targetRange * 0.6;
-        const preferredDistance = enemy.preferredDistance ?? targetRange;
-
         if (!enemy.orbitPhase) {
           enterOrbitReposition(enemy);
         }
@@ -300,8 +341,8 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
             break;
           }
           case 'reposition': {
-            const dx = player.x - enemy.targetX;
-            const dy = player.y - enemy.targetY;
+            const dx = targetPlayerX - enemy.targetX;
+            const dy = targetPlayerY - enemy.targetY;
             const distance = Math.hypot(dx, dy);
 
             // too close → run away
@@ -348,11 +389,11 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       case ENEMY_BEHAVIOR.FLANKER: {
         if (!inAttackRange) {
           resetMeleeState(enemy);
-          const angleToPlayer = Math.atan2(enemy.targetY - player.y, enemy.targetX - player.x);
+          const angleToPlayer = Math.atan2(enemy.targetY - targetPlayerY, enemy.targetX - targetPlayerX);
           enemy.flankAngleOffset = (enemy.flankAngleOffset ?? 0) + dt * (enemy.flankOrbitSpeed ?? 1.2) * (enemy.flankDirection ?? 1);
           const orbitAngle = angleToPlayer + (enemy.flankDirection ?? 1) * (Math.PI / 2) + enemy.flankAngleOffset;
-          const targetX = player.x + Math.cos(orbitAngle) * flankerOffsetDistance;
-          const targetY = player.y + Math.sin(orbitAngle) * flankerOffsetDistance;
+          const targetX = targetPlayerX + Math.cos(orbitAngle) * flankerOffsetDistance;
+          const targetY = targetPlayerY + Math.sin(orbitAngle) * flankerOffsetDistance;
           move(enemy, targetX - enemy.targetX, targetY - enemy.targetY, dt, speedMult, 0, collisionMap, tileSize);
         } else {
           applyMeleeLogic(enemy, dt, cooldownMult);
@@ -372,6 +413,9 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       }
     }
 
+    applyEnemySeparation(enemy, aliveEnemies);
+    applyPlayerPersonalSpace(enemy, player);
+    commitEnemyVelocity(enemy, dt, collisionMap, tileSize);
     interpolateEnemyPosition(enemy);
   }
 }
