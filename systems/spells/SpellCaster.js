@@ -4,6 +4,7 @@ import { applyElementModifiers, composeSpellWithElement } from './ElementSystem.
 import { getBehaviorExecutor } from './behaviors/index.js';
 import { resolveComponent } from './components/index.js';
 import { updateOrbitBehavior } from './behaviors/orbit.js';
+import { SpellEffectSystem } from './SpellEffectSystem.js';
 
 export function resolveTarget(context = {}) {
   if (context.targetPosition && Number.isFinite(context.targetPosition.x) && Number.isFinite(context.targetPosition.y)) {
@@ -64,6 +65,13 @@ function applyAugments(instance, components, runtimeContext) {
   }
 }
 
+function dispatchSpellEvent(instance, hook, payload = {}) {
+  const eventPayload = { ...payload, instance };
+  SpellEffectSystem.applyEffects(hook, eventPayload);
+  instance.handleEvent(hook, eventPayload);
+  return eventPayload;
+}
+
 function updateZoneBehavior(instance, dt, context = {}) {
   if (instance?.base?.behavior !== 'zone') return;
   const system = context?.system;
@@ -74,6 +82,15 @@ function updateZoneBehavior(instance, dt, context = {}) {
   const tickInterval = Math.max(0.05, zoneState.tickInterval ?? 0.25);
   while (zoneState.tickAccumulator >= tickInterval) {
     zoneState.tickAccumulator -= tickInterval;
+    dispatchSpellEvent(instance, 'onTick', {
+      ...context,
+      dt: tickInterval,
+      x: zoneState.x,
+      y: zoneState.y,
+      system,
+      sourceX: zoneState.x,
+      sourceY: zoneState.y,
+    });
     const targets = system.getEntitiesInRadius(zoneState.x, zoneState.y, zoneState.radius);
     for (const target of targets) {
       system.applySpellDamage(target, zoneState.damage, {
@@ -83,13 +100,15 @@ function updateZoneBehavior(instance, dt, context = {}) {
         sourceY: zoneState.y,
         hitParticleColor: instance.parameters?.hitParticleColor,
       });
-      instance.handleEvent('onTick', {
+      dispatchSpellEvent(instance, 'onHit', {
         ...context,
-        x: zoneState.x,
-        y: zoneState.y,
+        x: target.x,
+        y: target.y,
         target,
         system,
-        instance,
+        sourceX: zoneState.x,
+        sourceY: zoneState.y,
+        damage: zoneState.damage,
       });
     }
   }
@@ -143,9 +162,9 @@ export function castSpell(spellOrArray, context = {}) {
     };
 
     applyAugments(instance, components, runtimeContext);
-    instance.handleEvent('onCast', runtimeContext);
 
     applyElementModifiers(instance);
+    dispatchSpellEvent(instance, 'onCast', runtimeContext);
 
     const overrideComponents = components.filter((component) => component.type === 'override');
     let behaviorSuccess = true;
@@ -186,10 +205,12 @@ export function updateSpellInstances(activeSpellInstances, dt, context = {}) {
 
     updateZoneBehavior(instance, dt, context);
     updateOrbitBehavior(instance, dt, context);
-    if (instance.base.behavior !== 'zone') instance.handleEvent('onTick', { ...context, dt });
+    if (!['zone', 'projectile'].includes(instance.base.behavior)) {
+      dispatchSpellEvent(instance, 'onTick', { ...context, dt });
+    }
 
     if (instance.state.hasHit || instance.state.age >= instance.state.lifetime) {
-      instance.handleEvent('onExpire', context);
+      dispatchSpellEvent(instance, 'onExpire', context);
       activeSpellInstances.splice(i, 1);
     }
   }

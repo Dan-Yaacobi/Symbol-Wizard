@@ -1,3 +1,23 @@
+const LEGACY_EFFECT_MAP = Object.freeze({
+  explode_on_hit: 'explode',
+  spawn_zone_on_hit: 'zone_on_hit',
+  emit_projectiles: 'emit_projectiles',
+  pierce: 'pierce',
+});
+
+function normalizeEffectType(ref) {
+  if (typeof ref === 'string') return LEGACY_EFFECT_MAP[ref] ?? ref;
+  if (ref && typeof ref === 'object') return LEGACY_EFFECT_MAP[ref.id] ?? ref.type ?? ref.id ?? null;
+  return null;
+}
+
+function collectEffectTypes(spell) {
+  return new Set([
+    ...(Array.isArray(spell?.components) ? spell.components : []),
+    ...(Array.isArray(spell?.effects) ? spell.effects : []),
+  ].map(normalizeEffectType).filter(Boolean));
+}
+
 const VALID_BEHAVIORS = new Set(['projectile', 'zone', 'beam', 'burst', 'summon', 'orbit', 'chain', 'nova']);
 
 function validateBehaviorParameters(behavior, parameters, cost, overload) {
@@ -24,6 +44,27 @@ function validateBehaviorParameters(behavior, parameters, cost, overload) {
 
   if (behavior === 'nova' && !Number.isFinite(parameters?.count)) {
     return { valid: false, reason: 'invalid-nova-count', message: 'Nova spells require a numeric parameters.count.', cost, overload };
+  }
+
+  return { valid: true, reason: 'ok', message: 'ok', cost, overload };
+}
+
+function validateCompatibility(spell, cost, overload) {
+  const effects = collectEffectTypes(spell);
+  if (spell.behavior === 'zone') {
+    for (const effectType of ['pierce', 'bounce', 'split', 'emit_projectiles']) {
+      if (effects.has(effectType)) {
+        return { valid: false, reason: `unsupported-zone-${effectType}`, message: `Zone spells do not support ${effectType}.`, cost, overload };
+      }
+    }
+  }
+
+  if (spell.behavior === 'beam') {
+    for (const effectType of ['pierce', 'bounce', 'split']) {
+      if (effects.has(effectType)) {
+        return { valid: false, reason: `unsupported-beam-${effectType}`, message: `Beam spells do not support ${effectType}.`, cost, overload };
+      }
+    }
   }
 
   return { valid: true, reason: 'ok', message: 'ok', cost, overload };
@@ -59,5 +100,7 @@ export function validateSpell(spell) {
     return { valid: false, reason: 'invalid-parameters', message: 'Spell parameters must be an object.', cost, overload };
   }
 
-  return validateBehaviorParameters(spell.behavior, spell.parameters, cost, overload);
+  const parameterValidation = validateBehaviorParameters(spell.behavior, spell.parameters, cost, overload);
+  if (!parameterValidation.valid) return parameterValidation;
+  return validateCompatibility(spell, cost, overload);
 }

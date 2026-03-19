@@ -1,3 +1,5 @@
+import { SpellEffectSystem } from '../SpellEffectSystem.js';
+
 export function executeBehavior(instance, context) {
   const system = context?.system;
   const origin = context?.origin ?? context?.player;
@@ -14,6 +16,18 @@ export function executeBehavior(instance, context) {
   const beamLength = Number.isFinite(instance.parameters?.range) ? instance.parameters.range : length;
   const hitRadius = Number.isFinite(instance.parameters?.width) ? instance.parameters.width : 1;
   const damage = Number.isFinite(instance.parameters?.damage) ? instance.parameters.damage : 2;
+
+  instance.state.beam = {
+    originX: origin.x,
+    originY: origin.y,
+    targetX: targetPosition.x,
+    targetY: targetPosition.y,
+    dirX,
+    dirY,
+    range: beamLength,
+    width: hitRadius,
+  };
+  instance.state.cast = { originX: origin.x, originY: origin.y, dirX, dirY };
 
   system.spawnEffect({
     type: 'line',
@@ -42,13 +56,18 @@ export function executeBehavior(instance, context) {
       sourceY: origin?.y ?? target.y,
       hitParticleColor: instance.parameters?.hitParticleColor,
     });
-    instance.handleEvent('onHit', {
+    const eventPayload = {
       x: target.x,
       y: target.y,
       target,
       system,
       instance,
-    });
+      sourceX: origin.x,
+      sourceY: origin.y,
+      damage,
+    };
+    SpellEffectSystem.applyEffects('onHit', eventPayload);
+    instance.handleEvent('onHit', eventPayload);
   }
 
   return true;

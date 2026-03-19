@@ -1,21 +1,21 @@
 import assert from 'node:assert/strict';
 import { SpellEffectSystem } from '../systems/spells/SpellEffectSystem.js';
 import { createSpellInstance } from '../systems/spells/SpellInstance.js';
+import { castSpell, updateSpellInstances } from '../systems/spells/SpellCaster.js';
+import { validateSpell } from '../systems/spells/SpellValidator.js';
 
 function makeEnemy(x, y) {
-  return { x, y, hp: 20, alive: true, statusEffects: new Map(), activeStatuses: [] };
+  return { x, y, hp: 20, alive: true, statusEffects: new Map(), activeStatuses: [], radius: 1 };
 }
 
 function makeSystem(enemies = []) {
   const spawnedProjectiles = [];
-  const zones = [];
   const effects = [];
   const damageEvents = [];
   const activeSpellInstances = [];
   return {
     enemies,
     effects,
-    zones,
     activeSpellInstances,
     spawnedProjectiles,
     map: Array.from({ length: 20 }, () => Array.from({ length: 20 }, () => ({ walkable: true }))),
@@ -41,22 +41,36 @@ function makeSystem(enemies = []) {
   };
 }
 
-function buildInstance(effects) {
+function buildInstance(effects, behavior = 'projectile', parameters = {}) {
+  const baseParameters = {
+    damage: 4,
+    speed: 10,
+    ttl: 1,
+    size: 1,
+    color: '#fff',
+    duration: 0.4,
+    radius: 2,
+    tickInterval: 0.2,
+    width: 1,
+    range: 6,
+    ...parameters,
+  };
   return createSpellInstance({
     id: 'test-spell',
-    behavior: 'projectile',
+    behavior,
     components: effects,
-    parameters: { damage: 4, speed: 10, ttl: 1, size: 1, color: '#fff' },
+    parameters: baseParameters,
     cost: 1,
     cooldown: 0,
     manaCost: 0,
     name: 'Test',
+    description: 'test',
     targeting: 'cursor',
+    element: 'arcane',
   });
 }
 
 function testPierceCountDecrements() {
-  const system = makeSystem();
   const instance = buildInstance([{ id: 'pierce', count: 2 }]);
   const projectile = SpellEffectSystem.initializeProjectile({ x: 0, y: 0, dx: 1, dy: 0, damage: 4 }, instance);
   const targetA = makeEnemy(1, 0);
@@ -91,7 +105,7 @@ function testChainAvoidsRehits() {
   SpellEffectSystem.applyEffects('onHit', { system, target: a, instance, x: 0, y: 0, damage: 4 });
   assert.equal(system.damageEvents.length, 2);
   assert.deepEqual(system.damageEvents.map((entry) => entry.target), [b, c]);
- }
+}
 
 function testBounceCountDecrements() {
   const system = makeSystem();
@@ -101,7 +115,7 @@ function testBounceCountDecrements() {
   SpellEffectSystem.applyEffects('onExpire', ctx);
   assert.equal(projectile.remainingBounces, 1);
   assert.equal(ctx.preventDestroy, true);
- }
+}
 
 function testZoneOnHitSpawnsZone() {
   const system = makeSystem();
@@ -109,7 +123,7 @@ function testZoneOnHitSpawnsZone() {
   SpellEffectSystem.applyEffects('onHit', { system, instance, x: 3, y: 4 });
   assert.equal(system.activeSpellInstances.length, 1);
   assert.equal(system.activeSpellInstances[0].instance.base.behavior, 'zone');
- }
+}
 
 function testExplodeDamagesNearbyEnemies() {
   const near = makeEnemy(1, 0);
@@ -119,7 +133,146 @@ function testExplodeDamagesNearbyEnemies() {
   SpellEffectSystem.applyEffects('onHit', { system, instance, x: 0, y: 0, target: null, damage: 4 });
   assert.equal(system.damageEvents.length, 1);
   assert.equal(system.damageEvents[0].target, near);
- }
+}
+
+function testProjectileZoneOnHitAndPierceCoexist() {
+  const system = makeSystem();
+  const instance = buildInstance([{ type: 'zone_on_hit', radius: 2, duration: 1, tickInterval: 0.2, damage: 1 }, { type: 'pierce', count: 2 }]);
+  const projectile = SpellEffectSystem.initializeProjectile({ x: 0, y: 0, dx: 1, dy: 0, damage: 4 }, instance);
+  const target = makeEnemy(1, 0);
+  const ctx = { projectile, target, system, instance, x: 1, y: 0, damage: 4 };
+  SpellEffectSystem.applyEffects('onHit', ctx);
+  assert.equal(ctx.preventDestroy, true);
+  assert.equal(system.activeSpellInstances.length, 1);
+}
+
+function testBeamZoneOnHitHooksThroughRuntime() {
+  const target = makeEnemy(4, 0);
+  const system = makeSystem([target]);
+  const beamSpell = {
+    id: 'beam-zone',
+    name: 'Beam Zone',
+    description: 'test',
+    behavior: 'beam',
+    targeting: 'cursor',
+    element: 'arcane',
+    components: [],
+    effects: [{ type: 'zone_on_hit', radius: 2, duration: 1, tickInterval: 0.2, damage: 1 }],
+    parameters: { damage: 5, duration: 0.3, width: 1, range: 6, color: '#fff' },
+    cost: 1,
+    cooldown: 0,
+    manaCost: 0,
+  };
+
+  const result = castSpell(beamSpell, {
+    system,
+    player: { x: 0, y: 0, facingX: 1, facingY: 0 },
+    targetPosition: { x: 6, y: 0 },
+    activeSpellInstances: system.activeSpellInstances,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(system.damageEvents.length, 1);
+  assert.equal(system.activeSpellInstances.length, 2);
+  assert.equal(system.activeSpellInstances.some((entry) => entry.instance.base.behavior === 'zone'), true);
+}
+
+function testBeamEmitProjectilesAugmentsInsteadOfReplacing() {
+  const system = makeSystem();
+  const beamSpell = {
+    id: 'beam-emit',
+    name: 'Beam Emit',
+    description: 'test',
+    behavior: 'beam',
+    targeting: 'cursor',
+    element: 'arcane',
+    components: ['emit_projectiles'],
+    effects: [],
+    parameters: { damage: 4, duration: 0.5, width: 1, range: 6, speed: 12, ttl: 0.8, spriteFrames: ['*'] },
+    cost: 1,
+    cooldown: 0,
+    manaCost: 0,
+  };
+
+  const result = castSpell(beamSpell, {
+    system,
+    player: { x: 0, y: 0, facingX: 1, facingY: 0 },
+    targetPosition: { x: 6, y: 0 },
+    activeSpellInstances: system.activeSpellInstances,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(system.activeSpellInstances.length, 1);
+  assert.equal(system.activeSpellInstances[0].instance.base.behavior, 'beam');
+  assert.equal(system.spawnedProjectiles.length, 0);
+
+  updateSpellInstances(system.activeSpellInstances, 0.2, { system, player: { x: 0, y: 0 } });
+  assert.ok(system.spawnedProjectiles.length >= 2);
+}
+
+function testZoneZoneOnHitCanCascadeWithDepthCap() {
+  const target = makeEnemy(3, 3);
+  const system = makeSystem([target]);
+  const zoneSpell = {
+    id: 'zone-echo',
+    name: 'Zone Echo',
+    description: 'test',
+    behavior: 'zone',
+    targeting: 'cursor',
+    element: 'poison',
+    components: [],
+    effects: [{ type: 'zone_on_hit', radius: 1.5, duration: 0.5, tickInterval: 0.2, damage: 1, maxDepth: 1 }],
+    parameters: { damage: 2, duration: 0.5, radius: 2, tickInterval: 0.2, color: '#0f0' },
+    cost: 1,
+    cooldown: 0,
+    manaCost: 0,
+  };
+
+  const result = castSpell(zoneSpell, {
+    system,
+    player: { x: 0, y: 0, facingX: 1, facingY: 0 },
+    targetPosition: { x: 3, y: 3 },
+    activeSpellInstances: system.activeSpellInstances,
+  });
+  assert.equal(result.ok, true);
+  assert.equal(system.activeSpellInstances.length, 1);
+
+  updateSpellInstances(system.activeSpellInstances, 0.2, { system, player: { x: 0, y: 0 } });
+  assert.equal(system.activeSpellInstances.length, 2);
+
+  updateSpellInstances(system.activeSpellInstances, 0.2, { system, player: { x: 0, y: 0 } });
+  assert.equal(system.activeSpellInstances.length, 2);
+}
+
+function testExplicitUnsupportedCombosAreRejected() {
+  const beamSplit = validateSpell({
+    id: 'beam-split',
+    name: 'Beam Split',
+    description: 'test',
+    behavior: 'beam',
+    targeting: 'cursor',
+    element: 'arcane',
+    components: [],
+    effects: [{ type: 'split', count: 2 }],
+    parameters: { damage: 3, duration: 0.2, width: 1, range: 5 },
+    cost: 1,
+  });
+  assert.equal(beamSplit.valid, false);
+
+  const zoneEmit = validateSpell({
+    id: 'zone-emit',
+    name: 'Zone Emit',
+    description: 'test',
+    behavior: 'zone',
+    targeting: 'cursor',
+    element: 'arcane',
+    components: ['emit_projectiles'],
+    effects: [],
+    parameters: { damage: 2, duration: 0.5, radius: 2, tickInterval: 0.2 },
+    cost: 1,
+  });
+  assert.equal(zoneEmit.valid, false);
+}
 
 function run() {
   testPierceCountDecrements();
@@ -128,6 +281,11 @@ function run() {
   testBounceCountDecrements();
   testZoneOnHitSpawnsZone();
   testExplodeDamagesNearbyEnemies();
+  testProjectileZoneOnHitAndPierceCoexist();
+  testBeamZoneOnHitHooksThroughRuntime();
+  testBeamEmitProjectilesAugmentsInsteadOfReplacing();
+  testZoneZoneOnHitCanCascadeWithDepthCap();
+  testExplicitUnsupportedCombosAreRejected();
   console.log('Spell effect system tests passed.');
 }
 
