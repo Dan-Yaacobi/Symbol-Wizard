@@ -65,7 +65,7 @@ function validateCompatibility(spell, cost, overload) {
   }
 
   if (spell.behavior === 'beam') {
-    for (const effectType of ['pierce', 'bounce', 'split']) {
+    for (const effectType of ['pierce', 'bounce']) {
       if (effects.has(effectType)) {
         return { valid: false, reason: `unsupported-beam-${effectType}`, message: `Beam spells do not support ${effectType}.`, cost, overload };
       }

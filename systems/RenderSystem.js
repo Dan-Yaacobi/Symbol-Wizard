@@ -231,6 +231,47 @@ function drawAbilityEffect(renderer, camera, effect) {
     return;
   }
 
+  if (effect.type === 'beam') {
+    const branches = Array.isArray(effect.branches) && effect.branches.length > 0
+      ? effect.branches
+      : [{ fromX: effect.fromX, fromY: effect.fromY, toX: effect.toX, toY: effect.toY, width: effect.width ?? 1.5, branchIndex: 0 }];
+    const normalizedLife = effect.maxTtl > 0 ? Math.max(0, effect.ttl / effect.maxTtl) : 1;
+
+    for (const branch of branches) {
+      const dx = branch.toX - branch.fromX;
+      const dy = branch.toY - branch.fromY;
+      const distance = Math.hypot(dx, dy) || 1;
+      const steps = Math.max(4, Math.round(distance * 3));
+      const nx = -dy / distance;
+      const ny = dx / distance;
+      const width = Math.max(1, Math.round(branch.width ?? effect.width ?? 1.5));
+      const glyphs = branch.branchIndex % 2 === 0 ? ['≈', '~'] : ['*', '·'];
+
+      for (let i = 0; i <= steps; i += 1) {
+        const t = i / steps;
+        const pulse = 0.45 + Math.sin((t + normalizedLife) * Math.PI) * 0.2;
+        const x = branch.fromX + dx * t;
+        const y = branch.fromY + dy * t;
+        const coreX = Math.round(x) - camera.x;
+        const coreY = Math.round(y) - camera.y;
+
+        for (let lane = -Math.floor(width / 2); lane <= Math.floor(width / 2); lane += 1) {
+          const offsetScale = lane * 0.45;
+          const sx = Math.round(x + nx * offsetScale) - camera.x;
+          const sy = Math.round(y + ny * offsetScale) - camera.y;
+          const glyph = lane === 0 ? glyphs[0] : glyphs[1];
+          const color = lane === 0 ? (effect.glowColor ?? '#f4fbff') : (effect.color ?? '#cfe7ff');
+          drawCell(renderer, { glyph, fg: color, layer: renderLayers.effects }, sx, sy);
+        }
+
+        if (pulse > 0.5) {
+          drawCell(renderer, { glyph: '·', fg: effect.color ?? '#cfe7ff', layer: renderLayers.effects }, coreX, coreY);
+        }
+      }
+    }
+    return;
+  }
+
   if (effect.type === 'line') {
     const steps = Math.max(2, Math.round(Math.hypot(effect.toX - effect.fromX, effect.toY - effect.fromY) * 2));
     for (let i = 0; i <= steps; i += 1) {

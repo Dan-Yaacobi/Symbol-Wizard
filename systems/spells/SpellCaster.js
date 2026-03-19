@@ -4,6 +4,7 @@ import { applyElementModifiers, composeSpellWithElement } from './ElementSystem.
 import { getBehaviorExecutor } from './behaviors/index.js';
 import { resolveComponent } from './components/index.js';
 import { updateOrbitBehavior } from './behaviors/orbit.js';
+import { updateBeamBehavior } from './behaviors/beam.js';
 import { SpellEffectSystem } from './SpellEffectSystem.js';
 
 export function resolveTarget(context = {}) {
