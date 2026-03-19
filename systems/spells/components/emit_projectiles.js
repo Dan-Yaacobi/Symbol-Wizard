@@ -1,3 +1,5 @@
+import { SpellEffectSystem } from '../SpellEffectSystem.js';
+
 function clampSpreadDegrees(value) {
   if (!Number.isFinite(value)) return 30;
   return Math.max(15, Math.min(30, value));
@@ -55,6 +57,7 @@ export const emitProjectilesComponent = {
 
         if (projectile) {
           projectile.spellInstance = instance;
+          SpellEffectSystem.initializeProjectile(projectile, instance);
           spawnCount += 1;
         }
       }

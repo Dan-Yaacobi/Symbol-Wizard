@@ -1,3 +1,5 @@
+import { buildSpellEffects } from './SpellEffectSystem.js';
+
 function deepClone(value) {
   if (typeof globalThis.structuredClone === 'function') return globalThis.structuredClone(value);
   return JSON.parse(JSON.stringify(value));
@@ -5,12 +7,13 @@ function deepClone(value) {
 
 export function createSpellInstance(baseSpell) {
   const base = deepClone(baseSpell ?? {});
-  return {
+  const instance = {
     base,
     currentElement: base.element ?? null,
     components: deepClone(base.components ?? []),
     config: deepClone(base.config ?? base.parameters ?? {}),
     parameters: deepClone(base.parameters ?? {}),
+    effects: deepClone(base.effects ?? []),
 
     handleEvent(eventName, payload) {
       this.components.forEach((component) => {
@@ -29,4 +32,7 @@ export function createSpellInstance(baseSpell) {
       tickTimer: 0,
     },
   };
+
+  instance.effects = buildSpellEffects(instance);
+  return instance;
 }
