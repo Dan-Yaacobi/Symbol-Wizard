@@ -141,35 +141,36 @@ function testCombatTextSeparatesDistinctTargetsAndExpiresByGroupLifetime() {
   assert.equal(combatTextSystem.textGroups.length, 0);
 }
 
-function testPickupCombatTextUsesScatterMotionFadeAndSeparation() {
+function testPickupCombatTextUsesLaneScatterMotionFadeAndVerticalSpacing() {
   const combatTextSystem = new CombatTextSystem();
   const player = { x: 4, y: 6 };
 
-  withMockedRandom([
-    0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-    0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-  ], () => {
-    combatTextSystem.spawnPickupText(player, 'stone', 2, 10);
-    combatTextSystem.spawnPickupText(player, 'ember_dust', 1, 10.25);
+  withMockedRandom(new Array(40).fill(0.5), () => {
+    ['stone', 'ember_dust', 'essence', 'wood', 'poison_gland', 'storm_shard'].forEach((itemId, index) => {
+      combatTextSystem.spawnPickupText(player, itemId, 1, 10 + index * 0.05);
+    });
   });
 
   assert.equal(combatTextSystem.pickupStack[0].anchorX, 4);
   assert.equal(combatTextSystem.pickupStack[0].anchorY, 4);
-  assert.equal(combatTextSystem.pickupStack[0].x, 4);
+  assert.equal(combatTextSystem.pickupStack[0].lane, -2);
+  assert.equal(combatTextSystem.pickupStack[1].lane, -1);
+  assert.equal(combatTextSystem.pickupStack[4].lane, 2);
+  assert.equal(combatTextSystem.pickupStack[5].lane, -2);
+  assert.equal(combatTextSystem.pickupStack[0].x, 2.8);
   assert.equal(combatTextSystem.pickupStack[0].y, 4);
-  assert.equal(combatTextSystem.pickupStack[0].vx, 0);
-  assert.equal(Math.abs(combatTextSystem.pickupStack[0].vy + 0.6) < 1e-9, true);
+  assert.equal(combatTextSystem.pickupStack[0].vx, -0.3);
+  assert.equal(Math.abs(combatTextSystem.pickupStack[0].vy + 0.75) < 1e-9, true);
   assert.equal(combatTextSystem.pickupStack[0].style.fontScale, 1.5);
 
   combatTextSystem.update(0.5, 10.5);
 
   assert.equal(combatTextSystem.pickupStack[0].opacity > 0 && combatTextSystem.pickupStack[0].opacity < 1, true);
   assert.equal(combatTextSystem.pickupStack[0].y < 4, true);
-  assert.equal(combatTextSystem.pickupStack[0].vx, 0);
+  assert.equal(combatTextSystem.pickupStack[5].y <= combatTextSystem.pickupStack[0].y - 1, true);
 
   const dx = combatTextSystem.pickupStack[0].x - combatTextSystem.pickupStack[1].x;
-  const dy = combatTextSystem.pickupStack[0].y - combatTextSystem.pickupStack[1].y;
-  assert.equal(Math.hypot(dx, dy) > 0, true);
+  assert.equal(Math.abs(dx) > 0, true);
 }
 
 function testPickupCombatTextCapsVisibleEntries() {
@@ -198,7 +199,7 @@ function run() {
   testPickupCombatTextMergesNearbyItemBursts();
   testCombatTextGroupsStackNearbyBursts();
   testCombatTextSeparatesDistinctTargetsAndExpiresByGroupLifetime();
-  testPickupCombatTextUsesScatterMotionFadeAndSeparation();
+  testPickupCombatTextUsesLaneScatterMotionFadeAndVerticalSpacing();
   testPickupCombatTextCapsVisibleEntries();
   console.log('Inventory and enemy drop tests passed.');
 }
