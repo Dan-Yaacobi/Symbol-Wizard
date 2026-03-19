@@ -90,9 +90,10 @@ function testEnemyDropsSpawnOnGroundInsteadOfDirectInventoryInsertion() {
 function testPickupCombatTextMergesNearbyItemBursts() {
   const combatTextSystem = new CombatTextSystem();
 
-  combatTextSystem.spawnPickupText('stone', 2, 10);
-  combatTextSystem.spawnPickupText('stone', 3, 10.2);
-  combatTextSystem.spawnPickupText('ember_dust', 1, 10.25);
+  const player = { x: 4, y: 6 };
+  combatTextSystem.spawnPickupText(player, 'stone', 2, 10);
+  combatTextSystem.spawnPickupText(player, 'stone', 3, 10.2);
+  combatTextSystem.spawnPickupText(player, 'ember_dust', 1, 10.25);
 
   assert.equal(combatTextSystem.pickupStack.length, 2);
   assert.deepEqual(
@@ -103,7 +104,7 @@ function testPickupCombatTextMergesNearbyItemBursts() {
     ],
   );
 
-  combatTextSystem.update(0.1, 12.5);
+  combatTextSystem.update(0.1, 13.5);
   assert.equal(combatTextSystem.pickupStack.length, 0);
 }
 
