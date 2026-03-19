@@ -162,6 +162,7 @@ export function updateProjectiles(
 
 export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem = null, config = null) {
   for (const enemy of enemies) {
+    enemy.attackCooldownTimer = Math.max(0, (enemy.attackCooldownTimer ?? 0) - dt);
     if (!enemy.alive) continue;
     if (!enemy.isAttacking || enemy.attackDamageApplied) continue;
 
@@ -175,9 +176,15 @@ export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSys
       continue;
     }
 
+    if ((enemy.attackCooldownTimer ?? 0) > 0) {
+      enemy.attackDamageApplied = true;
+      continue;
+    }
+
     const damage = enemy.attackDamage ?? 1;
     player.hp = Math.max(0, player.hp - damage);
     combatTextSystem?.spawnDamageText(player, damage, false);
     enemy.attackDamageApplied = true;
+    enemy.attackCooldownTimer = enemy.attackRate ?? 1.2;
   }
 }
