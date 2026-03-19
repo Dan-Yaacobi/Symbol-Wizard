@@ -1,3 +1,4 @@
+import { SpellEffectSystem } from './spells/SpellEffectSystem.js';
 import { collides } from './CollisionSystem.js';
 import { applyAttackToObject, objectIntersectsCircle } from './ObjectInteractionSystem.js';
 
@@ -30,8 +31,8 @@ function triggerProjectileHit(projectile, payload) {
   const target = payload?.target ?? null;
   projectile.hitTargets ??= new Set();
 
-  if (!target && projectile.hitHandled) return;
-  if (target && projectile.hitTargets.has(target)) return;
+  if (!target && projectile.hitHandled) return { ...payload, projectile, damage: projectile.damage ?? 0, sourceX: projectile.x, sourceY: projectile.y, preventDestroy: false, skipped: true };
+  if (target && projectile.hitTargets.has(target)) return { ...payload, projectile, damage: projectile.damage ?? 0, sourceX: projectile.x, sourceY: projectile.y, preventDestroy: false, skipped: true };
 
   if (target) {
     projectile.hitTargets.add(target);
@@ -40,7 +41,10 @@ function triggerProjectileHit(projectile, payload) {
   }
 
   console.log('[PROJECTILE HIT]', payload.x, payload.y);
-  projectile.onHit?.(payload);
+  const context = { ...payload, projectile, damage: projectile.damage ?? 0, sourceX: projectile.x, sourceY: projectile.y, preventDestroy: false };
+  SpellEffectSystem.applyEffects('onHit', context);
+  projectile.onHit?.(context);
+  return context;
 }
 
 function updateProjectileTrail(projectile, dt) {
@@ -77,6 +81,7 @@ export function updateProjectiles(
 
   for (const p of projectiles) {
     updateProjectileTrail(p, dt);
+    SpellEffectSystem.applyEffects('onTick', { projectile: p, instance: p.spellInstance, system: abilitySystem, dt, x: p.x, y: p.y, damage: p.damage ?? 0 });
     const speedMult = config?.get?.('combat.projectileSpeedMultiplier') ?? 1;
     const ttlMult = config?.get?.('combat.projectileLifetimeMultiplier') ?? 1;
     p.ttl -= dt / Math.max(0.01, ttlMult);
@@ -85,22 +90,24 @@ export function updateProjectiles(
     p.radius = config?.get?.('combat.projectileCollisionRadius') ?? p.radius;
 
     if (p.ttl <= 0) {
-      triggerProjectileHit(p, { x: p.x, y: p.y, target: null, system: abilitySystem, instance: p.spellInstance });
-      deadProjectiles.add(p);
+      const hitContext = triggerProjectileHit(p, { x: p.x, y: p.y, target: null, system: abilitySystem, instance: p.spellInstance });
+      SpellEffectSystem.applyEffects('onExpire', hitContext);
+      if (!hitContext.preventDestroy) deadProjectiles.add(p);
     }
 
     const tx = Math.round(p.x);
     const ty = Math.round(p.y);
     if (!map[ty] || !map[ty][tx] || !map[ty][tx].walkable) {
-      triggerProjectileHit(p, { x: p.x, y: p.y, target: null, system: abilitySystem, instance: p.spellInstance });
-      deadProjectiles.add(p);
+      const hitContext = triggerProjectileHit(p, { x: p.x, y: p.y, target: null, system: abilitySystem, instance: p.spellInstance });
+      SpellEffectSystem.applyEffects('onExpire', hitContext);
+      if (!hitContext.preventDestroy) deadProjectiles.add(p);
     }
 
     for (const object of worldObjects) {
       if (object.destroyed || !object.attackable) continue;
       if (objectIntersectsCircle(object, p.x, p.y, p.radius ?? 0.8)) {
-        triggerProjectileHit(p, { x: p.x, y: p.y, target: object, system: abilitySystem, instance: p.spellInstance });
-        if (!p.pierce) deadProjectiles.add(p);
+        const hitContext = triggerProjectileHit(p, { x: p.x, y: p.y, target: object, system: abilitySystem, instance: p.spellInstance });
+        if (!p.pierce && !hitContext.preventDestroy) deadProjectiles.add(p);
         const result = applyAttackToObject(object, p.damage ?? 2);
         if (result.destroyed) onDestructibleDestroyed?.(object);
       }
@@ -122,15 +129,16 @@ export function updateProjectiles(
             sourceY: p.y,
             hitParticleColor: p.hitParticleColor,
           });
-          triggerProjectileHit(p, {
+          const hitContext = triggerProjectileHit(p, {
             x: p.x,
             y: p.y,
             target: enemy,
             system: abilitySystem,
             instance: p.spellInstance,
+            damage,
           });
-          if (!p.pierce) deadProjectiles.add(p);
-          if (p.pierce && Number.isFinite(p.pierceCount) && p.hitTargets?.size >= p.pierceCount) deadProjectiles.add(p);
+          if (!p.pierce && !hitContext.preventDestroy) deadProjectiles.add(p);
+          if (p.pierce && Number.isFinite(p.remainingPierce) && p.remainingPierce <= 0 && !hitContext.preventDestroy) deadProjectiles.add(p);
           if (enemy.hp <= 0) {
             enemy.alive = false;
             slain.push(enemy);
@@ -141,8 +149,8 @@ export function updateProjectiles(
       const damage = p.damage ?? 1;
       player.hp = Math.max(0, player.hp - damage);
       combatTextSystem?.spawnDamageText(player, damage, false);
-      triggerProjectileHit(p, { x: p.x, y: p.y, target: player, system: abilitySystem, instance: p.spellInstance });
-      deadProjectiles.add(p);
+      const hitContext = triggerProjectileHit(p, { x: p.x, y: p.y, target: player, system: abilitySystem, instance: p.spellInstance, damage });
+      if (!hitContext.preventDestroy) deadProjectiles.add(p);
     }
   }
 
