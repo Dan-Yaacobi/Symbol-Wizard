@@ -145,6 +145,7 @@ player.y = initialSpawn.y;
 camera.follow(player);
 let projectiles = [];
 let goldPiles = [];
+let worldDrops = [];
 const combatTextSystem = new CombatTextSystem(runtimeConfig);
 
 function triggerItemPickupFeedback(itemId, quantity) {
@@ -153,9 +154,88 @@ function triggerItemPickupFeedback(itemId, quantity) {
   soundSystem.play('item-pickup', { itemId, quantity });
 }
 
+function randomRange(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+function createWorldDrop(drop) {
+  const x = (drop?.x ?? 0) + randomRange(-1.5, 1.5);
+  const y = (drop?.y ?? 0) + randomRange(-1.5, 1.5);
+
+  return {
+    ...drop,
+    x,
+    y,
+    baseY: y,
+    vx: randomRange(-3.5, 3.5),
+    vy: randomRange(2.5, 5.25),
+    ttlBounce: 0.2,
+    bobPhase: randomRange(0, Math.PI * 2),
+    blockedPickupAt: -Infinity,
+  };
+}
+
+function updateWorldDrops(dt) {
+  const kept = [];
+  const gravity = 24;
+
+  for (const drop of worldDrops) {
+    if ((drop.ttlBounce ?? 0) > 0) {
+      drop.x += (drop.vx ?? 0) * dt;
+      drop.y -= (drop.vy ?? 0) * dt;
+      drop.vx *= Math.max(0, 1 - dt * 6);
+      drop.vy -= gravity * dt;
+      drop.ttlBounce = Math.max(0, drop.ttlBounce - dt);
+      if (drop.ttlBounce <= 0) {
+        drop.y = drop.baseY ?? drop.y;
+        drop.vx = 0;
+        drop.vy = 0;
+      }
+    }
+    kept.push(drop);
+  }
+
+  worldDrops = kept;
+}
+
+function collectWorldDrops() {
+  const kept = [];
+
+  for (const drop of worldDrops) {
+    const dx = drop.x - player.x;
+    const dy = drop.y - player.y;
+    if ((dx * dx + dy * dy) >= (1.2 * 1.2)) {
+      kept.push(drop);
+      continue;
+    }
+
+    const pickupResult = player.addItem(drop.itemId, drop.quantity);
+    const added = pickupResult?.added ?? 0;
+    const remaining = pickupResult?.remaining ?? 0;
+
+    if (added > 0) {
+      triggerItemPickupFeedback(drop.itemId, added);
+      combatTextSystem.spawnPickupText(drop.itemId, added);
+    }
+
+    if (remaining > 0) {
+      kept.push({
+        ...drop,
+        quantity: remaining,
+        blockedPickupAt: performance.now() / 1000,
+      });
+      if ((performance.now() / 1000) - (drop.blockedPickupAt ?? -Infinity) > 0.4) {
+        combatTextSystem.spawnInfoText(player, 'Inventory Full');
+      }
+    }
+  }
+
+  worldDrops = kept;
+}
+
 function handleEnemyDefeat(enemy) {
   const result = LootSystem.awardEnemyDrops(player, enemy, combatTextSystem);
-  for (const entry of result.added) triggerItemPickupFeedback(entry.itemId, entry.quantity);
+  for (const drop of result.drops) worldDrops.push(createWorldDrop(drop));
   return result;
 }
 
@@ -273,7 +353,9 @@ function resetEncounterState() {
   enemies.length = 0;
   projectiles = [];
   goldPiles = [];
+  worldDrops = [];
   combatTextSystem.combatTexts.length = 0;
+  combatTextSystem.pickupStack.length = 0;
   player.hp = player.maxHp;
   const spawn = resolveValidRoomSpawn(activeRoom, { x: player.x, y: player.y });
   player.x = spawn.x;
@@ -302,7 +384,9 @@ function regenerateWorld(seed = null) {
   npcs.length = 0;
   projectiles = [];
   goldPiles = [];
+  worldDrops = [];
   combatTextSystem.combatTexts.length = 0;
+  combatTextSystem.pickupStack.length = 0;
   abilitySystem.effects.length = 0;
   abilitySystem.activeFreeze = null;
 
@@ -718,6 +802,7 @@ if (diagMinimalMode) {
   enemies.length = 0;
   projectiles = [];
   goldPiles = [];
+  worldDrops = [];
   player.x = Math.floor(ROOM_W / 2);
   player.y = Math.floor(ROOM_H / 2);
   camera.x = Math.floor(player.x - VIEW_W / 2);
@@ -827,6 +912,7 @@ function tick(now) {
       worldObjects,
       projectiles,
       goldPiles,
+      worldDrops,
       combatTextSystem,
       abilitySystem.getActiveEffects(),
       input.mouse,
@@ -901,6 +987,8 @@ function tick(now) {
     projectiles = combat.projectiles;
     for (const dead of combat.slain) handleEnemyDefeat(dead);
     goldPiles = LootSystem.collectGold(player, goldPiles, combatTextSystem);
+    updateWorldDrops(dt);
+    collectWorldDrops();
   } else {
     player.vx = 0;
     player.vy = 0;
@@ -966,6 +1054,7 @@ function tick(now) {
     worldObjects,
     projectiles,
     goldPiles,
+    worldDrops,
     combatTextSystem,
     abilitySystem.getActiveEffects(),
     input.mouse,

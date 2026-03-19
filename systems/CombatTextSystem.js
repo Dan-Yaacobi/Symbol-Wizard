@@ -1,3 +1,4 @@
+import { getItemDefinition } from '../data/ItemRegistry.js';
 import { visualTheme } from '../data/VisualTheme.js';
 
 const MAX_ACTIVE_TEXTS = 20;
@@ -6,6 +7,11 @@ const MAX_LIFETIME = 1.3;
 const DEFAULT_UPWARD_SPEED = 13;
 const VERTICAL_OFFSET = 3.8;
 const DEBUG_COMBAT_TEXT = false;
+const PICKUP_LIFETIME_MIN = 1.5;
+const PICKUP_LIFETIME_MAX = 2.0;
+const PICKUP_MERGE_WINDOW = 0.45;
+const PICKUP_START_Y_PX = 20;
+const PICKUP_ROW_HEIGHT_PX = 16;
 // Toggle to true while diagnosing combat-text lifecycle issues without spamming normal gameplay logs.
 
 const COLOR_MAP = {
@@ -28,6 +34,7 @@ const TEXT_STYLES = {
   gold: { color: COLOR_MAP.gold, fontScale: 2.35, fontWeight: '700' },
   heal: { color: COLOR_MAP.green, fontScale: 2.35, fontWeight: '700' },
   info: { color: COLOR_MAP.white, fontScale: 2.2, fontWeight: '700' },
+  pickup: { color: COLOR_MAP.white, fontScale: 1.25, fontWeight: '700' },
 };
 
 function isFiniteNumber(value) {
@@ -38,6 +45,7 @@ export class CombatTextSystem {
   constructor(configRegistry = null) {
     this.configRegistry = configRegistry;
     this.combatTexts = [];
+    this.pickupStack = [];
     this.nextId = 1;
   }
 
@@ -85,6 +93,35 @@ export class CombatTextSystem {
     this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), text, TEXT_STYLES.info);
   }
 
+
+  spawnPickupText(itemId, quantity, nowSeconds = performance.now() / 1000) {
+    if (!itemId || !Number.isFinite(quantity) || quantity <= 0) return;
+
+    const recentEntry = this.pickupStack.findLast?.((entry) => entry.itemId === itemId && nowSeconds - entry.time <= PICKUP_MERGE_WINDOW)
+      ?? [...this.pickupStack].reverse().find((entry) => entry.itemId === itemId && nowSeconds - entry.time <= PICKUP_MERGE_WINDOW);
+
+    if (recentEntry) {
+      recentEntry.quantity += Math.max(1, Math.round(quantity));
+      recentEntry.time = nowSeconds;
+      recentEntry.createdAt = nowSeconds;
+      recentEntry.lifetime = this.#pickupLifetime();
+      recentEntry.opacity = 1;
+      return;
+    }
+
+    this.pickupStack.push({
+      id: `pickup_${this.nextId++}`,
+      type: 'pickup',
+      itemId,
+      quantity: Math.max(1, Math.round(quantity)),
+      time: nowSeconds,
+      createdAt: nowSeconds,
+      lifetime: this.#pickupLifetime(),
+      opacity: 1,
+      xOffsetPx: Math.round((Math.random() - 0.5) * 10),
+    });
+  }
+
   update(dt, nowSeconds = performance.now() / 1000) {
     if (!isFiniteNumber(dt) || dt <= 0) return;
 
@@ -103,6 +140,17 @@ export class CombatTextSystem {
     }
 
     this.combatTexts.length = writeIndex;
+
+    let pickupWriteIndex = 0;
+    for (let i = 0; i < this.pickupStack.length; i += 1) {
+      const entry = this.pickupStack[i];
+      const age = nowSeconds - entry.createdAt;
+      if (age >= entry.lifetime) continue;
+      entry.opacity = 1 - age / entry.lifetime;
+      this.pickupStack[pickupWriteIndex] = entry;
+      pickupWriteIndex += 1;
+    }
+    this.pickupStack.length = pickupWriteIndex;
   }
 
   render(renderer, camera) {
@@ -127,6 +175,8 @@ export class CombatTextSystem {
       const drawStyle = this.#getAnimatedStyle(entry);
       renderer.drawEffectText(entry.text, drawStyle.color, screenX, screenY, entry.opacity, '#09101a', drawStyle);
     }
+
+    this.#renderPickupStack(renderer);
   }
 
   #getAnimatedStyle(entry) {
@@ -168,6 +218,29 @@ export class CombatTextSystem {
 
   #goldStyle() { return { ...TEXT_STYLES.gold }; }
   #healStyle() { return { ...TEXT_STYLES.heal, color: this.configRegistry?.get?.('palette.healColor') ?? TEXT_STYLES.heal.color }; }
+  #pickupStyle() { return { ...TEXT_STYLES.pickup }; }
+
+
+  #pickupLifetime() {
+    return PICKUP_LIFETIME_MIN + Math.random() * (PICKUP_LIFETIME_MAX - PICKUP_LIFETIME_MIN);
+  }
+
+  #renderPickupStack(renderer) {
+    const baseY = PICKUP_START_Y_PX / renderer.cellH;
+    const rowHeight = PICKUP_ROW_HEIGHT_PX / renderer.cellH;
+
+    for (let i = 0; i < this.pickupStack.length; i += 1) {
+      const entry = this.pickupStack[i];
+      const item = getItemDefinition(entry.itemId);
+      const icon = item?.icon ?? '*';
+      const name = item?.name ?? entry.itemId;
+      const label = `${icon} ${name} x${entry.quantity}`;
+      const xOffsetCells = (entry.xOffsetPx ?? 0) / renderer.cellW;
+      const y = baseY + i * rowHeight;
+      const x = Math.max(1, renderer.cols - label.length - 2) + xOffsetCells;
+      renderer.drawEffectText(label, this.#pickupStyle().color, x, y, entry.opacity, 'rgba(0,0,0,0)', this.#pickupStyle());
+    }
+  }
 
   #hasValidEntityPosition(entity) {
     return Boolean(entity) && isFiniteNumber(entity.x) && isFiniteNumber(entity.y);
