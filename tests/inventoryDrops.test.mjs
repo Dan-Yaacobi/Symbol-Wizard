@@ -108,6 +108,39 @@ function testPickupCombatTextMergesNearbyItemBursts() {
   assert.equal(combatTextSystem.pickupStack.length, 0);
 }
 
+
+function testCombatTextGroupsStackNearbyBursts() {
+  const combatTextSystem = new CombatTextSystem();
+  const enemy = { x: 10, y: 10 };
+
+  withMockedRandom([0.5, 0.5, 0.5, 0.5], () => {
+    combatTextSystem.spawnDamageText(enemy, 10, false, 1.0);
+  });
+  combatTextSystem.spawnDamageText(enemy, 12, false, 1.05);
+  combatTextSystem.spawnGoldText(enemy, 5, 1.1);
+
+  assert.equal(combatTextSystem.textGroups.length, 1);
+  assert.deepEqual(
+    combatTextSystem.textGroups[0].entries.map((entry) => entry.text),
+    ['22', '+5$'],
+  );
+
+  combatTextSystem.update(0.5, 1.5);
+  assert.equal(combatTextSystem.textGroups[0].y < enemy.y - 3.8, true);
+}
+
+function testCombatTextSeparatesDistinctTargetsAndExpiresByGroupLifetime() {
+  const combatTextSystem = new CombatTextSystem();
+
+  combatTextSystem.spawnDamageText({ x: 0, y: 0 }, 8, false, 2.0);
+  combatTextSystem.spawnDamageText({ x: 5, y: 5 }, 9, false, 2.05);
+
+  assert.equal(combatTextSystem.textGroups.length, 2);
+
+  combatTextSystem.update(2.5, 4.6);
+  assert.equal(combatTextSystem.textGroups.length, 0);
+}
+
 function run() {
   testItemRegistryContainsCraftingFeeders();
   testInventoryStacksAndCountsItems();
@@ -116,6 +149,8 @@ function run() {
   testEnsureInventoryProvidesSafeFallback();
   testEnemyDropsSpawnOnGroundInsteadOfDirectInventoryInsertion();
   testPickupCombatTextMergesNearbyItemBursts();
+  testCombatTextGroupsStackNearbyBursts();
+  testCombatTextSeparatesDistinctTargetsAndExpiresByGroupLifetime();
   console.log('Inventory and enemy drop tests passed.');
 }
 
