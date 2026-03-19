@@ -186,5 +186,14 @@ export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSys
     combatTextSystem?.spawnDamageText(player, damage, false);
     enemy.attackDamageApplied = true;
     enemy.attackCooldownTimer = enemy.attackRate ?? 1.2;
+
+    const knockbackDx = enemy.x - player.x;
+    const knockbackDy = enemy.y - player.y;
+    const knockbackLength = Math.hypot(knockbackDx, knockbackDy) || 1;
+    enemy.vx += (knockbackDx / knockbackLength) * 2;
+    enemy.vy += (knockbackDy / knockbackLength) * 2;
+    enemy.targetX = enemy.x;
+    enemy.targetY = enemy.y;
+    enemy.postAttackSlowTimer = Math.max(enemy.postAttackSlowTimer ?? 0, 0.15);
   }
 }
