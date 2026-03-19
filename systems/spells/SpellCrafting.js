@@ -1,150 +1,221 @@
-import { SpellRegistry } from '../../data/spells.js';
-import { ElementRegistry, composeSpellWithElement } from './ElementSystem.js';
+import { getRecipeGuaranteedEffects, getSpellCraftRecipe, SPELL_CRAFT_PROFILES, SPELL_CRAFT_RECIPES } from '../../data/spellCraftRecipes.js';
 import { validateSpell } from './SpellValidator.js';
-import { resolveComponent } from './components/index.js';
 
-export const MAX_CRAFTING_COST = 5;
+const PROFILE_STAT_KEYS = ['damage', 'speed', 'cooldown', 'manaCost', 'duration', 'radius', 'width', 'range'];
+const BONUS_RARITY_ORDER = ['common', 'uncommon', 'rare'];
 
-export const BASE_SPELL_COSTS = Object.freeze({
-  'magic-bolt': 1,
-  beam_test: 1,
-  zone_test: 1,
-});
-
-export const ELEMENT_COSTS = Object.freeze({
-  arcane: 0,
-  fire: 2,
-  frost: 2,
-  lightning: 2,
-  poison: 1,
-});
-
-export const COMPONENT_COSTS = Object.freeze({
-  apply_status_on_hit: 1,
-  pierce: 1,
-  explode_on_hit: 3,
-  emit_projectiles: 3,
-  spawn_zone_on_hit: 3,
-});
-
-function normalizeSpellId(baseId) {
-  if (typeof baseId !== 'string') return null;
-  if (SpellRegistry[baseId]) return baseId;
-
-  const dashVariant = baseId.replaceAll('_', '-');
-  if (SpellRegistry[dashVariant]) return dashVariant;
-
-  const underscoreVariant = baseId.replaceAll('-', '_');
-  if (SpellRegistry[underscoreVariant]) return underscoreVariant;
-
-  return null;
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
-function normalizeComponents(components) {
-  if (!Array.isArray(components)) return [];
+function roundStatValue(key, value) {
+  if (!Number.isFinite(value)) return value;
+  if (['damage', 'speed', 'manaCost'].includes(key)) return Math.round(value);
+  return Math.round(value * 100) / 100;
+}
 
-  const merged = [];
-  const seen = new Set();
+function createRng(random = Math.random) {
+  return typeof random === 'function' ? random : Math.random;
+}
 
-  for (const componentRef of components) {
-    if (typeof componentRef !== 'string') continue;
-    const component = resolveComponent(componentRef);
-    if (!component) continue;
-    if (seen.has(component.id)) continue;
-    seen.add(component.id);
-    merged.push(component.id);
+function pickWeighted(weightMap, random) {
+  const entries = Object.entries(weightMap ?? {}).filter(([, weight]) => Number.isFinite(weight) && weight > 0);
+  if (entries.length === 0) return null;
+  const total = entries.reduce((sum, [, weight]) => sum + weight, 0);
+  let roll = random() * total;
+  for (const [key, weight] of entries) {
+    roll -= weight;
+    if (roll <= 0) return key;
   }
-
-  return merged;
+  return entries.at(-1)?.[0] ?? null;
 }
 
-function buildConfig(spell) {
-  const parameters = spell.parameters && typeof spell.parameters === 'object' ? spell.parameters : {};
-  const config = spell.config && typeof spell.config === 'object' ? spell.config : {};
-  return { ...config, ...parameters };
+function rollRange([min, max], random) {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return 0;
+  return min + (max - min) * random();
 }
 
-function getCostFromTable(table, id, label) {
-  if (!id) return 0;
-  const cost = table[id];
-  if (!Number.isFinite(cost)) {
-    throw new Error(`Missing ${label} cost for: ${String(id)}`);
-  }
-  return cost;
+function deepClone(value) {
+  if (typeof globalThis.structuredClone === 'function') return globalThis.structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
 }
 
-export function calculateSpellCost({ base, element = null, components = [] } = {}) {
-  const normalizedBaseId = normalizeSpellId(base);
-  if (!normalizedBaseId) {
-    throw new Error(`Unknown base spell: ${String(base)}`);
-  }
+function buildStatusComponent(effect) {
+  return effect?.statusType ? 'apply_status_on_hit' : null;
+}
 
-  const normalizedComponents = normalizeComponents(components);
-  const totalCost = getCostFromTable(BASE_SPELL_COSTS, normalizedBaseId, 'base spell')
-    + getCostFromTable(ELEMENT_COSTS, element, 'element')
-    + normalizedComponents.reduce((sum, componentId) => sum + getCostFromTable(COMPONENT_COSTS, componentId, 'component'), 0);
-
-  return {
-    totalCost,
-    maxCost: MAX_CRAFTING_COST,
-    withinLimit: totalCost <= MAX_CRAFTING_COST,
-    breakdown: {
-      base: getCostFromTable(BASE_SPELL_COSTS, normalizedBaseId, 'base spell'),
-      element: getCostFromTable(ELEMENT_COSTS, element, 'element'),
-      components: normalizedComponents.map((componentId) => ({
-        id: componentId,
-        cost: getCostFromTable(COMPONENT_COSTS, componentId, 'component'),
-      })),
-    },
+function buildParameters(recipe, finalStats, element) {
+  const visuals = recipe.visuals ?? {};
+  const parameters = {
+    damage: finalStats.damage,
+    color: visuals.color,
+    hitParticleColor: visuals.hitParticleColor,
   };
+
+  if (recipe.behavior === 'projectile') {
+    parameters.speed = finalStats.speed;
+    parameters.ttl = finalStats.ttl;
+    parameters.size = finalStats.size;
+    parameters.spriteFrames = visuals.spriteFrames;
+  }
+
+  if (recipe.behavior === 'beam') {
+    parameters.range = finalStats.range;
+    parameters.width = finalStats.width;
+    parameters.duration = finalStats.duration;
+  }
+
+  if (recipe.behavior === 'zone') {
+    parameters.radius = finalStats.radius;
+    parameters.duration = finalStats.duration;
+    parameters.tickInterval = finalStats.tickInterval;
+  }
+
+  const statusEffect = getRecipeGuaranteedEffects(recipe, element).find((effect) => effect.type === 'status');
+  if (statusEffect?.statusType) {
+    parameters.statusType = statusEffect.statusType;
+    parameters.statusDuration = statusEffect.duration;
+  }
+
+  return parameters;
 }
 
-export function craftSpell({ base, element = null, components = [] } = {}) {
-  const normalizedBaseId = normalizeSpellId(base);
-  if (!normalizedBaseId) {
-    throw new Error(`Unknown base spell: ${String(base)}`);
+function isEffectCompatible(recipe, effect) {
+  if (!effect?.type) return false;
+  if (recipe.behavior === 'zone' && ['pierce', 'bounce', 'split'].includes(effect.type)) return false;
+  if (recipe.behavior === 'beam' && effect.type === 'zone_on_hit') return false;
+  return true;
+}
+
+function profileAffectsStat(statKey) {
+  return PROFILE_STAT_KEYS.includes(statKey);
+}
+
+function applyProfile(baseStats, profile) {
+  const finalStats = {};
+  for (const [key, value] of Object.entries(baseStats)) {
+    if (!Number.isFinite(value)) {
+      finalStats[key] = value;
+      continue;
+    }
+    const multiplier = profileAffectsStat(key) ? (profile?.modifiers?.[key] ?? 1) : 1;
+    finalStats[key] = roundStatValue(key, value * multiplier);
+  }
+  if (Number.isFinite(finalStats.tickInterval)) {
+    finalStats.tickInterval = clamp(finalStats.tickInterval, 0.12, 1.5);
+  }
+  return finalStats;
+}
+
+function rollStats(recipe, random) {
+  const baseStats = {};
+  for (const [key, range] of Object.entries(recipe.statRanges ?? {})) {
+    baseStats[key] = roundStatValue(key, rollRange(range, random));
+  }
+  return baseStats;
+}
+
+function rollProfile(recipe, random) {
+  const profileId = pickWeighted(recipe.weightedProfiles, random) ?? 'efficient';
+  return SPELL_CRAFT_PROFILES[profileId] ?? SPELL_CRAFT_PROFILES.efficient;
+}
+
+function selectBonusEffects(recipe, random) {
+  const rollCount = Number.parseInt(pickWeighted(recipe.effectPool?.rollCountWeights, random) ?? '0', 10);
+  if (!Number.isFinite(rollCount) || rollCount <= 0) return [];
+
+  const rarityPicks = [];
+  for (let index = 0; index < rollCount; index += 1) {
+    rarityPicks.push(pickWeighted({ common: 60, uncommon: 30, rare: 10 }, random) ?? 'common');
   }
 
-  const baseSpell = SpellRegistry[normalizedBaseId];
-  if (!baseSpell || typeof baseSpell !== 'object') {
-    throw new Error(`Invalid base spell definition for: ${normalizedBaseId}`);
+  const selected = [];
+  const seenTypes = new Set();
+
+  for (const rarity of rarityPicks) {
+    const poolsToTry = [rarity, ...BONUS_RARITY_ORDER.filter((entry) => entry !== rarity)];
+    let picked = null;
+    for (const poolName of poolsToTry) {
+      const pool = (recipe.effectPool?.[poolName] ?? [])
+        .filter((effect) => isEffectCompatible(recipe, effect) && !seenTypes.has(effect.type));
+      if (pool.length === 0) continue;
+      const total = pool.reduce((sum, effect) => sum + (Number.isFinite(effect.weight) ? effect.weight : 1), 0);
+      let roll = random() * total;
+      for (const effect of pool) {
+        roll -= Number.isFinite(effect.weight) ? effect.weight : 1;
+        if (roll <= 0) {
+          picked = { ...effect, rarity: poolName };
+          break;
+        }
+      }
+      if (picked) break;
+    }
+    if (!picked) continue;
+    selected.push(picked);
+    seenTypes.add(picked.type);
   }
 
-  if (!baseSpell.behavior) {
-    throw new Error(`Base spell "${normalizedBaseId}" is not craftable (missing behavior).`);
+  return selected;
+}
+
+function buildDescription(recipe, profile, guaranteedEffects, bonusEffects) {
+  const guaranteedText = guaranteedEffects.map((effect) => effect.label).join(', ') || 'identity magic';
+  const bonusText = bonusEffects.length > 0 ? ` Bonus roll: ${bonusEffects.map((effect) => effect.label).join(', ')}.` : '';
+  return `${recipe.craftingSummary} ${profile.name} profile. Guaranteed: ${guaranteedText}.${bonusText}`;
+}
+
+let craftedSpellCounter = 0;
+
+export function getCraftableSpellRecipes() {
+  return SPELL_CRAFT_RECIPES.map((recipe) => ({ ...recipe, validElements: [...recipe.validElements] }));
+}
+
+export function craftSpell({ recipeId, element = null, random = Math.random } = {}) {
+  const recipe = getSpellCraftRecipe(recipeId);
+  if (!recipe) {
+    throw new Error(`Unknown spell recipe: ${String(recipeId)}`);
   }
 
-  const shouldApplyElement = element !== null && element !== undefined && element !== '';
-  if (shouldApplyElement && !ElementRegistry[element]) {
-    throw new Error(`Unknown element: ${String(element)}`);
+  const appliedElement = element ?? recipe.validElements[0] ?? null;
+  if (!recipe.validElements.includes(appliedElement)) {
+    throw new Error(`Element ${String(appliedElement)} is not valid for recipe ${recipe.name}.`);
   }
 
-  const appliedElement = shouldApplyElement ? element : baseSpell.element ?? null;
-  const elementAppliedSpell = composeSpellWithElement({ ...baseSpell }, appliedElement);
-
-  const mergedComponents = normalizeComponents([
-    ...(Array.isArray(elementAppliedSpell.components) ? elementAppliedSpell.components : []),
-    ...components,
-  ]);
-
-  const costSummary = calculateSpellCost({
-    base: normalizedBaseId,
-    element: appliedElement,
-    components: mergedComponents,
-  });
-
-  if (!costSummary.withinLimit) {
-    throw new Error(`Spell is too complex to craft (${costSummary.totalCost}/${costSummary.maxCost}).`);
-  }
+  const rng = createRng(random);
+  const profile = rollProfile(recipe, rng);
+  const baseStats = rollStats(recipe, rng);
+  const finalStats = applyProfile(baseStats, profile);
+  const guaranteedEffects = getRecipeGuaranteedEffects(recipe, appliedElement);
+  const bonusEffects = selectBonusEffects(recipe, rng);
+  const components = guaranteedEffects
+    .map(buildStatusComponent)
+    .filter(Boolean);
+  const parameters = buildParameters(recipe, finalStats, appliedElement);
 
   const craftedSpell = {
-    ...elementAppliedSpell,
-    components: mergedComponents,
-    cost: costSummary.totalCost,
-    config: buildConfig(elementAppliedSpell),
-    craftingCost: costSummary.totalCost,
-    craftingCostBreakdown: costSummary.breakdown,
-    maxCraftingCost: costSummary.maxCost,
+    id: `crafted:${recipe.id}:${Date.now().toString(36)}:${craftedSpellCounter += 1}`,
+    name: recipe.name,
+    icon: recipe.icon ?? '*',
+    description: buildDescription(recipe, profile, guaranteedEffects, bonusEffects),
+    behavior: recipe.behavior,
+    targeting: 'cursor',
+    element: appliedElement,
+    components,
+    effects: bonusEffects.map((effect) => ({ ...effect })),
+    parameters,
+    config: { ...parameters },
+    cost: Math.max(1, finalStats.manaCost),
+    damage: finalStats.damage,
+    range: finalStats.range ?? Math.round(((finalStats.speed ?? 0) * (finalStats.ttl ?? 0)) / 5 * 100) / 100,
+    cooldown: finalStats.cooldown,
+    manaCost: finalStats.manaCost,
+    crafted: true,
+    recipeId: recipe.id,
+    profile: { id: profile.id, name: profile.name, summary: profile.summary },
+    baseStats,
+    finalStats,
+    guaranteedEffects,
+    bonusEffects,
   };
 
   const validation = validateSpell(craftedSpell);
@@ -152,5 +223,5 @@ export function craftSpell({ base, element = null, components = [] } = {}) {
     throw new Error(`Invalid crafted spell combination: ${validation.message}`);
   }
 
-  return craftedSpell;
+  return deepClone(craftedSpell);
 }

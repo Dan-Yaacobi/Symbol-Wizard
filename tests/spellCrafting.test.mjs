@@ -1,123 +1,125 @@
 import assert from 'node:assert/strict';
-import { MAX_CRAFTING_COST, calculateSpellCost, craftSpell } from '../systems/spells/SpellCrafting.js';
+import { craftSpell, getCraftableSpellRecipes } from '../systems/spells/SpellCrafting.js';
 import { castSpell } from '../systems/spells/SpellCaster.js';
 
-function testBaseOnly() {
-  const spell = craftSpell({ base: 'magic_bolt' });
-  assert.equal(spell.behavior, 'projectile');
-  assert.deepEqual(spell.components, []);
-  assert.ok(typeof spell.config === 'object');
-  assert.equal(spell.config.damage, 4);
-  assert.equal(spell.cost, 1);
+function sequenceRng(values) {
+  let index = 0;
+  return () => {
+    const value = values[index] ?? values.at(-1) ?? 0.5;
+    index += 1;
+    return value;
+  };
 }
 
-function testBaseWithElement() {
-  const spell = craftSpell({ base: 'magic-bolt', element: 'fire' });
-  assert.equal(spell.behavior, 'projectile');
-  assert.equal(spell.element, 'fire');
+function buildCastingSystem() {
+  return {
+    projectiles: [],
+    effects: [],
+    statuses: [],
+    activeSpellInstances: [],
+    createProjectile(x, y, dx, dy, payload) {
+      const projectile = { x, y, dx, dy, ...payload };
+      this.projectiles.push(projectile);
+      return projectile;
+    },
+    spawnEffect(effect) {
+      this.effects.push(effect);
+    },
+    getEntitiesInRadius() {
+      return [];
+    },
+    applySpellDamage() {},
+    applyDamage() {},
+    applyStatus(target, type, duration) {
+      this.statuses.push({ target, type, duration });
+      return true;
+    },
+  };
+}
+
+function testRecipesExposeFixedIdentity() {
+  const recipes = getCraftableSpellRecipes();
+  assert.deepEqual(recipes.map((recipe) => recipe.name), [
+    'Fire Bolt',
+    'Frost Beam',
+    'Lightning Beam',
+    'Poison Zone',
+    'Arcane Orb',
+  ]);
+  assert.ok(recipes.every((recipe) => recipe.validElements.length >= 1));
+}
+
+function testCraftVariationAcrossRolls() {
+  const first = craftSpell({ recipeId: 'fire_bolt', random: sequenceRng([0.02, 0.05, 0.1, 0.2, 0.3, 0.1, 0.2, 0.3, 0.9]) });
+  const second = craftSpell({ recipeId: 'fire_bolt', random: sequenceRng([0.95, 0.92, 0.85, 0.8, 0.75, 0.6, 0.55, 0.5, 0.1]) });
+
+  assert.equal(first.name, 'Fire Bolt');
+  assert.equal(second.name, 'Fire Bolt');
+  assert.notDeepEqual(first.baseStats, second.baseStats);
+  assert.notEqual(first.profile.id, second.profile.id);
+}
+
+function testIdentityAndGuaranteedEffectsArePreserved() {
+  const spell = craftSpell({ recipeId: 'lightning_beam', random: sequenceRng([0.1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]) });
+
+  assert.equal(spell.recipeId, 'lightning_beam');
+  assert.equal(spell.element, 'lightning');
+  assert.equal(spell.behavior, 'beam');
   assert.deepEqual(spell.components, ['apply_status_on_hit']);
-  assert.equal(spell.config.statusType, 'burn');
-  assert.equal(spell.cost, 4);
+  assert.deepEqual(spell.guaranteedEffects.map((effect) => effect.label), ['Shock']);
+  assert.equal(spell.parameters.statusType, 'shock');
 }
 
-function testBaseWithComponent() {
-  const spell = craftSpell({ base: 'magic-bolt', components: ['pierce', 'pierce'] });
-  assert.equal(spell.behavior, 'projectile');
-  assert.deepEqual(spell.components, ['pierce']);
-  assert.ok(spell.config.speed > 0);
-  assert.equal(spell.cost, 2);
-}
-
-function testBaseElementAndComponent() {
+function testBonusEffectsStayWithinValidPoolAndRemainUnique() {
   const spell = craftSpell({
-    base: 'magic_bolt',
-    element: 'fire',
-    components: ['pierce'],
+    recipeId: 'arcane_orb',
+    random: sequenceRng([0.8, 0.5, 0.5, 0.5, 0.5, 0.5, 0.8, 0.95, 0.2, 0.7, 0.7]),
   });
 
-  assert.equal(spell.behavior, 'projectile');
-  assert.deepEqual(
-    spell.components,
-    ['apply_status_on_hit', 'pierce'],
-  );
-  assert.equal(spell.config.statusType, 'burn');
-  assert.equal(spell.cost, 5);
+  const effectTypes = spell.bonusEffects.map((effect) => effect.type);
+  assert.ok(effectTypes.length <= 2);
+  assert.equal(new Set(effectTypes).size, effectTypes.length);
+  assert.ok(effectTypes.every((type) => ['pierce', 'knockback', 'explode', 'trail', 'split'].includes(type)));
+}
+
+function testCraftedSpellRemainsRuntimeCastable() {
+  const spell = craftSpell({
+    recipeId: 'poison_zone',
+    random: sequenceRng([0.65, 0.3, 0.4, 0.6, 0.7, 0.2, 0.5, 0.9]),
+  });
+  const system = buildCastingSystem();
 
   const result = castSpell(spell, {
-    player: { x: 0, y: 0, facingX: 1, facingY: 0 },
-    system: {
-      projectiles: [],
-      createProjectile(x, y, dx, dy, payload) {
-        const projectile = { x, y, dx, dy, ...payload };
-        this.projectiles.push(projectile);
-        return projectile;
-      },
-      applyDamage() {},
-      addStatusEffect() {},
-      spawnEffect() {},
-      getEntitiesInRadius() {
-        return [];
-      },
-    },
+    player: { x: 2, y: 2, facingX: 1, facingY: 0 },
+    system,
+    activeSpellInstances: system.activeSpellInstances,
+    targetPosition: { x: 5, y: 5 },
   });
 
   assert.equal(result.ok, true);
+  assert.equal(system.activeSpellInstances.length, 1);
+  assert.equal(system.activeSpellInstances[0].instance.base.behavior, 'zone');
 }
 
-function testElementsStayStatusFocused() {
-  const frost = craftSpell({ base: 'magic-bolt', element: 'frost' });
-  const poison = craftSpell({ base: 'magic-bolt', element: 'poison' });
-
-  assert.deepEqual(frost.components, ['apply_status_on_hit']);
-  assert.equal(frost.config.statusType, 'slow');
-  assert.equal(poison.config.statusType, 'poison');
-  assert.equal('spawnZoneDamage' in poison.config, false);
-}
-
-
-function testAdditionalBaseBehaviorsAreCraftable() {
-  const beamSpell = craftSpell({ base: 'beam_test', element: 'arcane' });
-  const zoneSpell = craftSpell({ base: 'zone_test', components: ['apply_status_on_hit'] });
-
-  assert.equal(beamSpell.behavior, 'beam');
-  assert.equal(beamSpell.cost, 1);
-  assert.equal(zoneSpell.behavior, 'zone');
-  assert.deepEqual(zoneSpell.components, ['apply_status_on_hit']);
-  assert.equal(zoneSpell.cost, 2);
-}
-
-function testCalculateSpellCostBreakdown() {
-  const summary = calculateSpellCost({
-    base: 'magic-bolt',
-    element: 'fire',
-    components: ['explode_on_hit', 'pierce', 'pierce'],
+function testProfileModifiersChangeStatsFromBaseToFinal() {
+  const spell = craftSpell({
+    recipeId: 'fire_bolt',
+    random: sequenceRng([0.41, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.2]),
   });
 
-  assert.equal(summary.maxCost, MAX_CRAFTING_COST);
-  assert.equal(summary.totalCost, 7);
-  assert.equal(summary.withinLimit, false);
-  assert.deepEqual(summary.breakdown.components, [
-    { id: 'explode_on_hit', cost: 3 },
-    { id: 'pierce', cost: 1 },
-  ]);
-}
-
-function testOverBudgetCraftingFails() {
-  assert.throws(
-    () => craftSpell({ base: 'magic-bolt', element: 'fire', components: ['explode_on_hit'] }),
-    /Spell is too complex to craft \(7\/5\)\./,
-  );
+  assert.equal(spell.profile.id, 'heavy');
+  assert.ok(spell.finalStats.damage > spell.baseStats.damage);
+  assert.ok(spell.finalStats.speed < spell.baseStats.speed);
+  assert.ok(spell.finalStats.cooldown > spell.baseStats.cooldown);
 }
 
 function run() {
-  testBaseOnly();
-  testBaseWithElement();
-  testBaseWithComponent();
-  testBaseElementAndComponent();
-  testElementsStayStatusFocused();
-  testAdditionalBaseBehaviorsAreCraftable();
-  testCalculateSpellCostBreakdown();
-  testOverBudgetCraftingFails();
+  testRecipesExposeFixedIdentity();
+  testCraftVariationAcrossRolls();
+  testIdentityAndGuaranteedEffectsArePreserved();
+  testBonusEffectsStayWithinValidPoolAndRemainUnique();
+  testCraftedSpellRemainsRuntimeCastable();
+  testProfileModifiersChangeStatsFromBaseToFinal();
   console.log('Spell crafting tests passed.');
 }
 
