@@ -11,12 +11,15 @@ const PICKUP_LIFETIME_MIN = 2.5;
 const PICKUP_LIFETIME_MAX = 3.0;
 const PICKUP_MERGE_WINDOW = 0.45;
 const PICKUP_WORLD_OFFSET_Y = 2;
-const PICKUP_STACK_SPACING = 0.6;
+const PICKUP_STACK_SPACING = 1.2;
+const PICKUP_LINE_HEIGHT_MULTIPLIER = 1.4;
+const PICKUP_STACK_PADDING = 2;
 const PICKUP_DRIFT_SPEED = 0.5;
 const GROUP_DISTANCE_THRESHOLD = 1.5;
 const GROUP_MERGE_WINDOW = 0.2;
 const GROUP_STACK_SPACING = 1.2;
 const GROUP_JITTER_RANGE = 0.2;
+const MAX_VISIBLE_PICKUP_TEXTS = 6;
 // Toggle to true while diagnosing combat-text lifecycle issues without spamming normal gameplay logs.
 
 const COLOR_MAP = {
@@ -55,6 +58,9 @@ export class CombatTextSystem {
     this.textGroups = [];
     this.combatTexts = this.textGroups;
     this.pickupStack = [];
+    this.pickupStackAnchorX = 0;
+    this.pickupStackAnchorY = 0;
+    this.pickupStackDrift = 0;
     this.nextId = 1;
   }
 
@@ -101,6 +107,9 @@ export class CombatTextSystem {
   spawnPickupText(entity, itemId, quantity, nowSeconds = performance.now() / 1000) {
     if (!this.#hasValidEntityPosition(entity) || !itemId || !Number.isFinite(quantity) || quantity <= 0) return;
 
+    this.pickupStackAnchorX = entity.x;
+    this.pickupStackAnchorY = entity.y - PICKUP_WORLD_OFFSET_Y;
+
     const recentEntry = this.pickupStack.findLast?.((entry) => entry.itemId === itemId && nowSeconds - entry.time <= PICKUP_MERGE_WINDOW)
       ?? [...this.pickupStack].reverse().find((entry) => entry.itemId === itemId && nowSeconds - entry.time <= PICKUP_MERGE_WINDOW);
 
@@ -110,11 +119,11 @@ export class CombatTextSystem {
       recentEntry.createdAt = nowSeconds;
       recentEntry.lifetime = this.#pickupLifetime();
       recentEntry.opacity = 1;
-      recentEntry.anchorX = entity.x;
-      recentEntry.anchorY = entity.y - PICKUP_WORLD_OFFSET_Y;
+      recentEntry.anchorX = this.pickupStackAnchorX;
+      recentEntry.anchorY = this.pickupStackAnchorY;
       recentEntry.x = recentEntry.anchorX + recentEntry.xJitter;
-      recentEntry.baseY = recentEntry.anchorY - recentEntry.stackIndex * PICKUP_STACK_SPACING;
-      recentEntry.y = recentEntry.baseY - recentEntry.drift;
+      recentEntry.baseY = this.#pickupBaseY();
+      recentEntry.y = recentEntry.baseY + this.#pickupYOffset(recentEntry.stackIndex) - this.pickupStackDrift;
       return;
     }
 
@@ -130,12 +139,18 @@ export class CombatTextSystem {
       stackIndex: this.pickupStack.length,
       xJitter: this.#randomJitter(GROUP_JITTER_RANGE),
       drift: 0,
-      anchorX: entity.x,
-      anchorY: entity.y - PICKUP_WORLD_OFFSET_Y,
+      anchorX: this.pickupStackAnchorX,
+      anchorY: this.pickupStackAnchorY,
       x: entity.x,
-      baseY: entity.y - PICKUP_WORLD_OFFSET_Y - this.pickupStack.length * PICKUP_STACK_SPACING,
-      y: entity.y - PICKUP_WORLD_OFFSET_Y - this.pickupStack.length * PICKUP_STACK_SPACING,
+      baseY: this.#pickupBaseY(),
+      y: this.#pickupBaseY() + this.#pickupYOffset(this.pickupStack.length),
     });
+
+    if (this.pickupStack.length > MAX_VISIBLE_PICKUP_TEXTS) {
+      this.pickupStack.shift();
+    }
+
+    this.#reflowPickupStack();
   }
 
   update(dt, nowSeconds = performance.now() / 1000) {
@@ -160,20 +175,26 @@ export class CombatTextSystem {
     this.textGroups.length = writeIndex;
 
     let pickupWriteIndex = 0;
+    this.pickupStackDrift += PICKUP_DRIFT_SPEED * dt;
     for (let i = 0; i < this.pickupStack.length; i += 1) {
       const entry = this.pickupStack[i];
       const age = nowSeconds - entry.createdAt;
       if (age >= entry.lifetime) continue;
-      entry.drift += PICKUP_DRIFT_SPEED * dt;
       entry.stackIndex = pickupWriteIndex;
-      entry.x = (entry.anchorX ?? entry.x ?? 0) + (entry.xJitter ?? 0);
-      entry.baseY = (entry.anchorY ?? entry.baseY ?? 0) - pickupWriteIndex * PICKUP_STACK_SPACING;
-      entry.y = entry.baseY - entry.drift;
+      entry.anchorX = this.pickupStackAnchorX;
+      entry.anchorY = this.pickupStackAnchorY;
+      entry.x = this.pickupStackAnchorX + (entry.xJitter ?? 0);
+      entry.baseY = this.#pickupBaseY();
+      entry.y = entry.baseY + this.#pickupYOffset(pickupWriteIndex) - this.pickupStackDrift;
       entry.opacity = 1 - age / entry.lifetime;
       this.pickupStack[pickupWriteIndex] = entry;
       pickupWriteIndex += 1;
     }
     this.pickupStack.length = pickupWriteIndex;
+
+    if (this.pickupStack.length === 0) {
+      this.pickupStackDrift = 0;
+    }
   }
 
   render(renderer, camera) {
@@ -245,6 +266,34 @@ export class CombatTextSystem {
   #goldStyle() { return { ...TEXT_STYLES.gold }; }
   #healStyle() { return { ...TEXT_STYLES.heal, color: this.configRegistry?.get?.('palette.healColor') ?? TEXT_STYLES.heal.color }; }
   #pickupStyle() { return { ...TEXT_STYLES.pickup }; }
+
+
+
+  #pickupLineHeight(style = TEXT_STYLES.pickup) {
+    const fontSize = Number.isFinite(style?.fontScale) ? style.fontScale : TEXT_STYLES.pickup.fontScale;
+    return Math.max(PICKUP_STACK_SPACING, (fontSize * PICKUP_LINE_HEIGHT_MULTIPLIER) + PICKUP_STACK_PADDING);
+  }
+
+  #pickupYOffset(index, style = TEXT_STYLES.pickup) {
+    return index * -this.#pickupLineHeight(style);
+  }
+
+  #pickupBaseY() {
+    return this.pickupStackAnchorY;
+  }
+
+  #reflowPickupStack() {
+    const baseY = this.#pickupBaseY();
+    for (let i = 0; i < this.pickupStack.length; i += 1) {
+      const entry = this.pickupStack[i];
+      entry.stackIndex = i;
+      entry.anchorX = this.pickupStackAnchorX;
+      entry.anchorY = this.pickupStackAnchorY;
+      entry.baseY = baseY;
+      entry.x = this.pickupStackAnchorX + (entry.xJitter ?? 0);
+      entry.y = baseY + this.#pickupYOffset(i) - this.pickupStackDrift;
+    }
+  }
 
   #pickupLifetime() {
     return PICKUP_LIFETIME_MIN + Math.random() * (PICKUP_LIFETIME_MAX - PICKUP_LIFETIME_MIN);

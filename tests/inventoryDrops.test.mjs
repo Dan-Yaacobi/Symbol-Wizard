@@ -139,6 +139,41 @@ function testCombatTextSeparatesDistinctTargetsAndExpiresByGroupLifetime() {
 
   combatTextSystem.update(2.5, 4.6);
   assert.equal(combatTextSystem.textGroups.length, 0);
+function testPickupCombatTextUsesSharedSpacingAndDrift() {
+  const combatTextSystem = new CombatTextSystem();
+
+  const player = { x: 4, y: 6 };
+  combatTextSystem.spawnPickupText(player, 'stone', 2, 10);
+  combatTextSystem.spawnPickupText(player, 'ember_dust', 1, 10.25);
+
+  assert.equal(combatTextSystem.pickupStack[0].baseY, 4);
+  assert.equal(combatTextSystem.pickupStack[1].baseY, 4);
+  assert.equal(combatTextSystem.pickupStack[0].y - combatTextSystem.pickupStack[1].y, 4.1);
+
+  combatTextSystem.update(0.5, 10.75);
+
+  assert.equal(combatTextSystem.pickupStack[0].baseY, 4);
+  assert.equal(combatTextSystem.pickupStack[1].baseY, 4);
+  assert.equal(combatTextSystem.pickupStack[0].y - combatTextSystem.pickupStack[1].y, 4.1);
+}
+
+function testPickupCombatTextCapsVisibleEntries() {
+  const combatTextSystem = new CombatTextSystem();
+  const player = { x: 4, y: 6 };
+
+  ['stone', 'ember_dust', 'essence', 'wood', 'poison_gland', 'storm_shard', 'fire_core'].forEach((itemId, index) => {
+    combatTextSystem.spawnPickupText(player, itemId, 1, 10 + index);
+  });
+
+  assert.equal(combatTextSystem.pickupStack.length, 6);
+  assert.deepEqual(
+    combatTextSystem.pickupStack.map(({ itemId }) => itemId),
+    ['ember_dust', 'essence', 'wood', 'poison_gland', 'storm_shard', 'fire_core'],
+  );
+  assert.deepEqual(
+    combatTextSystem.pickupStack.map(({ stackIndex }) => stackIndex),
+    [0, 1, 2, 3, 4, 5],
+  );
 }
 
 function run() {
@@ -151,6 +186,8 @@ function run() {
   testPickupCombatTextMergesNearbyItemBursts();
   testCombatTextGroupsStackNearbyBursts();
   testCombatTextSeparatesDistinctTargetsAndExpiresByGroupLifetime();
+  testPickupCombatTextUsesSharedSpacingAndDrift();
+  testPickupCombatTextCapsVisibleEntries();
   console.log('Inventory and enemy drop tests passed.');
 }
 
