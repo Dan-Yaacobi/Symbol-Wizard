@@ -11,10 +11,16 @@ const PICKUP_LIFETIME_MIN = 2.5;
 const PICKUP_LIFETIME_MAX = 3.0;
 const PICKUP_MERGE_WINDOW = 0.45;
 const PICKUP_WORLD_OFFSET_Y = 2;
-const PICKUP_STACK_SPACING = 1.2;
-const PICKUP_LINE_HEIGHT_MULTIPLIER = 1.4;
-const PICKUP_STACK_PADDING = 2;
-const PICKUP_DRIFT_SPEED = 0.5;
+const PICKUP_SPAWN_OFFSET_X_RANGE = 0.6;
+const PICKUP_SPAWN_OFFSET_Y_RANGE = 0.3;
+const PICKUP_INITIAL_VX_RANGE = 0.3;
+const PICKUP_INITIAL_VY_MIN = -0.8;
+const PICKUP_INITIAL_VY_MAX = -0.4;
+const PICKUP_HORIZONTAL_DAMPING = 0.92;
+const PICKUP_MIN_SEPARATION = 0.8;
+const PICKUP_SEPARATION_FORCE = 0.02;
+const PICKUP_SCALE_VARIANCE_MIN = 0.95;
+const PICKUP_SCALE_VARIANCE_MAX = 1.05;
 const GROUP_DISTANCE_THRESHOLD = 1.5;
 const GROUP_MERGE_WINDOW = 0.2;
 const GROUP_STACK_SPACING = 1.2;
@@ -60,7 +66,6 @@ export class CombatTextSystem {
     this.pickupStack = [];
     this.pickupStackAnchorX = 0;
     this.pickupStackAnchorY = 0;
-    this.pickupStackDrift = 0;
     this.nextId = 1;
   }
 
@@ -119,13 +124,15 @@ export class CombatTextSystem {
       recentEntry.createdAt = nowSeconds;
       recentEntry.lifetime = this.#pickupLifetime();
       recentEntry.opacity = 1;
-      recentEntry.anchorX = this.pickupStackAnchorX;
-      recentEntry.anchorY = this.pickupStackAnchorY;
-      recentEntry.x = recentEntry.anchorX + recentEntry.xJitter;
-      recentEntry.baseY = this.#pickupBaseY();
-      recentEntry.y = recentEntry.baseY + this.#pickupYOffset(recentEntry.stackIndex) - this.pickupStackDrift;
+      recentEntry.age = 0;
       return;
     }
+
+    const baseX = entity.x;
+    const baseY = entity.y - PICKUP_WORLD_OFFSET_Y;
+    const offsetX = this.#randomRange(-PICKUP_SPAWN_OFFSET_X_RANGE, PICKUP_SPAWN_OFFSET_X_RANGE);
+    const offsetY = this.#randomRange(-PICKUP_SPAWN_OFFSET_Y_RANGE, PICKUP_SPAWN_OFFSET_Y_RANGE);
+    const scale = this.#pickupStyle().fontScale * this.#randomRange(PICKUP_SCALE_VARIANCE_MIN, PICKUP_SCALE_VARIANCE_MAX);
 
     this.pickupStack.push({
       id: `pickup_${this.nextId++}`,
@@ -136,21 +143,19 @@ export class CombatTextSystem {
       createdAt: nowSeconds,
       lifetime: this.#pickupLifetime(),
       opacity: 1,
-      stackIndex: this.pickupStack.length,
-      xJitter: this.#randomJitter(GROUP_JITTER_RANGE),
-      drift: 0,
-      anchorX: this.pickupStackAnchorX,
-      anchorY: this.pickupStackAnchorY,
-      x: entity.x,
-      baseY: this.#pickupBaseY(),
-      y: this.#pickupBaseY() + this.#pickupYOffset(this.pickupStack.length),
+      age: 0,
+      anchorX: baseX,
+      anchorY: baseY,
+      x: baseX + offsetX,
+      y: baseY + offsetY,
+      vx: this.#randomRange(-PICKUP_INITIAL_VX_RANGE, PICKUP_INITIAL_VX_RANGE),
+      vy: this.#randomRange(PICKUP_INITIAL_VY_MIN, PICKUP_INITIAL_VY_MAX),
+      style: { ...this.#pickupStyle(), fontScale: scale },
     });
 
     if (this.pickupStack.length > MAX_VISIBLE_PICKUP_TEXTS) {
       this.pickupStack.shift();
     }
-
-    this.#reflowPickupStack();
   }
 
   update(dt, nowSeconds = performance.now() / 1000) {
@@ -175,26 +180,23 @@ export class CombatTextSystem {
     this.textGroups.length = writeIndex;
 
     let pickupWriteIndex = 0;
-    this.pickupStackDrift += PICKUP_DRIFT_SPEED * dt;
     for (let i = 0; i < this.pickupStack.length; i += 1) {
       const entry = this.pickupStack[i];
       const age = nowSeconds - entry.createdAt;
       if (age >= entry.lifetime) continue;
-      entry.stackIndex = pickupWriteIndex;
       entry.anchorX = this.pickupStackAnchorX;
       entry.anchorY = this.pickupStackAnchorY;
-      entry.x = this.pickupStackAnchorX + (entry.xJitter ?? 0);
-      entry.baseY = this.#pickupBaseY();
-      entry.y = entry.baseY + this.#pickupYOffset(pickupWriteIndex) - this.pickupStackDrift;
+      entry.x += (entry.vx ?? 0) * dt;
+      entry.y += (entry.vy ?? 0) * dt;
+      entry.vx *= PICKUP_HORIZONTAL_DAMPING;
       entry.opacity = 1 - age / entry.lifetime;
+      entry.age = age;
       this.pickupStack[pickupWriteIndex] = entry;
       pickupWriteIndex += 1;
     }
     this.pickupStack.length = pickupWriteIndex;
 
-    if (this.pickupStack.length === 0) {
-      this.pickupStackDrift = 0;
-    }
+    this.#separatePickupEntries();
   }
 
   render(renderer, camera) {
@@ -269,34 +271,36 @@ export class CombatTextSystem {
 
 
 
-  #pickupLineHeight(style = TEXT_STYLES.pickup) {
-    const fontSize = Number.isFinite(style?.fontScale) ? style.fontScale : TEXT_STYLES.pickup.fontScale;
-    return Math.max(PICKUP_STACK_SPACING, (fontSize * PICKUP_LINE_HEIGHT_MULTIPLIER) + PICKUP_STACK_PADDING);
-  }
-
-  #pickupYOffset(index, style = TEXT_STYLES.pickup) {
-    return index * -this.#pickupLineHeight(style);
-  }
-
-  #pickupBaseY() {
-    return this.pickupStackAnchorY;
-  }
-
-  #reflowPickupStack() {
-    const baseY = this.#pickupBaseY();
-    for (let i = 0; i < this.pickupStack.length; i += 1) {
-      const entry = this.pickupStack[i];
-      entry.stackIndex = i;
-      entry.anchorX = this.pickupStackAnchorX;
-      entry.anchorY = this.pickupStackAnchorY;
-      entry.baseY = baseY;
-      entry.x = this.pickupStackAnchorX + (entry.xJitter ?? 0);
-      entry.y = baseY + this.#pickupYOffset(i) - this.pickupStackDrift;
-    }
-  }
-
   #pickupLifetime() {
     return PICKUP_LIFETIME_MIN + Math.random() * (PICKUP_LIFETIME_MAX - PICKUP_LIFETIME_MIN);
+  }
+
+  #randomRange(min, max) {
+    return min + Math.random() * (max - min);
+  }
+
+  #separatePickupEntries() {
+    for (let i = 0; i < this.pickupStack.length; i += 1) {
+      const entryA = this.pickupStack[i];
+      for (let j = i + 1; j < this.pickupStack.length; j += 1) {
+        const entryB = this.pickupStack[j];
+        const dx = entryA.x - entryB.x;
+        const dy = entryA.y - entryB.y;
+        const distance = Math.hypot(dx, dy);
+
+        if (distance >= PICKUP_MIN_SEPARATION) continue;
+
+        const normalizedX = distance > 0 ? dx / distance : (j - i) % 2 === 0 ? 1 : -1;
+        const normalizedY = distance > 0 ? dy / distance : -0.35;
+        const pushX = normalizedX * PICKUP_SEPARATION_FORCE;
+        const pushY = normalizedY * PICKUP_SEPARATION_FORCE;
+
+        entryA.x += pushX;
+        entryA.y += pushY;
+        entryB.x -= pushX;
+        entryB.y -= pushY;
+      }
+    }
   }
 
   #renderPickupStack(renderer, camera) {
@@ -310,7 +314,7 @@ export class CombatTextSystem {
       const label = `+ ${name} x${entry.quantity}`;
       const x = entry.x - cameraX;
       const y = entry.y - cameraY;
-      this.#drawOutlinedText(renderer, label, this.#pickupStyle(), x, y, entry.opacity);
+      this.#drawOutlinedText(renderer, label, entry.style ?? this.#pickupStyle(), x, y, entry.opacity);
     }
   }
 
