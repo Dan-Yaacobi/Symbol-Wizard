@@ -159,39 +159,37 @@ function randomRange(min, max) {
 }
 
 function createWorldDrop(drop) {
-  const x = (drop?.x ?? 0) + randomRange(-1.5, 1.5);
-  const y = (drop?.y ?? 0) + randomRange(-1.5, 1.5);
+  const angle = randomRange(0, Math.PI * 2);
+  const speed = randomRange(2, 4);
+  const duration = randomRange(0.15, 0.25);
 
   return {
     ...drop,
-    x,
-    y,
-    baseY: y,
-    vx: randomRange(-3.5, 3.5),
-    vy: randomRange(2.5, 5.25),
-    ttlBounce: 0.2,
-    bobPhase: randomRange(0, Math.PI * 2),
-    blockedPickupAt: -Infinity,
+    x: drop?.x ?? 0,
+    y: drop?.y ?? 0,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    life: 0,
+    duration,
   };
 }
 
 function updateWorldDrops(dt) {
   const kept = [];
-  const gravity = 24;
 
   for (const drop of worldDrops) {
-    if ((drop.ttlBounce ?? 0) > 0) {
+    drop.life = (drop.life ?? 0) + dt;
+    const duration = Math.max(0.0001, drop.duration ?? 0.2);
+    const t = drop.life / duration;
+
+    if (t < 1) {
       drop.x += (drop.vx ?? 0) * dt;
-      drop.y -= (drop.vy ?? 0) * dt;
-      drop.vx *= Math.max(0, 1 - dt * 6);
-      drop.vy -= gravity * dt;
-      drop.ttlBounce = Math.max(0, drop.ttlBounce - dt);
-      if (drop.ttlBounce <= 0) {
-        drop.y = drop.baseY ?? drop.y;
-        drop.vx = 0;
-        drop.vy = 0;
-      }
+      drop.y += (drop.vy ?? 0) * dt;
+    } else {
+      drop.vx = 0;
+      drop.vy = 0;
     }
+
     kept.push(drop);
   }
 
@@ -204,7 +202,7 @@ function collectWorldDrops() {
   for (const drop of worldDrops) {
     const dx = drop.x - player.x;
     const dy = drop.y - player.y;
-    if ((dx * dx + dy * dy) >= (1.2 * 1.2)) {
+    if ((dx * dx + dy * dy) >= (2.5 * 2.5)) {
       kept.push(drop);
       continue;
     }
@@ -215,18 +213,15 @@ function collectWorldDrops() {
 
     if (added > 0) {
       triggerItemPickupFeedback(drop.itemId, added);
-      combatTextSystem.spawnPickupText(drop.itemId, added);
+      combatTextSystem.spawnPickupText(player, drop.itemId, added);
     }
 
     if (remaining > 0) {
       kept.push({
         ...drop,
         quantity: remaining,
-        blockedPickupAt: performance.now() / 1000,
       });
-      if ((performance.now() / 1000) - (drop.blockedPickupAt ?? -Infinity) > 0.4) {
-        combatTextSystem.spawnInfoText(player, 'Inventory Full');
-      }
+      combatTextSystem.spawnInfoText(player, 'Inventory Full');
     }
   }
 

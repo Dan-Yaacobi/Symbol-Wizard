@@ -2,16 +2,17 @@ import { getItemDefinition } from '../data/ItemRegistry.js';
 import { visualTheme } from '../data/VisualTheme.js';
 
 const MAX_ACTIVE_TEXTS = 20;
-const MIN_LIFETIME = 0.9;
-const MAX_LIFETIME = 1.3;
-const DEFAULT_UPWARD_SPEED = 13;
+const MIN_LIFETIME = 1.6;
+const MAX_LIFETIME = 1.8;
+const DEFAULT_UPWARD_SPEED = 0.5;
 const VERTICAL_OFFSET = 3.8;
 const DEBUG_COMBAT_TEXT = false;
-const PICKUP_LIFETIME_MIN = 1.5;
-const PICKUP_LIFETIME_MAX = 2.0;
+const PICKUP_LIFETIME_MIN = 2.5;
+const PICKUP_LIFETIME_MAX = 3.0;
 const PICKUP_MERGE_WINDOW = 0.45;
-const PICKUP_START_Y_PX = 20;
-const PICKUP_ROW_HEIGHT_PX = 16;
+const PICKUP_WORLD_OFFSET_Y = 2;
+const PICKUP_STACK_SPACING = 0.6;
+const PICKUP_DRIFT_SPEED = 0.5;
 // Toggle to true while diagnosing combat-text lifecycle issues without spamming normal gameplay logs.
 
 const COLOR_MAP = {
@@ -34,7 +35,7 @@ const TEXT_STYLES = {
   gold: { color: COLOR_MAP.gold, fontScale: 2.35, fontWeight: '700' },
   heal: { color: COLOR_MAP.green, fontScale: 2.35, fontWeight: '700' },
   info: { color: COLOR_MAP.white, fontScale: 2.2, fontWeight: '700' },
-  pickup: { color: COLOR_MAP.white, fontScale: 1.25, fontWeight: '700' },
+  pickup: { color: COLOR_MAP.white, fontScale: 1.5, fontWeight: '700' },
 };
 
 function isFiniteNumber(value) {
@@ -57,7 +58,7 @@ export class CombatTextSystem {
     }
 
     const amount = Math.max(0, Math.round(damage));
-    const text = isCritical ? `*${amount}*` : `-${amount}`;
+    const text = isCritical ? `${amount}!` : `${amount}`;
     this.#spawnText(entity.x, entity.y - this.#getConfig('combat.damageTextVerticalDrift', VERTICAL_OFFSET), text, isCritical ? this.#criticalStyle() : this.#damageStyle());
   }
 
@@ -94,8 +95,8 @@ export class CombatTextSystem {
   }
 
 
-  spawnPickupText(itemId, quantity, nowSeconds = performance.now() / 1000) {
-    if (!itemId || !Number.isFinite(quantity) || quantity <= 0) return;
+  spawnPickupText(entity, itemId, quantity, nowSeconds = performance.now() / 1000) {
+    if (!this.#hasValidEntityPosition(entity) || !itemId || !Number.isFinite(quantity) || quantity <= 0) return;
 
     const recentEntry = this.pickupStack.findLast?.((entry) => entry.itemId === itemId && nowSeconds - entry.time <= PICKUP_MERGE_WINDOW)
       ?? [...this.pickupStack].reverse().find((entry) => entry.itemId === itemId && nowSeconds - entry.time <= PICKUP_MERGE_WINDOW);
@@ -106,6 +107,11 @@ export class CombatTextSystem {
       recentEntry.createdAt = nowSeconds;
       recentEntry.lifetime = this.#pickupLifetime();
       recentEntry.opacity = 1;
+      recentEntry.anchorX = entity.x;
+      recentEntry.anchorY = entity.y - PICKUP_WORLD_OFFSET_Y;
+      recentEntry.x = recentEntry.anchorX + recentEntry.xJitter;
+      recentEntry.baseY = recentEntry.anchorY - recentEntry.stackIndex * PICKUP_STACK_SPACING;
+      recentEntry.y = recentEntry.baseY - recentEntry.drift;
       return;
     }
 
@@ -118,7 +124,14 @@ export class CombatTextSystem {
       createdAt: nowSeconds,
       lifetime: this.#pickupLifetime(),
       opacity: 1,
-      xOffsetPx: Math.round((Math.random() - 0.5) * 10),
+      stackIndex: this.pickupStack.length,
+      xJitter: (() => { const jitter = (Math.random() * 0.4) - 0.2; return jitter; })(),
+      drift: 0,
+      anchorX: entity.x,
+      anchorY: entity.y - PICKUP_WORLD_OFFSET_Y,
+      x: entity.x,
+      baseY: entity.y - PICKUP_WORLD_OFFSET_Y - this.pickupStack.length * PICKUP_STACK_SPACING,
+      y: entity.y - PICKUP_WORLD_OFFSET_Y - this.pickupStack.length * PICKUP_STACK_SPACING,
     });
   }
 
@@ -146,6 +159,11 @@ export class CombatTextSystem {
       const entry = this.pickupStack[i];
       const age = nowSeconds - entry.createdAt;
       if (age >= entry.lifetime) continue;
+      entry.drift += PICKUP_DRIFT_SPEED * dt;
+      entry.stackIndex = pickupWriteIndex;
+      entry.x = (entry.anchorX ?? entry.x ?? 0) + (entry.xJitter ?? 0);
+      entry.baseY = (entry.anchorY ?? entry.baseY ?? 0) - pickupWriteIndex * PICKUP_STACK_SPACING;
+      entry.y = entry.baseY - entry.drift;
       entry.opacity = 1 - age / entry.lifetime;
       this.pickupStack[pickupWriteIndex] = entry;
       pickupWriteIndex += 1;
@@ -173,10 +191,10 @@ export class CombatTextSystem {
       }
 
       const drawStyle = this.#getAnimatedStyle(entry);
-      renderer.drawEffectText(entry.text, drawStyle.color, screenX, screenY, entry.opacity, '#09101a', drawStyle);
+      this.#drawOutlinedText(renderer, entry.text, drawStyle, screenX, screenY, entry.opacity);
     }
 
-    this.#renderPickupStack(renderer);
+    this.#renderPickupStack(renderer, camera);
   }
 
   #getAnimatedStyle(entry) {
@@ -225,21 +243,28 @@ export class CombatTextSystem {
     return PICKUP_LIFETIME_MIN + Math.random() * (PICKUP_LIFETIME_MAX - PICKUP_LIFETIME_MIN);
   }
 
-  #renderPickupStack(renderer) {
-    const baseY = PICKUP_START_Y_PX / renderer.cellH;
-    const rowHeight = PICKUP_ROW_HEIGHT_PX / renderer.cellH;
+  #renderPickupStack(renderer, camera) {
+    const cameraX = isFiniteNumber(camera?.x) ? camera.x : 0;
+    const cameraY = isFiniteNumber(camera?.y) ? camera.y : 0;
 
     for (let i = 0; i < this.pickupStack.length; i += 1) {
       const entry = this.pickupStack[i];
       const item = getItemDefinition(entry.itemId);
-      const icon = item?.icon ?? '*';
       const name = item?.name ?? entry.itemId;
-      const label = `${icon} ${name} x${entry.quantity}`;
-      const xOffsetCells = (entry.xOffsetPx ?? 0) / renderer.cellW;
-      const y = baseY + i * rowHeight;
-      const x = Math.max(1, renderer.cols - label.length - 2) + xOffsetCells;
-      renderer.drawEffectText(label, this.#pickupStyle().color, x, y, entry.opacity, 'rgba(0,0,0,0)', this.#pickupStyle());
+      const label = `+ ${name} x${entry.quantity}`;
+      const x = entry.x - cameraX;
+      const y = entry.y - cameraY;
+      this.#drawOutlinedText(renderer, label, this.#pickupStyle(), x, y, entry.opacity);
     }
+  }
+
+
+  #drawOutlinedText(renderer, text, style, x, y, opacity) {
+    const outlineOffsets = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (const [offsetX, offsetY] of outlineOffsets) {
+      renderer.drawEffectText(text, '#000000', x + offsetX, y + offsetY, opacity, 'rgba(0,0,0,0)', style);
+    }
+    renderer.drawEffectText(text, style.color, x, y, opacity, 'rgba(0,0,0,0)', style);
   }
 
   #hasValidEntityPosition(entity) {
@@ -278,6 +303,8 @@ export class CombatTextSystem {
       id: `ct_${this.nextId}`,
       x,
       y,
+      anchorX: x,
+      anchorY: y,
       text: safeText,
       style: resolvedStyle,
       createdAt: nowSeconds,
