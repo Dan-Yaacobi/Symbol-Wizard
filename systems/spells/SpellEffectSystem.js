@@ -1,6 +1,7 @@
 const LEGACY_EFFECT_MAP = Object.freeze({
   explode_on_hit: 'explode',
   spawn_zone_on_hit: 'zone_on_hit',
+  emit_projectiles: 'emit_projectiles',
   pierce: 'pierce',
 });
 
@@ -63,6 +64,24 @@ function copyEffect(effect) {
   return effect ? { ...effect } : effect;
 }
 
+function copyComponent(component) {
+  if (!component || typeof component !== 'object') return component;
+  return { ...component, hooks: component.hooks ? { ...component.hooks } : component.hooks };
+}
+
+function createRuntimeHandleEvent(instance) {
+  return function handleEvent(eventName, payload) {
+    this.components.forEach((component) => {
+      if (typeof component?.hooks?.[eventName] === 'function') {
+        component.hooks[eventName](this, payload);
+      }
+      if (typeof component?.[eventName] === 'function') {
+        component[eventName](payload, this);
+      }
+    });
+  };
+}
+
 function reflectVector(dx, dy, normalX, normalY) {
   const dot = dx * normalX + dy * normalY;
   return {
@@ -87,12 +106,19 @@ function inferCollisionNormal(projectile, map) {
 }
 
 function spawnZoneInstance(system, instance, x, y, effect) {
+  const parentDepth = clampInt(instance?.state?.zoneSpawnDepth, 0, 0);
+  const maxDepth = clampInt(effect.maxDepth ?? effect.zoneSpawnMaxDepth, 1, 0);
+  if (parentDepth >= maxDepth) return null;
+
+  const inheritedEffects = (Array.isArray(instance?.effects) ? instance.effects : [])
+    .map(copyEffect)
+    .filter((item) => item?.type !== 'emit_projectiles');
   const zoneInstance = {
     base: { ...(instance?.base ?? {}), behavior: 'zone' },
     currentElement: instance?.currentElement ?? instance?.base?.element ?? null,
-    components: [],
-    effects: [],
-    config: {},
+    components: (Array.isArray(instance?.components) ? instance.components : []).map(copyComponent),
+    effects: inheritedEffects,
+    config: { ...(instance?.config ?? {}), behavior: 'zone' },
     parameters: {
       ...(instance?.parameters ?? {}),
       radius: effect.radius,
@@ -101,10 +127,17 @@ function spawnZoneInstance(system, instance, x, y, effect) {
       damage: effect.damage,
       color: effect.color ?? instance?.parameters?.color ?? '#cfe7ff',
     },
-    state: { age: 0, lifetime: effect.duration, tickTimer: 0 },
-    handleEvent() {},
+    state: {
+      age: 0,
+      lifetime: effect.duration,
+      tickTimer: 0,
+      hasHit: false,
+      zoneSpawnDepth: parentDepth + 1,
+    },
+    handleEvent: createRuntimeHandleEvent(null),
   };
-  system.activeSpellInstances?.push?.({ instance: zoneInstance, components: [] });
+  zoneInstance.handleEvent = createRuntimeHandleEvent(zoneInstance);
+  system.activeSpellInstances?.push?.({ instance: zoneInstance, components: zoneInstance.components });
   zoneInstance.state.zone = {
     x,
     y,
@@ -132,6 +165,7 @@ export class SpellEffectSystem {
     projectile.effectState.uniqueTargets ??= new Set();
     projectile.effectState.splitDepth = clampInt(projectile.effectState.splitDepth ?? instance?.state?.splitDepth, 0, 0);
     projectile.effectState.bounceTTL = 0;
+    projectile.effectState.emitTimers ??= {};
 
     for (const effect of effects) {
       if (effect.type === 'pierce') {
@@ -153,36 +187,122 @@ export class SpellEffectSystem {
     const projectileEffects = Array.isArray(context?.projectile?.effects) ? context.projectile.effects : [];
     const instanceEffects = Array.isArray(context?.instance?.effects) ? context.instance.effects : [];
     const effects = projectileEffects.length > 0 ? projectileEffects : instanceEffects;
-    for (const effect of effects) {
+    for (let effectIndex = 0; effectIndex < effects.length; effectIndex += 1) {
+      const effect = effects[effectIndex];
       if (!effect?.type) continue;
+      const effectContext = context;
+      effectContext.effectIndex = effectIndex;
       switch (effect.type) {
         case 'explode':
-          if (hook === 'onHit') this.#explode(effect, context);
+          if (hook === 'onHit') this.#explode(effect, effectContext);
           break;
         case 'pierce':
-          if (hook === 'onHit') this.#pierce(effect, context);
+          if (hook === 'onHit') this.#pierce(effect, effectContext);
           break;
         case 'chain':
-          if (hook === 'onHit') this.#chain(effect, context);
+          if (hook === 'onHit') this.#chain(effect, effectContext);
           break;
         case 'bounce':
-          if (hook === 'onHit' || hook === 'onExpire') this.#bounce(effect, context);
+          if (hook === 'onHit' || hook === 'onExpire') this.#bounce(effect, effectContext);
           break;
         case 'trail':
-          if (hook === 'onTick') this.#trail(effect, context);
+          if (hook === 'onTick') this.#trail(effect, effectContext);
           break;
         case 'split':
-          if (hook === 'onHit') this.#split(effect, context);
+          if (hook === 'onHit') this.#split(effect, effectContext);
           break;
         case 'knockback':
-          if (hook === 'onHit') this.#knockback(effect, context);
+          if (hook === 'onHit') this.#knockback(effect, effectContext);
           break;
         case 'zone_on_hit':
-          if (hook === 'onHit') this.#zoneOnHit(effect, context);
+          if (hook === 'onHit') this.#zoneOnHit(effect, effectContext);
+          break;
+        case 'emit_projectiles':
+          this.#emitProjectiles(effect, hook, effectContext);
           break;
         default:
           break;
       }
+    }
+  }
+
+  static #emitProjectiles(effect, hook, context) {
+    const instance = context?.instance;
+    const system = context?.system;
+    if (!instance || !system) return;
+
+    const behavior = instance.base?.behavior;
+    if (behavior === 'zone') {
+      console.warn(`[SpellSystem] emit_projectiles is unsupported for zone spells (spell: ${instance.base?.id ?? 'unknown'}).`);
+      return;
+    }
+
+    const trigger = effect.trigger ?? (behavior === 'beam' ? 'onTick' : 'onCast');
+    if (hook !== trigger) return;
+
+    const timerStore = context?.projectile?.effectState?.emitTimers ?? (instance.state.emitTimers ??= {});
+    const timerKey = `${effect.type}:${context.effectIndex ?? 0}`;
+    const interval = Math.max(0.05, effect.interval ?? effect.tickInterval ?? 0.2);
+    if (hook === 'onTick') {
+      timerStore[timerKey] = (timerStore[timerKey] ?? 0) + (context.dt ?? 0);
+      if (timerStore[timerKey] + 1e-9 < interval) return;
+      timerStore[timerKey] = 0;
+    }
+
+    let originX = null;
+    let originY = null;
+    let dirX = null;
+    let dirY = null;
+    const projectile = context?.projectile;
+    if (projectile) {
+      originX = projectile.x;
+      originY = projectile.y;
+      dirX = projectile.dx;
+      dirY = projectile.dy;
+    } else if (behavior === 'beam') {
+      const beam = instance.state?.beam;
+      if (!beam) return;
+      originX = beam.originX;
+      originY = beam.originY;
+      dirX = beam.dirX;
+      dirY = beam.dirY;
+    } else {
+      const cast = instance.state?.cast;
+      if (!cast) return;
+      originX = cast.originX;
+      originY = cast.originY;
+      dirX = cast.dirX;
+      dirY = cast.dirY;
+    }
+
+    const count = Math.max(2, clampInt(effect.count ?? effect.emitCount, 3, 2));
+    const spread = Number.isFinite(effect.spreadDegrees) ? effect.spreadDegrees : 30;
+    const step = count > 1 ? spread / (count - 1) : 0;
+    const start = -spread / 2;
+
+    for (let i = 0; i < count; i += 1) {
+      const radians = ((start + step * i) * Math.PI) / 180;
+      const cos = Math.cos(radians);
+      const sin = Math.sin(radians);
+      const dx = dirX * cos - dirY * sin;
+      const dy = dirX * sin + dirY * cos;
+      const child = system.createProjectile(originX, originY, dx, dy, {
+        speed: effect.speed ?? instance.parameters?.speed ?? projectile?.speed ?? 60,
+        damage: Math.max(1, effect.damage ?? Math.round((effect.damageMultiplier ?? 0.6) * (context.damage ?? instance.parameters?.damage ?? projectile?.damage ?? 1))),
+        ttl: Math.max(0.15, effect.ttl ?? effect.duration ?? projectile?.ttl ?? instance.parameters?.ttl ?? 0.7),
+        radius: effect.radius ?? projectile?.radius ?? instance.parameters?.size ?? 1,
+        color: effect.color ?? projectile?.color ?? instance.parameters?.color ?? '#9cc7ff',
+        hitParticleColor: effect.color ?? projectile?.hitParticleColor ?? instance.parameters?.hitParticleColor,
+        spriteFrames: projectile?.spriteFrames ?? instance.parameters?.spriteFrames,
+        spellInstance: instance,
+        onHit: (payload) => {
+          if (!instance.parameters?.pierce) instance.state.hasHit = true;
+          instance.handleEvent('onHit', payload);
+        },
+      });
+      if (!child) continue;
+      child.spellInstance = instance;
+      this.initializeProjectile(child, instance);
     }
   }
 
@@ -334,8 +454,19 @@ export class SpellEffectSystem {
   }
 
   static #zoneOnHit(effect, context) {
-    const { system, instance, x, y } = context;
+    const { system, instance, x, y, target } = context;
     if (!system || !instance || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    instance.state.zoneOnHitHistory ??= {};
+    const historyKey = String(context.effectIndex ?? 0);
+    const record = instance.state.zoneOnHitHistory[historyKey] ??= { targets: new WeakSet(), positions: new Set() };
+    if (target && typeof target === 'object') {
+      if (record.targets.has(target)) return;
+      record.targets.add(target);
+    } else {
+      const positionKey = `${Math.round(x * 10)}:${Math.round(y * 10)}`;
+      if (record.positions.has(positionKey)) return;
+      record.positions.add(positionKey);
+    }
     spawnZoneInstance(system, instance, x, y, effect);
   }
 }

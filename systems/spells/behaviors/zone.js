@@ -8,6 +8,7 @@ export function executeBehavior(instance, context) {
   const tickInterval = Number.isFinite(instance.parameters?.tickInterval) ? instance.parameters.tickInterval : 0.25;
   const damage = Number.isFinite(instance.parameters?.damage) ? instance.parameters.damage : 1;
 
+  instance.state.cast = { originX: targetPosition.x, originY: targetPosition.y, dirX: 1, dirY: 0 };
   instance.state.zone = {
     x: targetPosition.x,
     y: targetPosition.y,

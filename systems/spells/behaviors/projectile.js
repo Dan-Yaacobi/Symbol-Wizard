@@ -11,7 +11,11 @@ export function executeBehavior(instance, context) {
   const length = Math.hypot(dx, dy);
   if (!Number.isFinite(length) || length === 0) return false;
 
-  const projectile = system.createProjectile(origin.x, origin.y, dx / length, dy / length, {
+  const normX = dx / length;
+  const normY = dy / length;
+  instance.state.cast = { originX: origin.x, originY: origin.y, dirX: normX, dirY: normY };
+
+  const projectile = system.createProjectile(origin.x, origin.y, normX, normY, {
     speed: instance.parameters?.speed ?? 65,
     damage: instance.parameters?.damage ?? 3,
     ttl: instance.parameters?.ttl ?? instance.parameters?.lifetime ?? 0.9,
