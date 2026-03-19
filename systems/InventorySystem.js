@@ -40,6 +40,13 @@ export function hasItem(inventory, itemId, amount = 1) {
   return getItemCount(inventory, itemId) >= amount;
 }
 
+export function getAllItems(inventory) {
+  const safeInventory = ensureInventory(inventory, { warn: true, context: 'InventorySystem.getAllItems' });
+  return safeInventory.slots
+    .filter((slot) => slot && typeof slot.itemId === 'string' && Number.isFinite(slot.quantity) && slot.quantity > 0)
+    .map((slot) => ({ itemId: slot.itemId, quantity: slot.quantity }));
+}
+
 export function addItem(inventory, itemId, amount = 1) {
   const item = assertItemDefinition(itemId);
   const requested = Math.max(0, Math.floor(amount));

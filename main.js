@@ -29,6 +29,7 @@ import { SpellRegistry, defaultSpellSlots } from './data/spells.js';
 import { AbilitySystem } from './systems/AbilitySystem.js';
 import { SpellbookWindow } from './ui/SpellbookWindow.js';
 import { SpellCraftingWindow } from './ui/SpellCraftingWindow.js';
+import { InventoryWindow } from './ui/InventoryWindow.js';
 import { PrefabEditorScreen } from './ui/PrefabEditorScreen.js';
 import { palette } from './entities/SpriteLibrary.js';
 import { visualTheme } from './data/VisualTheme.js';
@@ -193,6 +194,7 @@ const spellCraftingWindow = new SpellCraftingWindow({
     return true;
   },
 });
+const inventoryWindow = new InventoryWindow({ root: uiRoot, player });
 let isCraftingUIOpen = false;
 
 const prefabEditor = new PrefabEditorScreen();
@@ -208,6 +210,7 @@ let f7Latch = false;
 let f8Latch = false;
 let f9Latch = false;
 let craftingToggleLatch = false;
+let inventoryToggleLatch = false;
 
 const objectEditorButton = document.createElement('button');
 objectEditorButton.type = 'button';
@@ -638,7 +641,7 @@ function handlePlayer(dt) {
   let moveX = 0;
   let moveY = 0;
 
-  const gameplayInputBlocked = dialogueManager.isOpen || isCraftingUIOpen;
+  const gameplayInputBlocked = dialogueManager.isOpen || isCraftingUIOpen || inventoryWindow.isOpen();
 
   if (!gameplayInputBlocked && input.isDown('w')) moveY -= 1;
   if (!gameplayInputBlocked && input.isDown('s')) moveY += 1;
@@ -680,7 +683,7 @@ function handlePlayer(dt) {
   player.castTimer = Math.max(0, (player.castTimer ?? 0) - dt);
   player.castCooldown = runtimeConfig.get('player.castDuration');
 
-  if (!dialogueManager.isOpen && !isCraftingUIOpen) {
+  if (!dialogueManager.isOpen && !isCraftingUIOpen && !inventoryWindow.isOpen()) {
     const interactDown = input.isDown('e');
     if (interactDown && !interactLatch) {
       tryInteractInFront(player, worldObjects);
@@ -751,6 +754,13 @@ function tick(now) {
     spellCraftingWindow.toggle();
   }
   craftingToggleLatch = craftingToggleDown;
+
+  const inventoryDown = input.isDown('i');
+  if (inventoryDown && !inventoryToggleLatch) {
+    inventoryWindow.toggle();
+  }
+  inventoryToggleLatch = inventoryDown;
+  if (inventoryWindow.isOpen()) inventoryWindow.render();
   player.frameDurations.walk = runtimeConfig.get('sprites.playerWalkFrameDuration');
   player.frameDurations.idle = runtimeConfig.get('sprites.playerIdleFrameDuration');
   palette.player = runtimeConfig.get('palette.playerPrimary');
