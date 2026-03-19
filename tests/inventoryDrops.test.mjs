@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 
 import { Player } from '../entities/Player.js';
 import { getItemDefinition, ItemRegistry } from '../data/ItemRegistry.js';
-import { addItem, createInventory, getItemCount, hasItem, removeItem } from '../systems/InventorySystem.js';
+import { addItem, createInventory, ensureInventory, getItemCount, hasItem, isInventory, removeItem } from '../systems/InventorySystem.js';
 import { awardEnemyDrops } from '../systems/LootSystem.js';
 
 function withMockedRandom(sequence, fn) {
@@ -51,6 +51,25 @@ function testInventoryFailsWhenFull() {
   assert.equal(result.remaining, 1);
 }
 
+
+function testPlayerKeepsCanonicalInventoryShape() {
+  const player = new Player(0, 0);
+
+  assert.equal(isInventory(player.inventory), true);
+
+  const addResult = player.addItem('essence', 5);
+  assert.equal(addResult.success, true);
+  assert.equal(player.getItemCount('essence'), 5);
+  assert.equal(player.hasItem('essence', 5), true);
+  assert.equal(player.removeItem('essence', 3), true);
+  assert.equal(player.getItemCount('essence'), 2);
+}
+
+function testEnsureInventoryProvidesSafeFallback() {
+  const fallback = ensureInventory(new Map(), { fallbackMaxSlots: 8 });
+  assert.deepEqual(fallback, { slots: [], maxSlots: 8 });
+}
+
 function testEnemyDropsGoDirectlyIntoInventoryAndShowFeedback() {
   const player = new Player(0, 0);
   const infoTexts = [];
@@ -80,6 +99,8 @@ function run() {
   testItemRegistryContainsCraftingFeeders();
   testInventoryStacksAndCountsItems();
   testInventoryFailsWhenFull();
+  testPlayerKeepsCanonicalInventoryShape();
+  testEnsureInventoryProvidesSafeFallback();
   testEnemyDropsGoDirectlyIntoInventoryAndShowFeedback();
   console.log('Inventory and enemy drop tests passed.');
 }
