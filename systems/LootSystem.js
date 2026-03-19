@@ -1,3 +1,88 @@
+import { getItemDefinition } from '../data/ItemRegistry.js';
+import { addItem } from './InventorySystem.js';
+
+export const ENEMY_DROP_TABLES = Object.freeze({
+  spider: {
+    drops: [
+      { itemId: 'essence', chance: 1, min: 1, max: 3 },
+      { itemId: 'spider_eye', chance: 0.4, min: 1, max: 1 },
+    ],
+  },
+  wasp: {
+    drops: [
+      { itemId: 'essence', chance: 1, min: 1, max: 2 },
+      { itemId: 'wasp_stinger', chance: 0.45, min: 1, max: 1 },
+      { itemId: 'poison_gland', chance: 0.12, min: 1, max: 1 },
+    ],
+  },
+  forest_beetle: {
+    drops: [
+      { itemId: 'essence', chance: 1, min: 2, max: 4 },
+      { itemId: 'stone', chance: 0.35, min: 1, max: 2 },
+      { itemId: 'skull_fragment', chance: 0.18, min: 1, max: 1 },
+    ],
+  },
+  swarm_bug: {
+    drops: [
+      { itemId: 'essence', chance: 1, min: 1, max: 1 },
+      { itemId: 'wood', chance: 0.25, min: 1, max: 1 },
+    ],
+  },
+  forest_mantis: {
+    drops: [
+      { itemId: 'essence', chance: 1, min: 2, max: 3 },
+      { itemId: 'poison_gland', chance: 0.3, min: 1, max: 1 },
+      { itemId: 'skull_fragment', chance: 0.15, min: 1, max: 1 },
+    ],
+  },
+});
+
+function randomInt(min, max) {
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
+export function rollEnemyDrops(enemy) {
+  const enemyType = enemy?.enemyType ?? enemy?.kind;
+  const table = ENEMY_DROP_TABLES[enemyType];
+  if (!table?.drops?.length) return [];
+
+  const drops = [];
+  for (const drop of table.drops) {
+    if (!drop?.itemId || Math.random() > (drop.chance ?? 0)) continue;
+    const min = Number.isFinite(drop.min) ? drop.min : 1;
+    const max = Number.isFinite(drop.max) ? Math.max(min, drop.max) : min;
+    const quantity = randomInt(min, max);
+    if (quantity <= 0) continue;
+    drops.push({ itemId: drop.itemId, quantity });
+  }
+  return drops;
+}
+
+export function awardEnemyDrops(player, enemy, combatTextSystem = null) {
+  const inventory = player?.inventory;
+  if (!inventory) return { drops: [], added: [], rejected: [] };
+
+  const drops = rollEnemyDrops(enemy);
+  const added = [];
+  const rejected = [];
+
+  for (const drop of drops) {
+    const result = addItem(inventory, drop.itemId, drop.quantity);
+    if (result.added > 0) {
+      const entry = { ...drop, quantity: result.added };
+      added.push(entry);
+      const item = getItemDefinition(drop.itemId);
+      combatTextSystem?.spawnInfoText(player, `+${entry.quantity} ${item?.name ?? drop.itemId}`);
+    }
+    if (result.remaining > 0) {
+      rejected.push({ ...drop, quantity: result.remaining, reason: 'inventory_full' });
+      combatTextSystem?.spawnInfoText(player, 'Inventory Full');
+    }
+  }
+
+  return { drops, added, rejected };
+}
+
 export function spawnGold(enemy) {
   return {
     type: 'gold',

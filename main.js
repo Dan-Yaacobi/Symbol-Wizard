@@ -140,6 +140,18 @@ let projectiles = [];
 let goldPiles = [];
 const combatTextSystem = new CombatTextSystem(runtimeConfig);
 
+function triggerItemPickupFeedback(itemId, quantity) {
+  const soundSystem = globalThis?.soundSystem;
+  if (!soundSystem || typeof soundSystem.play !== 'function') return;
+  soundSystem.play('item-pickup', { itemId, quantity });
+}
+
+function handleEnemyDefeat(enemy) {
+  const result = LootSystem.awardEnemyDrops(player, enemy, combatTextSystem);
+  for (const entry of result.added) triggerItemPickupFeedback(entry.itemId, entry.quantity);
+  return result;
+}
+
 const abilitySystem = new AbilitySystem({
   definitions: Object.values(SpellRegistry),
   player,
@@ -148,10 +160,7 @@ const abilitySystem = new AbilitySystem({
   camera,
   spawnProjectile: (projectile) => projectiles.push(projectile),
   reportDamage: (enemy, damage, isCritical) => combatTextSystem.spawnDamageText(enemy, damage, isCritical),
-  onEnemySlain: (enemy) => {
-    const drop = LootSystem.spawnGold(enemy);
-    if (drop) goldPiles.push(drop);
-  },
+  onEnemySlain: handleEnemyDefeat,
 });
 
 defaultSpellSlots.forEach((spellId, slotIndex) => {
@@ -873,10 +882,7 @@ function tick(now) {
       runtimeConfig,
     );
     projectiles = combat.projectiles;
-    for (const dead of combat.slain) {
-      const drop = LootSystem.spawnGold(dead);
-      if (drop) goldPiles.push(drop);
-    }
+    for (const dead of combat.slain) handleEnemyDefeat(dead);
     goldPiles = LootSystem.collectGold(player, goldPiles, combatTextSystem);
   } else {
     player.vx = 0;
