@@ -7,6 +7,10 @@ function cloneTile(tile) {
   return { ...tile };
 }
 
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
 function makeGrid(width, height, tile) {
   return Array.from({ length: height }, () => Array.from({ length: width }, () => cloneTile(tile)));
 }
@@ -61,7 +65,7 @@ function carveWidePath(grid, mask, start, end, rng, halfWidth = 1) {
           const ty = cy + oy;
           if (!grid[ty]?.[tx]) continue;
           const edge = Math.abs(ox) === halfWidth || Math.abs(oy) === halfWidth;
-          grid[ty][tx] = cloneTile(edge ? tiles.dirtEdge : tiles.dirt);
+          grid[ty][tx] = tileFrom(edge ? tiles.dirtEdge : tiles.dirt, { type: 'road', walkable: true });
           mask.add(`${tx},${ty}`);
         }
       }
@@ -98,6 +102,42 @@ function sideDirection(side) {
   if (side === 'bottom') return 'south';
   if (side === 'left') return 'west';
   return 'east';
+}
+
+function edgeDistance(width, height, x, y) {
+  return Math.min(x, y, (width - 1) - x, (height - 1) - y);
+}
+
+function computeEnvelopeMetrics(width, height, x, y, rngValue) {
+  const envelopeBase = 6;
+  const envelopeRange = 6;
+  const transitionBase = 2;
+  const transitionRange = 2;
+  const sideDistance = edgeDistance(width, height, x, y);
+  const radialX = (x / Math.max(1, width - 1)) - 0.5;
+  const radialY = (y / Math.max(1, height - 1)) - 0.5;
+  const radialDistance = Math.sqrt((radialX * radialX) + (radialY * radialY));
+  const waveA = Math.sin((x * 0.11) + (rngValue * Math.PI * 2));
+  const waveB = Math.cos((y * 0.09) - (rngValue * Math.PI * 1.7));
+  const waveC = Math.sin(((x + y) * 0.045) + (rngValue * Math.PI * 3.1));
+  const organicNoise = ((waveA * 0.45) + (waveB * 0.3) + (waveC * 0.25) + ((rngValue - 0.5) * 0.9));
+  const envelopeThickness = clamp(
+    Math.round(envelopeBase + (rngValue * envelopeRange) + (organicNoise * 2.75) + (radialDistance * 2.5)),
+    6,
+    12,
+  );
+  const transitionThickness = clamp(
+    Math.round(transitionBase + (rngValue * transitionRange) + (organicNoise * 0.85)),
+    2,
+    4,
+  );
+  return {
+    sideDistance,
+    envelopeDepth: envelopeThickness,
+    transitionDepth: envelopeThickness + transitionThickness,
+    organicNoise,
+    radialDistance,
+  };
 }
 
 function chooseExitLayout(width, height, rng) {
@@ -138,43 +178,6 @@ function chooseExitLayout(width, height, rng) {
   };
 }
 
-function enforceTownBoundary(grid, exitLayout, rng) {
-  const boundaryVariants = [tiles.denseTree, tiles.denseTreeSpire, tiles.denseTreeBloom, tiles.denseTreeCanopy, tiles.denseTreeShadow];
-  const allowed = new Set(exitLayout.edgeTiles.map(({ x, y }) => `${x},${y}`));
-
-  for (let y = 0; y < grid.length; y += 1) {
-    for (let x = 0; x < grid[0].length; x += 1) {
-      const isBorder = x === 0 || y === 0 || x === grid[0].length - 1 || y === grid.length - 1;
-      if (!isBorder) continue;
-      if (allowed.has(`${x},${y}`)) {
-        grid[y][x] = cloneTile(tiles.dirt);
-        continue;
-      }
-      const variant = boundaryVariants[Math.floor(rng() * boundaryVariants.length)] ?? tiles.denseTree;
-      grid[y][x] = cloneTile(variant);
-    }
-  }
-}
-
-function validateTownBoundary(grid, exitLayout) {
-  const allowed = new Set(exitLayout.edgeTiles.map(({ x, y }) => `${x},${y}`));
-  const leaks = [];
-  for (let y = 0; y < grid.length; y += 1) {
-    for (let x = 0; x < grid[0].length; x += 1) {
-      const isBorder = x === 0 || y === 0 || x === grid[0].length - 1 || y === grid.length - 1;
-      if (!isBorder) continue;
-      const key = `${x},${y}`;
-      const walkable = Boolean(grid[y][x]?.walkable);
-      if (allowed.has(key)) {
-        if (!walkable) leaks.push({ x, y, reason: 'exit-blocked' });
-        continue;
-      }
-      if (walkable) leaks.push({ x, y, reason: 'border-leak' });
-    }
-  }
-  return { valid: leaks.length === 0, leaks };
-}
-
 function createExitCorridor(exit, direction, width = 3, depth = 3) {
   const tilesOut = [];
   const lowOffset = -Math.floor((width - 1) / 2);
@@ -192,6 +195,164 @@ function createExitCorridor(exit, direction, width = 3, depth = 3) {
   return {
     exitId: exit.id,
     triggerTiles: tilesOut,
+  };
+}
+
+function paintForestEnvelope(grid, rng, roadMask, exitLayout, center, plaza) {
+  const width = grid[0]?.length ?? 0;
+  const height = grid.length;
+  const denseVariants = [tiles.denseTree, tiles.denseTreeSpire, tiles.denseTreeBloom, tiles.denseTreeCanopy, tiles.denseTreeShadow];
+  const transitionProps = [
+    () => cloneTile(tiles.grassDark),
+    () => tileFrom(tiles.grassDark, { char: '"', type: 'transition-grass', walkable: true }),
+    () => tileFrom(tiles.pathPebble, { char: '*', fg: '#7fb06e', bg: '#243526', type: 'transition-prop', walkable: true }),
+    () => tileFrom(tiles.pathPebble, { char: '·', fg: '#9bb18b', bg: '#1f2c22', type: 'transition-prop', walkable: true }),
+  ];
+  const envelopeMask = new Set();
+  const denseMask = new Set();
+  const transitionMask = new Set();
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const localRng = rng();
+      const metrics = computeEnvelopeMetrics(width, height, x, y, localRng);
+      const key = `${x},${y}`;
+      const plazaDistance = Math.hypot(x - center.x, y - center.y);
+      const preserveTownInterior = x >= plaza.left - 8
+        && x <= plaza.left + plaza.width + 8
+        && y >= plaza.top - 8
+        && y <= plaza.top + plaza.height + 8
+        && plazaDistance < Math.max(plaza.width, plaza.height) * 1.05;
+
+      if (preserveTownInterior) continue;
+      if (roadMask.has(key)) continue;
+
+      if (metrics.sideDistance <= metrics.envelopeDepth) {
+        envelopeMask.add(key);
+        const edgeFactor = 1 - clamp(metrics.sideDistance / Math.max(1, metrics.envelopeDepth), 0, 1);
+        const densityBias = clamp(0.72 + (edgeFactor * 0.2) + (metrics.organicNoise * 0.08), 0.7, 0.92);
+        if (localRng <= densityBias) {
+          const variantRoll = rng();
+          if (variantRoll < 0.12) {
+            grid[y][x] = cloneTile(tiles.rockCliff);
+          } else {
+            const variantIndex = Math.floor(rng() * denseVariants.length);
+            grid[y][x] = cloneTile(denseVariants[variantIndex] ?? tiles.denseTree);
+          }
+          denseMask.add(key);
+        } else {
+          grid[y][x] = cloneTile(rng() < 0.55 ? tiles.grassDark : tiles.grass);
+        }
+        continue;
+      }
+
+      if (metrics.sideDistance <= metrics.transitionDepth) {
+        envelopeMask.add(key);
+        transitionMask.add(key);
+        const edgeFactor = 1 - clamp((metrics.sideDistance - metrics.envelopeDepth) / Math.max(1, metrics.transitionDepth - metrics.envelopeDepth), 0, 1);
+        const treeChance = clamp(0.18 + (edgeFactor * 0.35) + (metrics.organicNoise * 0.08), 0.14, 0.52);
+        const rockChance = clamp(0.04 + (edgeFactor * 0.08), 0.02, 0.12);
+        if (localRng < rockChance) {
+          grid[y][x] = tileFrom(tiles.rockCliff, { type: 'transition-rock', walkable: false });
+          denseMask.add(key);
+        } else if (localRng < treeChance) {
+          const variantIndex = Math.floor(rng() * denseVariants.length);
+          grid[y][x] = cloneTile(denseVariants[variantIndex] ?? tiles.denseTree);
+          denseMask.add(key);
+        } else {
+          grid[y][x] = transitionProps[Math.floor(rng() * transitionProps.length)]();
+        }
+      }
+    }
+  }
+
+  const allowedEdge = new Set(exitLayout.edgeTiles.map(({ x, y }) => `${x},${y}`));
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const isBorder = x === 0 || y === 0 || x === width - 1 || y === height - 1;
+      if (!isBorder) continue;
+      const key = `${x},${y}`;
+      if (allowedEdge.has(key) || roadMask.has(key)) continue;
+      envelopeMask.add(key);
+      denseMask.add(key);
+      grid[y][x] = cloneTile(denseVariants[Math.floor(rng() * denseVariants.length)] ?? tiles.denseTree);
+    }
+  }
+
+  return { envelopeMask, denseMask, transitionMask };
+}
+
+function carveTownExitRoad(grid, roadMask, exitLayout, center, rng) {
+  const width = grid[0]?.length ?? 0;
+  const height = grid.length;
+  const pathEnd = { ...exitLayout.exitPosition };
+  const denseVariants = [tiles.denseTree, tiles.denseTreeSpire, tiles.denseTreeBloom, tiles.denseTreeCanopy, tiles.denseTreeShadow];
+  const driftRange = exitLayout.side === 'top' || exitLayout.side === 'bottom' ? 3 : 2;
+  const curvedTarget = {
+    x: clamp(exitLayout.interiorAnchor.x + randomInt(rng, -driftRange, driftRange), 2, width - 3),
+    y: clamp(exitLayout.interiorAnchor.y + randomInt(rng, -driftRange, driftRange), 2, height - 3),
+  };
+  carveWidePath(grid, roadMask, { x: center.x, y: center.y }, curvedTarget, rng, Math.max(1, exitLayout.roadWidth - 1));
+  carveWidePath(grid, roadMask, curvedTarget, pathEnd, rng, Math.max(1, exitLayout.roadWidth - 1));
+  for (const tile of exitLayout.edgeTiles) {
+    if (!grid[tile.y]?.[tile.x]) continue;
+    grid[tile.y][tile.x] = tileFrom(tiles.dirt, { type: 'road', walkable: true });
+    roadMask.add(`${tile.x},${tile.y}`);
+  }
+  const allowedEdge = new Set(exitLayout.edgeTiles.map(({ x, y }) => `${x},${y}`));
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const isBorder = x === 0 || y === 0 || x === width - 1 || y === height - 1;
+      if (!isBorder || allowedEdge.has(`${x},${y}`)) continue;
+      roadMask.delete(`${x},${y}`);
+      if (grid[y]?.[x]?.type === 'road') {
+        grid[y][x] = cloneTile(denseVariants[Math.floor(rng() * denseVariants.length)] ?? tiles.denseTree);
+      }
+    }
+  }
+}
+
+function sealForestLeaks(grid, envelopeMask, roadMask, exitLayout, rng) {
+  const allowedRoad = new Set([...roadMask]);
+  const denseVariants = [tiles.denseTree, tiles.denseTreeSpire, tiles.denseTreeBloom, tiles.denseTreeCanopy, tiles.denseTreeShadow];
+
+  for (const key of envelopeMask) {
+    if (allowedRoad.has(key)) continue;
+    const [x, y] = key.split(',').map(Number);
+    const isBorder = x === 0 || y === 0 || x === grid[0].length - 1 || y === grid.length - 1;
+    if (!isBorder || !grid[y]?.[x]?.walkable) continue;
+    grid[y][x] = cloneTile(rng() < 0.16 ? tiles.rockCliff : (denseVariants[Math.floor(rng() * denseVariants.length)] ?? tiles.denseTree));
+  }
+
+  const walkableEnvelopeTiles = [...envelopeMask].filter((key) => {
+    if (roadMask.has(key)) return false;
+    const [x, y] = key.split(',').map(Number);
+    return Boolean(grid[y]?.[x]?.walkable);
+  }).length;
+  const densityValue = envelopeMask.size === 0 ? 1 : 1 - (walkableEnvelopeTiles / envelopeMask.size);
+  console.log('Forest envelope density:', Number(densityValue.toFixed(3)));
+
+  const borderLeaks = [];
+  const allowedEdge = new Set(exitLayout.edgeTiles.map(({ x, y }) => `${x},${y}`));
+  for (let y = 0; y < grid.length; y += 1) {
+    for (let x = 0; x < grid[0].length; x += 1) {
+      const isBorder = x === 0 || y === 0 || x === grid[0].length - 1 || y === grid.length - 1;
+      if (!isBorder) continue;
+      const key = `${x},${y}`;
+      const walkable = Boolean(grid[y][x]?.walkable);
+      if (allowedEdge.has(key)) {
+        if (!walkable) borderLeaks.push({ x, y, reason: 'exit-blocked' });
+      } else if (walkable) {
+        borderLeaks.push({ x, y, reason: 'border-leak' });
+      }
+    }
+  }
+
+  return {
+    valid: borderLeaks.length === 0,
+    leaks: borderLeaks,
+    walkableEnvelopeTiles,
+    densityValue,
   };
 }
 
@@ -267,13 +428,6 @@ export class TownGenerator {
       },
     }];
 
-    carveWidePath(grid, roadMask, { x: center.x, y: center.y }, exitLayout.interiorAnchor, rng, Math.max(1, exitLayout.roadWidth - 1));
-    for (const tile of exitLayout.edgeTiles) {
-      if (!grid[tile.y]?.[tile.x]) continue;
-      grid[tile.y][tile.x] = cloneTile(tiles.dirt);
-      roadMask.add(`${tile.x},${tile.y}`);
-    }
-
     const candidateRows = [plaza.top - 24, plaza.top - 10, plaza.top + plaza.height + 8, plaza.top + plaza.height + 22]
       .filter((y) => y > 10 && y < this.height - 14);
     const houseCount = randomInt(rng, 3, 6);
@@ -314,14 +468,16 @@ export class TownGenerator {
       carveWidePath(grid, roadMask, { x: door.x, y: door.y + 2 }, { x: center.x + randomInt(rng, -8, 8), y: center.y + randomInt(rng, -4, 4) }, rng, 1);
     }
 
-    enforceTownBoundary(grid, exitLayout, rng);
-    const boundaryValidation = validateTownBoundary(grid, exitLayout);
+    carveTownExitRoad(grid, roadMask, exitLayout, center, rng);
+    const forestEnvelope = paintForestEnvelope(grid, rng, roadMask, exitLayout, center, plaza);
+    const boundaryValidation = sealForestLeaks(grid, forestEnvelope.envelopeMask, roadMask, exitLayout, rng);
     if (!boundaryValidation.valid) {
       throw new Error(`Town boundary validation failed for seed ${seed}: ${JSON.stringify(boundaryValidation.leaks.slice(0, 8))}`);
     }
 
     const objectBlockedMask = new Set(blocked);
     for (const key of roadMask) objectBlockedMask.add(key);
+    for (const key of forestEnvelope.denseMask) objectBlockedMask.add(key);
     for (const exit of exits) {
       for (const tile of createExitCorridor(exit, exit.direction, exit.width, 5).triggerTiles) {
         objectBlockedMask.add(`${tile.x},${tile.y}`);
@@ -405,6 +561,11 @@ export class TownGenerator {
         townExitSide: exitLayout.side,
         townExitPosition: { ...exitLayout.exitPosition },
         boundaryValidation,
+        forestEnvelope: {
+          envelopeTiles: forestEnvelope.envelopeMask.size,
+          denseTiles: forestEnvelope.denseMask.size,
+          transitionTiles: forestEnvelope.transitionMask.size,
+        },
       },
     };
 
