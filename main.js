@@ -12,6 +12,7 @@ import * as LootSystem from './systems/LootSystem.js';
 import { CombatTextSystem } from './systems/CombatTextSystem.js';
 import { renderWorld } from './systems/RenderSystem.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
+import { setEntityState, syncEntityMovementState, updateEntityState } from './systems/EntityStateSystem.js';
 import { ChatBox } from './ui/ChatBox.js';
 import { drawHUD } from './ui/HUD.js';
 import {
@@ -406,7 +407,7 @@ function regenerateWorld(seed = null) {
   player.y = spawn.y;
   player.vx = 0;
   player.vy = 0;
-  player.castTimer = 0;
+  setEntityState(player, 'idle');
 
   abilitySystem.map = map;
   camera.worldW = map[0]?.length ?? ROOM_W;
@@ -750,8 +751,9 @@ function handlePlayer(dt) {
   const targetSpeed = runtimeConfig.get('player.speed');
   const accel = runtimeConfig.get('player.acceleration');
   const decel = runtimeConfig.get('player.deceleration');
-  const targetVx = moveX * targetSpeed;
-  const targetVy = moveY * targetSpeed;
+  const attackMoveMultiplier = player.state?.type === 'attack' ? 0.15 : 1;
+  const targetVx = moveX * targetSpeed * attackMoveMultiplier;
+  const targetVy = moveY * targetSpeed * attackMoveMultiplier;
   const blend = Math.min(1, ((Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01) ? accel : decel) * dt);
   player.vx += (targetVx - player.vx) * blend;
   player.vy += (targetVy - player.vy) * blend;
@@ -775,7 +777,8 @@ function handlePlayer(dt) {
 
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
-  player.castTimer = Math.max(0, (player.castTimer ?? 0) - dt);
+  updateEntityState(player, dt);
+  syncEntityMovementState(player);
   player.castCooldown = runtimeConfig.get('player.castDuration');
 
   if (!dialogueManager.isOpen && !isCraftingUIOpen && !inventoryWindow.isOpen()) {

@@ -1,5 +1,6 @@
 import { Entity } from './Entity.js';
 import { getAllEnemyDefinitions, getEnemyDefinition } from '../data/EnemyRegistry.js';
+import { createEnemyStateDefinitions } from '../systems/EntityStateSystem.js';
 
 export const ENEMY_BEHAVIOR = {
   CHASER: 'chaser',
@@ -153,24 +154,16 @@ export class Enemy extends Entity {
       orbitTargetPlayerY: y,
       orbitPhase: 'reposition',
       orbitWaitTimer: 0,
-      isChargingShot: false,
-      chargeTimer: 0,
       chargeDuration: def.chargeDuration ?? 0.35,
       attackCooldown: def.attackCooldown,
       attackTimer: Math.random() * 0.4,
       attackWindup: def.attackWindup ?? 0.4,
-      windupTime: def.attackWindup ?? 0.4,
-      windupTimer: 0,
+      stateDefinitions: createEnemyStateDefinitions(),
       attackDuration: def.attackDuration ?? 0.3,
       attackHitTime: def.attackHitTime ?? 0.08,
-      attackElapsed: 0,
-      attackDamageApplied: false,
-      isWindingUp: false,
-      isAttacking: false,
       postAttackSlowTimer: 0,
       hitKnockback: def.hitKnockback ?? 8,
       spriteId: def.spriteId,
-      animationState: 'idle',
       frozen: false,
       freezeTint: null,
       freezeGlow: null,

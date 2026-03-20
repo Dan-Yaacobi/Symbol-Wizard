@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Enemy } from '../entities/Enemy.js';
 import { updateEnemies } from '../systems/AISystem.js';
 import { updateEnemyPlayerInteractions } from '../systems/CombatSystem.js';
+import { setEntityState } from '../systems/EntityStateSystem.js';
 
 function createConfig(overrides = {}) {
   return {
@@ -36,23 +37,23 @@ function testMeleeWindupTelegraphsBeforeDamage() {
   enemy.attackTimer = 0;
 
   updateEnemies([enemy], player, 0.05, [], createConfig());
-  assert.equal(enemy.isWindingUp, true);
-  assert.ok(enemy.windupTimer > 0);
+  assert.equal(enemy.state.type, 'attack');
+  assert.equal(enemy.state.time, 0);
 
   updateEnemyPlayerInteractions([enemy], player, 0.05, null, createConfig());
   assert.equal(player.hp, 20);
 
-  updateEnemies([enemy], player, enemy.windupTimer + 0.01, [], createConfig());
-  assert.equal(enemy.isWindingUp, false);
-  assert.equal(enemy.isAttacking, true);
+  updateEnemies([enemy], player, (enemy.attackWindup ?? 0.2) + 0.01, [], createConfig());
+  assert.equal(enemy.state.type, 'attack');
+  assert.ok(enemy.state.time >= (enemy.attackWindup ?? 0.2));
 }
 
 function testMeleeAttackAppliesRecoilAfterHit() {
   const player = { x: 0, y: 0, radius: 1, hp: 20, statusEffects: new Map(), activeStatuses: [] };
   const enemy = new Enemy('spider', 1, 0);
-  enemy.isAttacking = true;
-  enemy.attackElapsed = enemy.attackHitTime ?? 0.08;
-  enemy.attackDamageApplied = false;
+  setEntityState(enemy, 'attack');
+  enemy.state.time = (enemy.attackWindup ?? 0.2) + (enemy.attackHitTime ?? 0.08);
+  enemy.attackImpactApplied = false;
   enemy.vx = 0;
   enemy.vy = 0;
 
@@ -62,7 +63,7 @@ function testMeleeAttackAppliesRecoilAfterHit() {
   assert.ok(enemy.hitKnockbackX > 0);
   assert.equal(enemy.hitKnockbackY, 0);
   assert.ok(enemy.hitKnockbackTimer > 0);
-  assert.equal(enemy.attackDamageApplied, true);
+  assert.equal(enemy.attackImpactApplied, true);
   assert.ok(enemy.postAttackSlowTimer > 0);
 
   const beforeX = enemy.x;

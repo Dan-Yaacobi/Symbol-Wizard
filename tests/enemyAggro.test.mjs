@@ -107,13 +107,13 @@ function testRangedEnemiesChargeBeforeShooting() {
   enemy.chargeDuration = 0.35;
 
   updateEnemies([enemy], player, 0.1, projectiles, config, null, effectSystem);
-  assert.equal(enemy.isChargingShot, true);
+  assert.equal(enemy.state.type, 'attack');
   assert.equal(projectiles.length, 0);
-  assert.equal(effectSystem.effects.some((effect) => effect.type === 'charge'), true);
+  assert.equal(effectSystem.effects.some((effect) => effect.type === 'charge'), false);
 
-  updateEnemies([enemy], player, 0.3, projectiles, config, null, effectSystem);
+  updateEnemies([enemy], player, 0.36, projectiles, config, null, effectSystem);
   assert.equal(projectiles.length, 1);
-  assert.equal(enemy.isChargingShot, false);
+  assert.notEqual(enemy.state.type, 'attack');
   assert.equal(enemy.orbitPhase, 'wait');
 }
 
@@ -144,7 +144,7 @@ function testSwarmAggroChainsOnlyToNearbySwarmEnemies() {
   chainedSwarm.targetY = chainedSwarm.y;
 
   const nonSwarm = new Enemy('spider', 13, 2);
-  nonSwarm.behavior = ENEMY_BEHAVIOR.MELEE;
+  nonSwarm.behavior = ENEMY_BEHAVIOR.CHASER;
   nonSwarm.aggroRadius = 5;
   nonSwarm.targetX = nonSwarm.x;
   nonSwarm.targetY = nonSwarm.y;

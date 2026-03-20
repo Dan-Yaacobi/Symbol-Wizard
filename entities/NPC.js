@@ -1,4 +1,5 @@
 import { Entity } from './Entity.js';
+import { createNpcStateDefinitions } from '../systems/EntityStateSystem.js';
 
 export class NPC extends Entity {
   constructor(x, y) {
@@ -10,6 +11,7 @@ export class NPC extends Entity {
       spriteId: 'npc',
       name: 'Gate Wizard',
       interactRadius: 8,
+      stateDefinitions: createNpcStateDefinitions(),
     });
   }
 }
