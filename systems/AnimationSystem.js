@@ -1,7 +1,8 @@
 import { getSpriteAnimationFrames } from '../entities/SpriteLibrary.js';
 
 export function updateEntityAnimation(entity, dt, moving, config = null) {
-  if (!entity.frameDurations) return;
+  const animationTimings = entity.animationTimings ?? entity.frameDurations;
+  if (!animationTimings) return;
 
   const isCasting = (entity.castTimer ?? 0) > 0;
   const nextState = isCasting ? 'cast' : (entity.isAttacking ? 'attack' : (moving ? 'walk' : 'idle'));
@@ -12,12 +13,12 @@ export function updateEntityAnimation(entity, dt, moving, config = null) {
     entity.frameTimer = 0;
   }
 
-  const stateFrames = getSpriteAnimationFrames(entity.spriteKey, entity.animationState);
+  const stateFrames = getSpriteAnimationFrames(entity.spriteId ?? entity.spriteKey, entity.animationState);
   if (!stateFrames || stateFrames.length <= 1) return;
 
   // Base timing per frame is authored per state (idle/walk) on the entity.
   const override = config?.get?.(`sprites.${entity.type === 'player' ? 'player' : 'enemy'}${entity.animationState[0].toUpperCase() + entity.animationState.slice(1)}FrameDuration`);
-  const baseFrameDuration = Number.isFinite(override) ? override : (entity.frameDurations[entity.animationState] ?? 0.2);
+  const baseFrameDuration = Number.isFinite(override) ? override : (animationTimings[entity.animationState] ?? animationTimings.idle ?? 0.2);
   const speed = Math.hypot(entity.vx ?? 0, entity.vy ?? 0);
   // Walk cycles scale with move speed so footfalls stay in sync with travel distance.
   // Clamp prevents unreadable flicker at high speed and sluggishness at very low speed.

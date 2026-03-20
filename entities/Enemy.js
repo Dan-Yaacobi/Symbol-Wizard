@@ -10,7 +10,7 @@ export const ENEMY_BEHAVIOR = {
 
 export const ENEMY_TYPE_DEFS = {
   spider: {
-    spriteKey: 'spider',
+    spriteId: 'spider',
     behavior: ENEMY_BEHAVIOR.CHASER,
     hp: 14,
     speed: 10.5,
@@ -25,7 +25,7 @@ export const ENEMY_TYPE_DEFS = {
     aggroRadius: 20,
   },
   wasp: {
-    spriteKey: 'wasp',
+    spriteId: 'wasp',
     behavior: ENEMY_BEHAVIOR.RANGED,
     hp: 6,
     speed: 13,
@@ -45,7 +45,7 @@ export const ENEMY_TYPE_DEFS = {
     projectileType: 'stingerProjectile',
   },
   forest_beetle: {
-    spriteKey: 'forest_beetle',
+    spriteId: 'forest_beetle',
     behavior: ENEMY_BEHAVIOR.TANK,
     hp: 56,
     speed: 4,
@@ -60,7 +60,7 @@ export const ENEMY_TYPE_DEFS = {
     aggroRadius: 18,
   },
   swarm_bug: {
-    spriteKey: 'swarm_bug',
+    spriteId: 'swarm_bug',
     behavior: ENEMY_BEHAVIOR.SWARM,
     hp: 4,
     speed: 16.5,
@@ -75,7 +75,7 @@ export const ENEMY_TYPE_DEFS = {
     aggroRadius: 16,
   },
   forest_mantis: {
-    spriteKey: 'forest_mantis',
+    spriteId: 'forest_mantis',
     behavior: ENEMY_BEHAVIOR.FLANKER,
     hp: 16,
     speed: 12,
@@ -240,7 +240,8 @@ export class Enemy extends Entity {
       isAttacking: false,
       postAttackSlowTimer: 0,
       hitKnockback: def.hitKnockback ?? 8,
-      spriteKey: def.spriteKey,
+      spriteId: def.spriteId,
+      spriteKey: def.spriteId,
       animationState: 'idle',
       frozen: false,
       freezeTint: null,
@@ -266,11 +267,12 @@ export class Enemy extends Entity {
       flankAngleOffset: Math.random() * Math.PI * 2,
       flankDirection: Math.random() < 0.5 ? -1 : 1,
       flankOrbitSpeed: def.flankOrbitSpeed ?? 1.2,
-      frameDurations: {
+      animationTimings: {
         idle: 0.32,
         walk: 0.14,
         attack: 0.08,
       },
     });
+    this.frameDurations = this.animationTimings;
   }
 }

@@ -1,5 +1,5 @@
 import { decodeCp437 } from '../world/Cp437.js';
-import { normalizeSpriteAsset } from './SpriteAssetSchema.js';
+import { REQUIRED_GAMEPLAY_ANIMATIONS, normalizeSpriteAsset } from './SpriteAssetSchema.js';
 
 function toUint8Array(bufferLike) {
   if (bufferLike instanceof Uint8Array) return bufferLike;
@@ -55,7 +55,7 @@ export async function parseSpriteXp(bufferLike) {
   return { version, layers };
 }
 
-export async function convertXpToSpriteAsset(bufferLike, { id, animation = 'idle', anchor = null } = {}) {
+export async function convertXpToSpriteAsset(bufferLike, { id, animation = 'idle', anchor = null, existingAsset = null } = {}) {
   const parsed = await parseSpriteXp(bufferLike);
   const frames = parsed.layers.map((layer) => ({
     width: layer.width,
@@ -67,6 +67,26 @@ export async function convertXpToSpriteAsset(bufferLike, { id, animation = 'idle
       bg: cell.ch === ' ' && /^#000000$/i.test(cell.bg ?? '') ? null : cell.bg,
     }))),
   }));
-  const fallbackAnchor = { x: Math.floor((frames[0]?.width ?? 1) / 2), y: 3 };
-  return normalizeSpriteAsset({ id, anchor: anchor ?? fallbackAnchor, animations: { [animation]: frames } });
+  const base = existingAsset ? normalizeSpriteAsset(existingAsset) : normalizeSpriteAsset({
+    id,
+    anchor: anchor ?? { x: Math.floor((frames[0]?.width ?? 1) / 2), y: Math.floor((frames[0]?.height ?? 1) / 2) },
+    defaultGrid: { width: frames[0]?.width ?? 1, height: frames[0]?.height ?? 1 },
+    animations: Object.fromEntries(REQUIRED_GAMEPLAY_ANIMATIONS.map((name) => [name, []])),
+  });
+
+  const merged = {
+    ...base,
+    id: String(id ?? base.id ?? 'sprite').trim() || 'sprite',
+    anchor: anchor ?? base.anchor,
+    defaultGrid: {
+      width: frames[0]?.width ?? base.defaultGrid.width,
+      height: frames[0]?.height ?? base.defaultGrid.height,
+    },
+    animations: {
+      ...base.animations,
+      [animation]: frames,
+    },
+  };
+
+  return normalizeSpriteAsset(merged);
 }
