@@ -1,14 +1,22 @@
 import { Renderer } from '../engine/Renderer.js';
-import { createEmptyCell, normalizeSpriteAsset, normalizeSpriteFrame, validateSpriteAsset, isOccupiedSpriteCell } from '../data/SpriteAssetSchema.js';
+import {
+  createEmptyCell,
+  createEmptyFrame,
+  createEmptySpriteAsset,
+  ensureRequiredAnimations,
+  isOccupiedSpriteCell,
+  normalizeSpriteAsset,
+  validateSpriteAsset,
+  resizeFrame,
+  resizeAnimationFrames,
+  resizeSpriteAsset,
+} from '../data/SpriteAssetSchema.js';
 import { getAllSpriteAssets, getSpriteAsset, registerSpriteAsset, saveSpriteAsset } from '../data/SpriteAssetLoader.js';
 import { convertXpToSpriteAsset } from '../data/SpriteXpImporter.js';
 
 const PALETTE = ['#ffffff', '#d7e9ff', '#8ac3ff', '#ffd37c', '#73c57e', '#5faa66', '#bb4f4f', '#1b1b1b', '#173a1f', '#23374d', '#11263a', '#000000'];
 
-function cloneAsset(asset) {
-  return normalizeSpriteAsset(JSON.parse(JSON.stringify(asset)));
-}
-
+function clone(value) { return JSON.parse(JSON.stringify(value)); }
 function downloadText(fileName, content) {
   const blob = new Blob([content], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -22,35 +30,26 @@ function downloadText(fileName, content) {
 export class SpriteEditorScreen {
   constructor() {
     this.isOpen = false;
-    this.asset = normalizeSpriteAsset({ id: 'new-sprite', anchor: { x: 2, y: 3 }, animations: { idle: [this.#makeFrame(7, 7)] } });
+    this.asset = createEmptySpriteAsset('new-sprite', 7, 7);
     this.currentAnimation = 'idle';
     this.currentFrameIndex = 0;
     this.previewTimer = 0;
     this.previewFrameIndex = 0;
     this.previewPlaying = true;
-    this.brush = { ch: '#', fg: '#ffffff', bg: null, paintChar: true, paintFg: true, paintBg: false };
     this.renderer = null;
     this.events = null;
+    this.brush = { ch: '#', fg: '#ffffff', bg: null, paintChar: true, paintFg: true, paintBg: false };
     this.elements = this.#createUi();
   }
 
-  #makeFrame(width = 7, height = 7) {
-    return normalizeSpriteFrame({ width, height, offsetY: 0, cells: Array.from({ length: height }, () => Array.from({ length: width }, () => createEmptyCell())) });
-  }
-
-  async initialize() {
-    this.#refreshSpriteList();
-    this.#syncUiFromAsset();
-    this.#renderEditor();
-  }
-
+  async initialize() { this.#refreshSpriteList(); this.#syncUiFromAsset(); this.#renderEditor(); }
   open() { if (!this.isOpen) { this.isOpen = true; this.elements.root.hidden = false; this.#bindEvents(); this.#refreshSpriteList(); this.#renderEditor(); } }
   close() { if (this.isOpen) { this.isOpen = false; this.elements.root.hidden = true; this.events?.abort(); this.events = null; } }
   toggle() { this.isOpen ? this.close() : this.open(); }
 
   tick(dt = 0.016) {
     if (!this.isOpen || !this.previewPlaying) return;
-    const frames = this.asset.animations[this.currentAnimation] ?? [];
+    const frames = this.getCurrentAnimationFrames();
     if (frames.length <= 1) return;
     this.previewTimer += dt;
     if (this.previewTimer >= 0.2) {
@@ -60,25 +59,41 @@ export class SpriteEditorScreen {
     }
   }
 
+  getCurrentAnimationFrames() { return this.asset.animations[this.currentAnimation] ?? []; }
+  getCurrentFrame() { return this.getCurrentAnimationFrames()[this.currentFrameIndex] ?? null; }
+  getPreviewFrame() { return this.getCurrentAnimationFrames()[this.previewFrameIndex] ?? this.getCurrentFrame(); }
+
   #bindEvents() {
     if (this.events) return;
     this.events = new AbortController();
     const { signal } = this.events;
     this.elements.closeButton.addEventListener('click', () => this.close(), { signal });
-    this.elements.newButton.addEventListener('click', () => { this.asset = normalizeSpriteAsset({ id: 'new-sprite', anchor: { x: 3, y: 3 }, animations: { idle: [this.#makeFrame(7, 7)] } }); this.currentAnimation = 'idle'; this.currentFrameIndex = 0; this.previewFrameIndex = 0; this.#syncUiFromAsset(); this.#renderEditor(); }, { signal });
-    this.elements.spriteSelect.addEventListener('change', () => { const asset = getSpriteAsset(this.elements.spriteSelect.value); if (asset) { this.asset = cloneAsset(asset); this.currentAnimation = Object.keys(this.asset.animations)[0] ?? 'idle'; this.currentFrameIndex = 0; this.previewFrameIndex = 0; this.#syncUiFromAsset(); this.#renderEditor(); } }, { signal });
-    this.elements.animationName.addEventListener('change', () => this.#ensureAnimation(this.elements.animationName.value), { signal });
-    this.elements.addFrameButton.addEventListener('click', () => { const frames = this.asset.animations[this.currentAnimation]; const current = this.getCurrentFrame(); frames.splice(this.currentFrameIndex + 1, 0, this.#makeFrame(current.width, current.height)); this.currentFrameIndex += 1; this.previewFrameIndex = this.currentFrameIndex; this.#syncFrameLabel(); this.#renderEditor(); }, { signal });
-    this.elements.duplicateFrameButton.addEventListener('click', () => { const frames = this.asset.animations[this.currentAnimation]; frames.splice(this.currentFrameIndex + 1, 0, JSON.parse(JSON.stringify(this.getCurrentFrame()))); this.currentFrameIndex += 1; this.previewFrameIndex = this.currentFrameIndex; this.#syncFrameLabel(); this.#renderEditor(); }, { signal });
-    this.elements.removeFrameButton.addEventListener('click', () => { const frames = this.asset.animations[this.currentAnimation]; if (frames.length > 1) frames.splice(this.currentFrameIndex, 1); this.currentFrameIndex = Math.max(0, Math.min(this.currentFrameIndex, frames.length - 1)); this.previewFrameIndex = this.currentFrameIndex; this.#syncFrameLabel(); this.#renderEditor(); }, { signal });
+    this.elements.newButton.addEventListener('click', () => this.#loadAsset(createEmptySpriteAsset('new-sprite', 7, 7)), { signal });
+    this.elements.spriteSelect.addEventListener('change', () => {
+      const asset = getSpriteAsset(this.elements.spriteSelect.value);
+      if (asset) this.#loadAsset(asset);
+    }, { signal });
+    this.elements.idInput.addEventListener('input', () => { this.asset.id = this.elements.idInput.value.trim() || 'sprite'; this.#renderEditor(); }, { signal });
+    this.elements.animationSelect.addEventListener('change', () => this.#switchAnimation(this.elements.animationSelect.value), { signal });
+    this.elements.seedAction.addEventListener('click', () => this.#seedEmptyAnimation(), { signal });
+    this.elements.copyFirstButton.addEventListener('click', () => this.#copyFromAnimation('first'), { signal });
+    this.elements.copyAllButton.addEventListener('click', () => this.#copyFromAnimation('all'), { signal });
+    this.elements.copyCurrentButton.addEventListener('click', () => this.#copyCurrentFrameToAnimation(), { signal });
+    this.elements.addFrameButton.addEventListener('click', () => this.#insertFrame(createEmptyFrame(this.asset.defaultGrid.width, this.asset.defaultGrid.height)), { signal });
+    this.elements.duplicateFrameButton.addEventListener('click', () => this.#insertFrame(clone(this.getCurrentFrame() ?? createEmptyFrame(this.asset.defaultGrid.width, this.asset.defaultGrid.height))), { signal });
+    this.elements.removeFrameButton.addEventListener('click', () => this.#deleteCurrentFrame(), { signal });
     this.elements.prevFrameButton.addEventListener('click', () => this.#setFrameIndex(this.currentFrameIndex - 1), { signal });
     this.elements.nextFrameButton.addEventListener('click', () => this.#setFrameIndex(this.currentFrameIndex + 1), { signal });
-    this.elements.clearFrameButton.addEventListener('click', () => { const frame = this.getCurrentFrame(); frame.cells = frame.cells.map((row) => row.map(() => createEmptyCell())); this.#renderEditor(); }, { signal });
+    this.elements.frameSelect.addEventListener('change', () => this.#setFrameIndex(Number(this.elements.frameSelect.value) || 0), { signal });
+    this.elements.clearFrameButton.addEventListener('click', () => { const frame = this.getCurrentFrame(); if (!frame) return; frame.cells = frame.cells.map((row) => row.map(() => createEmptyCell())); this.#renderEditor(); }, { signal });
     this.elements.playToggle.addEventListener('click', () => { this.previewPlaying = !this.previewPlaying; this.elements.playToggle.textContent = this.previewPlaying ? 'Pause Preview' : 'Play Preview'; }, { signal });
-    this.elements.idInput.addEventListener('input', () => { this.asset.id = this.elements.idInput.value.trim() || 'sprite'; }, { signal });
     this.elements.anchorX.addEventListener('input', () => { this.asset.anchor.x = Number(this.elements.anchorX.value) || 0; this.#renderEditor(); }, { signal });
     this.elements.anchorY.addEventListener('input', () => { this.asset.anchor.y = Number(this.elements.anchorY.value) || 0; this.#renderEditor(); }, { signal });
-    this.elements.offsetY.addEventListener('input', () => { this.getCurrentFrame().offsetY = Number(this.elements.offsetY.value) || 0; this.#renderEditor(); }, { signal });
+    this.elements.offsetY.addEventListener('input', () => { const frame = this.getCurrentFrame(); if (frame) frame.offsetY = Number(this.elements.offsetY.value) || 0; this.#renderEditor(); }, { signal });
+    this.elements.gridWidth.addEventListener('input', () => this.#syncResizePreview(), { signal });
+    this.elements.gridHeight.addEventListener('input', () => this.#syncResizePreview(), { signal });
+    this.elements.resizeScope.addEventListener('change', () => this.#syncResizePreview(), { signal });
+    this.elements.resizeButton.addEventListener('click', () => this.#applyResize(), { signal });
     this.elements.charInput.addEventListener('input', () => { this.brush.ch = (this.elements.charInput.value || ' ')[0]; }, { signal });
     this.elements.fgInput.addEventListener('input', () => { this.brush.fg = this.elements.fgInput.value || null; }, { signal });
     this.elements.bgInput.addEventListener('input', () => { this.brush.bg = this.elements.bgInput.value || null; }, { signal });
@@ -87,47 +102,125 @@ export class SpriteEditorScreen {
     this.elements.paintBg.addEventListener('change', () => { this.brush.paintBg = this.elements.paintBg.checked; }, { signal });
     this.elements.eraseButton.addEventListener('click', () => { this.brush = { ...this.brush, ch: ' ', fg: null, bg: null, paintChar: true, paintFg: true, paintBg: true }; this.#syncBrushUi(); }, { signal });
     this.elements.exportButton.addEventListener('click', async () => { const text = await saveSpriteAsset(this.asset); this.elements.jsonArea.value = text; downloadText(`${this.asset.id}.json`, text); registerSpriteAsset(this.asset); this.#refreshSpriteList(); this.#setStatus(`Exported ${this.asset.id}.json`, false); }, { signal });
-    this.elements.importJsonButton.addEventListener('click', () => { try { this.asset = normalizeSpriteAsset(JSON.parse(this.elements.jsonArea.value)); this.currentAnimation = Object.keys(this.asset.animations)[0] ?? 'idle'; this.currentFrameIndex = 0; this.previewFrameIndex = 0; this.#syncUiFromAsset(); this.#renderEditor(); } catch (error) { this.#setStatus(error.message, true); } }, { signal });
-    this.elements.xpInput.addEventListener('change', async (event) => { const file = event.target.files?.[0]; if (!file) return; const arrayBuffer = await file.arrayBuffer(); this.asset = await convertXpToSpriteAsset(arrayBuffer, { id: this.asset.id || file.name.replace(/\.xp$/i, ''), animation: this.currentAnimation }); this.currentFrameIndex = 0; this.previewFrameIndex = 0; this.#syncUiFromAsset(); this.#renderEditor(); }, { signal });
+    this.elements.importJsonButton.addEventListener('click', () => { try { this.#loadAsset(JSON.parse(this.elements.jsonArea.value)); } catch (error) { this.#setStatus(error.message, true); } }, { signal });
+    this.elements.xpInput.addEventListener('change', async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const arrayBuffer = await file.arrayBuffer();
+      const imported = await convertXpToSpriteAsset(arrayBuffer, { id: this.asset.id || file.name.replace(/\.xp$/i, ''), animation: this.currentAnimation, existingAsset: this.asset });
+      this.#loadAsset(imported, this.currentAnimation);
+      this.#setStatus(`Imported ${file.name} into ${this.currentAnimation}.`, false);
+    }, { signal });
     this.elements.importXpButton.addEventListener('click', () => this.elements.xpInput.click(), { signal });
     this.elements.showAnchor.addEventListener('change', () => this.#renderEditor(), { signal });
     this.elements.showOccupied.addEventListener('change', () => this.#renderEditor(), { signal });
     this.elements.canvas.addEventListener('click', (event) => this.#paintAt(event), { signal });
   }
 
-  #refreshSpriteList() {
-    const current = this.elements.spriteSelect.value;
-    const assets = getAllSpriteAssets().sort((a, b) => a.id.localeCompare(b.id));
-    this.elements.spriteSelect.innerHTML = '<option value="">Load sprite…</option>' + assets.map((asset) => `<option value="${asset.id}">${asset.id}</option>`).join('');
-    this.elements.spriteSelect.value = current;
-  }
-
-  #ensureAnimation(name) {
-    const animationName = (name || 'idle').trim() || 'idle';
-    if (!this.asset.animations[animationName]) {
-      this.asset.animations[animationName] = [this.#makeFrame(this.getCurrentFrame().width, this.getCurrentFrame().height)];
-    }
-    this.currentAnimation = animationName;
-    this.currentFrameIndex = 0;
-    this.previewFrameIndex = 0;
+  #loadAsset(asset, animation = null) {
+    this.asset = ensureRequiredAnimations(normalizeSpriteAsset(clone(asset)));
+    this.currentAnimation = this.asset.animations[animation] ? animation : (this.currentAnimation in this.asset.animations ? this.currentAnimation : 'idle');
+    this.currentFrameIndex = Math.min(this.currentFrameIndex, Math.max(0, this.getCurrentAnimationFrames().length - 1));
+    this.previewFrameIndex = this.currentFrameIndex;
     this.#syncUiFromAsset();
     this.#renderEditor();
   }
 
-  #setFrameIndex(index) {
-    const frames = this.asset.animations[this.currentAnimation] ?? [];
-    if (!frames.length) return;
-    this.currentFrameIndex = (index + frames.length) % frames.length;
+  #switchAnimation(animationName) {
+    this.currentAnimation = animationName;
+    if (this.getCurrentAnimationFrames().length === 0) this.currentFrameIndex = 0;
+    else this.currentFrameIndex = Math.min(this.currentFrameIndex, this.getCurrentAnimationFrames().length - 1);
     this.previewFrameIndex = this.currentFrameIndex;
-    this.#syncFrameLabel();
+    this.#syncUiFromAsset();
     this.#renderEditor();
   }
 
-  getCurrentFrame() { return this.asset.animations[this.currentAnimation][this.currentFrameIndex]; }
-  getPreviewFrame() { return (this.asset.animations[this.currentAnimation] ?? [])[this.previewFrameIndex] ?? this.getCurrentFrame(); }
+  #seedEmptyAnimation() {
+    const frames = this.getCurrentAnimationFrames();
+    if (frames.length > 0) return;
+    const source = this.asset.animations[this.elements.copySource.value] ?? [];
+    if (source.length > 0) {
+      this.asset.animations[this.currentAnimation] = [clone(source[0])];
+    } else {
+      this.asset.animations[this.currentAnimation] = [createEmptyFrame(this.asset.defaultGrid.width, this.asset.defaultGrid.height)];
+    }
+    this.currentFrameIndex = 0;
+    this.previewFrameIndex = 0;
+    this.#renderEditor();
+  }
+
+  #copyFromAnimation(mode) {
+    const sourceAnimation = this.elements.copySource.value;
+    const sourceFrames = this.asset.animations[sourceAnimation] ?? [];
+    if (!sourceFrames.length) return this.#setStatus(`Animation ${sourceAnimation} has no frames to copy.`, true);
+    this.asset.animations[this.currentAnimation] = mode === 'all' ? clone(sourceFrames) : [clone(sourceFrames[0])];
+    this.currentFrameIndex = 0;
+    this.previewFrameIndex = 0;
+    this.#renderEditor();
+  }
+
+  #copyCurrentFrameToAnimation() {
+    const targetAnimation = this.elements.copyTarget.value;
+    const frame = this.getCurrentFrame();
+    if (!frame || !targetAnimation) return;
+    this.asset.animations[targetAnimation].push(clone(frame));
+    this.#setStatus(`Copied current frame to ${targetAnimation}.`, false);
+    this.#syncUiFromAsset();
+    this.#renderEditor();
+  }
+
+  #insertFrame(frame) {
+    const frames = this.getCurrentAnimationFrames();
+    const insertAt = frames.length ? this.currentFrameIndex + 1 : 0;
+    frames.splice(insertAt, 0, frame);
+    this.currentFrameIndex = insertAt;
+    this.previewFrameIndex = insertAt;
+    this.#renderEditor();
+  }
+
+  #deleteCurrentFrame() {
+    const frames = this.getCurrentAnimationFrames();
+    if (!frames.length) return;
+    frames.splice(this.currentFrameIndex, 1);
+    this.currentFrameIndex = Math.max(0, Math.min(this.currentFrameIndex, frames.length - 1));
+    this.previewFrameIndex = this.currentFrameIndex;
+    this.#renderEditor();
+  }
+
+  #setFrameIndex(index) {
+    const frames = this.getCurrentAnimationFrames();
+    if (!frames.length) return;
+    this.currentFrameIndex = (index + frames.length) % frames.length;
+    this.previewFrameIndex = this.currentFrameIndex;
+    this.#renderEditor();
+  }
+
+  #syncResizePreview() {
+    this.elements.resizeHint.textContent = 'Resize uses top-left pinning; existing art stays aligned to the upper-left and new cells are empty.';
+  }
+
+  #applyResize() {
+    const width = Number(this.elements.gridWidth.value) || this.asset.defaultGrid.width;
+    const height = Number(this.elements.gridHeight.value) || this.asset.defaultGrid.height;
+    const scope = this.elements.resizeScope.value;
+    if (scope === 'current frame') {
+      const frame = this.getCurrentFrame();
+      if (!frame) return;
+      this.asset.animations[this.currentAnimation][this.currentFrameIndex] = resizeFrame(frame, width, height, { pin: 'top-left' });
+      this.asset.defaultGrid = { width, height };
+    } else if (scope === 'current animation') {
+      this.asset.animations[this.currentAnimation] = resizeAnimationFrames(this.getCurrentAnimationFrames(), width, height, { pin: 'top-left' });
+      this.asset.defaultGrid = { width, height };
+    } else {
+      this.asset = resizeSpriteAsset(this.asset, width, height, 'whole sprite asset', { pin: 'top-left' });
+    }
+    this.#syncUiFromAsset();
+    this.#renderEditor();
+  }
 
   #paintAt(event) {
     const frame = this.getCurrentFrame();
+    if (!frame) return;
     const rect = this.elements.canvas.getBoundingClientRect();
     const scale = this.elements.canvas.width / rect.width;
     const x = Math.floor(((event.clientX - rect.left) * scale - 16) / 24);
@@ -141,11 +234,7 @@ export class SpriteEditorScreen {
     this.#renderEditor();
   }
 
-  #setStatus(message, error = false) {
-    this.elements.status.textContent = message;
-    this.elements.status.dataset.error = error ? '1' : '0';
-  }
-
+  #setStatus(message, error = false) { this.elements.status.textContent = message; this.elements.status.dataset.error = error ? '1' : '0'; }
   #syncBrushUi() {
     this.elements.charInput.value = this.brush.ch === ' ' ? '' : this.brush.ch;
     this.elements.fgInput.value = this.brush.fg ?? '#ffffff';
@@ -155,26 +244,39 @@ export class SpriteEditorScreen {
     this.elements.paintBg.checked = this.brush.paintBg;
   }
 
-  #syncFrameLabel() {
-    const frames = this.asset.animations[this.currentAnimation] ?? [];
-    this.elements.frameLabel.textContent = `${this.currentFrameIndex + 1}/${Math.max(1, frames.length)}`;
-    this.elements.offsetY.value = String(this.getCurrentFrame().offsetY ?? 0);
+  #refreshSpriteList() {
+    const current = this.elements.spriteSelect.value;
+    const assets = getAllSpriteAssets().sort((a, b) => a.id.localeCompare(b.id));
+    this.elements.spriteSelect.innerHTML = '<option value="">Load sprite…</option>' + assets.map((asset) => `<option value="${asset.id}">${asset.id}</option>`).join('');
+    this.elements.spriteSelect.value = current;
   }
 
   #syncUiFromAsset() {
+    ensureRequiredAnimations(this.asset);
     this.elements.idInput.value = this.asset.id;
     this.elements.anchorX.value = String(this.asset.anchor.x ?? 0);
     this.elements.anchorY.value = String(this.asset.anchor.y ?? 0);
-    this.elements.animationName.value = this.currentAnimation;
-    this.#syncFrameLabel();
+    this.elements.animationSelect.innerHTML = Object.keys(this.asset.animations).map((name) => `<option value="${name}">${name}</option>`).join('');
+    this.elements.animationSelect.value = this.currentAnimation;
+    this.elements.copySource.innerHTML = Object.keys(this.asset.animations).filter((name) => name !== this.currentAnimation).map((name) => `<option value="${name}">${name}</option>`).join('');
+    this.elements.copyTarget.innerHTML = Object.keys(this.asset.animations).filter((name) => name !== this.currentAnimation).map((name) => `<option value="${name}">${name}</option>`).join('');
+    this.elements.frameSelect.innerHTML = this.getCurrentAnimationFrames().map((_, index) => `<option value="${index}">Frame ${index + 1}</option>`).join('');
+    if (this.getCurrentAnimationFrames().length > 0) this.elements.frameSelect.value = String(this.currentFrameIndex);
+    this.elements.frameLabel.textContent = `${this.currentFrameIndex + 1}/${Math.max(1, this.getCurrentAnimationFrames().length)}`;
+    this.elements.offsetY.value = String(this.getCurrentFrame()?.offsetY ?? 0);
+    this.elements.gridWidth.value = String(this.asset.defaultGrid.width);
+    this.elements.gridHeight.value = String(this.asset.defaultGrid.height);
+    this.elements.emptyAnimationActions.hidden = this.getCurrentAnimationFrames().length > 0;
     this.#syncBrushUi();
     const validation = validateSpriteAsset(this.asset);
     this.#setStatus(validation.valid ? 'Sprite asset ready.' : validation.errors.join(' '), !validation.valid);
+    this.elements.jsonArea.value = JSON.stringify(this.asset, null, 2);
   }
 
   #renderEditor() {
-    const editorFrame = this.getCurrentFrame();
-    const previewFrame = this.getPreviewFrame();
+    this.#syncUiFromAsset();
+    const editorFrame = this.getCurrentFrame() ?? createEmptyFrame(this.asset.defaultGrid.width, this.asset.defaultGrid.height);
+    const previewFrame = this.getPreviewFrame() ?? editorFrame;
     const cellPx = 24;
     const padding = 16;
     this.elements.canvas.width = editorFrame.width * cellPx + padding * 2;
@@ -200,7 +302,6 @@ export class SpriteEditorScreen {
         }
       }
     }
-
     const previewCanvas = this.elements.previewCanvas;
     const renderCols = previewFrame.width + 4;
     const renderRows = previewFrame.height + 4;
@@ -221,8 +322,6 @@ export class SpriteEditorScreen {
     }
     if (this.elements.showAnchor.checked) this.renderer.drawEntityGlyph('◎', '#ff7ee2', null, 2 + (this.asset.anchor.x ?? 0), 2 + (this.asset.anchor.y ?? 0));
     this.renderer.composite();
-    this.elements.jsonArea.value = JSON.stringify(this.asset, null, 2);
-    this.#syncFrameLabel();
   }
 
   #createUi() {
@@ -236,8 +335,15 @@ export class SpriteEditorScreen {
           <label>Load Existing <select data-sprite-select></select></label>
           <label>Sprite ID <input data-id type="text"></label>
           <div class="sprite-editor__row"><label>Anchor X <input data-anchor-x type="number"></label><label>Anchor Y <input data-anchor-y type="number"></label><label>Frame offsetY <input data-offset-y type="number"></label></div>
-          <div class="sprite-editor__row"><label>Animation <input data-animation type="text"></label><button type="button" data-import-xp>Import XP</button><input data-xp-input type="file" accept=".xp" hidden></div>
-          <div class="sprite-editor__row"><button type="button" data-prev-frame>◀</button><span data-frame-label>1/1</span><button type="button" data-next-frame>▶</button><button type="button" data-add-frame>Add</button><button type="button" data-duplicate-frame>Duplicate</button><button type="button" data-remove-frame>Remove</button><button type="button" data-clear-frame>Clear</button></div>
+          <div class="sprite-editor__row"><label>Animation <select data-animation></select></label><button type="button" data-import-xp>Import XP</button><input data-xp-input type="file" accept=".xp" hidden></div>
+          <div data-empty-animation-actions class="sprite-editor__stack" hidden>
+            <strong>Empty animation tools</strong>
+            <div class="sprite-editor__row"><label>Copy source <select data-copy-source></select></label><button type="button" data-seed-action>Create from source</button></div>
+            <div class="sprite-editor__row"><button type="button" data-copy-first>Copy first frame</button><button type="button" data-copy-all>Copy all frames</button></div>
+          </div>
+          <div class="sprite-editor__row"><button type="button" data-prev-frame>◀</button><select data-frame-select></select><span data-frame-label>1/1</span><button type="button" data-next-frame>▶</button><button type="button" data-add-frame>Add</button><button type="button" data-duplicate-frame>Duplicate</button><button type="button" data-remove-frame>Remove</button><button type="button" data-clear-frame>Clear</button></div>
+          <div class="sprite-editor__row"><label>Copy current to <select data-copy-target></select></label><button type="button" data-copy-current>Copy frame</button></div>
+          <div class="sprite-editor__stack"><strong>Grid resize</strong><div class="sprite-editor__row"><label>Width <input data-grid-width type="number" min="1"></label><label>Height <input data-grid-height type="number" min="1"></label><label>Scope <select data-resize-scope><option>current frame</option><option>current animation</option><option selected>whole sprite asset</option></select></label><button type="button" data-resize>Resize</button></div><div data-resize-hint class="sprite-editor__hint"></div></div>
           <canvas data-editor-canvas></canvas>
           <div class="sprite-editor__brush">
             <label>Char <input data-char type="text" maxlength="1"></label>
@@ -268,14 +374,27 @@ export class SpriteEditorScreen {
       anchorX: root.querySelector('[data-anchor-x]'),
       anchorY: root.querySelector('[data-anchor-y]'),
       offsetY: root.querySelector('[data-offset-y]'),
-      animationName: root.querySelector('[data-animation]'),
+      animationSelect: root.querySelector('[data-animation]'),
+      emptyAnimationActions: root.querySelector('[data-empty-animation-actions]'),
+      copySource: root.querySelector('[data-copy-source]'),
+      copyTarget: root.querySelector('[data-copy-target]'),
+      seedAction: root.querySelector('[data-seed-action]'),
+      copyFirstButton: root.querySelector('[data-copy-first]'),
+      copyAllButton: root.querySelector('[data-copy-all]'),
+      copyCurrentButton: root.querySelector('[data-copy-current]'),
       prevFrameButton: root.querySelector('[data-prev-frame]'),
       nextFrameButton: root.querySelector('[data-next-frame]'),
+      frameSelect: root.querySelector('[data-frame-select]'),
       frameLabel: root.querySelector('[data-frame-label]'),
       addFrameButton: root.querySelector('[data-add-frame]'),
       duplicateFrameButton: root.querySelector('[data-duplicate-frame]'),
       removeFrameButton: root.querySelector('[data-remove-frame]'),
       clearFrameButton: root.querySelector('[data-clear-frame]'),
+      gridWidth: root.querySelector('[data-grid-width]'),
+      gridHeight: root.querySelector('[data-grid-height]'),
+      resizeScope: root.querySelector('[data-resize-scope]'),
+      resizeButton: root.querySelector('[data-resize]'),
+      resizeHint: root.querySelector('[data-resize-hint]'),
       canvas: root.querySelector('[data-editor-canvas]'),
       charInput: root.querySelector('[data-char]'),
       fgInput: root.querySelector('[data-fg]'),
@@ -295,12 +414,7 @@ export class SpriteEditorScreen {
       jsonArea: root.querySelector('[data-json]'),
       status: root.querySelector('[data-status]'),
     };
-    root.querySelectorAll('.sprite-editor__swatch').forEach((button) => {
-      button.addEventListener('click', () => {
-        this.brush.fg = button.dataset.color;
-        this.elements.fgInput.value = button.dataset.color;
-      });
-    });
+    root.querySelectorAll('.sprite-editor__swatch').forEach((button) => button.addEventListener('click', () => { this.brush.fg = button.dataset.color; elements.fgInput.value = button.dataset.color; }));
     return elements;
   }
 }

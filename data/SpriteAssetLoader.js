@@ -54,6 +54,27 @@ export function getAllSpriteAssets() {
   return [...spriteAssetStore.values()];
 }
 
+export function getSpriteAnimation(spriteId, animationName = 'idle') {
+  const asset = getSpriteAsset(spriteId);
+  if (!asset) return null;
+  const requested = asset.animations?.[animationName];
+  if (Array.isArray(requested) && requested.length > 0) return requested;
+  const idle = asset.animations?.idle;
+  if (Array.isArray(idle) && idle.length > 0) return idle;
+  return null;
+}
+
+export function getSpriteFrame(spriteId, animationName = 'idle', frameIndex = 0) {
+  const frames = getSpriteAnimation(spriteId, animationName);
+  if (!frames?.length) return null;
+  const safeFrameIndex = Math.abs(Math.floor(frameIndex)) % frames.length;
+  return frames[safeFrameIndex] ?? null;
+}
+
+export function getAnimationFrameCount(spriteId, animationName = 'idle') {
+  return getSpriteAnimation(spriteId, animationName)?.length ?? 0;
+}
+
 export async function loadSpriteAsset(assetPath) {
   const json = await readJson(assetPath);
   return registerSpriteAsset(json);

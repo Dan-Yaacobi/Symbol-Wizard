@@ -3,7 +3,7 @@ import { getItemDefinition } from '../data/ItemRegistry.js';
 import { glyphDensity, renderLayers, toRenderCell, toSafeGlyph, visualPalette, visualTheme } from '../data/VisualTheme.js';
 
 function getEntitySprite(entity) {
-  return getSpriteFrame(entity.spriteKey, entity.animationState ?? 'idle', entity.currentFrame ?? entity.frameIndex ?? 0);
+  return getSpriteFrame(entity.spriteId ?? entity.spriteKey, entity.animationState ?? 'idle', entity.currentFrame ?? entity.frameIndex ?? 0);
 }
 
 const c = visualTheme.colors;
@@ -86,12 +86,12 @@ function colorForEntity(entity) {
     return '#976d45';
   }
   if (entity.category === 'decorative' || entity.category === 'terrain') {
-    if (entity.spriteKey?.includes('flower-red')) return '#d1788a';
-    if (entity.spriteKey?.includes('flower-yellow')) return '#d8bc6b';
-    if (entity.spriteKey?.includes('flower-blue')) return '#78aeda';
-    if (entity.spriteKey?.includes('tree-dark')) return '#4f8459';
-    if (entity.spriteKey?.includes('tree-bright')) return '#65a96f';
-    if (entity.spriteKey?.includes('stone')) return '#8a98ab';
+    if (entity.spriteId ?? entity.spriteKey?.includes('flower-red')) return '#d1788a';
+    if (entity.spriteId ?? entity.spriteKey?.includes('flower-yellow')) return '#d8bc6b';
+    if (entity.spriteId ?? entity.spriteKey?.includes('flower-blue')) return '#78aeda';
+    if (entity.spriteId ?? entity.spriteKey?.includes('tree-dark')) return '#4f8459';
+    if (entity.spriteId ?? entity.spriteKey?.includes('tree-bright')) return '#65a96f';
+    if (entity.spriteId ?? entity.spriteKey?.includes('stone')) return '#8a98ab';
     return '#6aa574';
   }
   if (entity.type === 'fence') return c.woodFg;

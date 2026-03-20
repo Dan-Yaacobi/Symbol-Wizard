@@ -1,5 +1,5 @@
 import { visualPalette, visualTheme } from '../data/VisualTheme.js';
-import { getSpriteAsset as getLoadedSpriteAsset, registerSpriteAsset } from '../data/SpriteAssetLoader.js';
+import { getSpriteAsset as getLoadedSpriteAsset, registerSpriteAsset, getSpriteAnimation as getLoadedSpriteAnimation, getSpriteFrame as getLoadedSpriteFrame, getAnimationFrameCount } from '../data/SpriteAssetLoader.js';
 import { normalizeSpriteAsset, normalizeSpriteFrame, isOccupiedSpriteCell } from '../data/SpriteAssetSchema.js';
 
 export const palette = {
@@ -636,25 +636,40 @@ export function convertLegacySpriteEntryToAsset(spriteId, spriteEntry) {
   });
 }
 
+export function resolveSpriteId(spriteLike) {
+  if (!spriteLike) return null;
+  if (typeof spriteLike === 'string') return spriteLike;
+  return spriteLike.spriteId ?? spriteLike.spriteKey ?? null;
+}
+
 export function getSpriteAsset(spriteId) {
-  const loaded = getLoadedSpriteAsset(spriteId);
+  const resolvedSpriteId = resolveSpriteId(spriteId);
+  if (!resolvedSpriteId) return null;
+  const loaded = getLoadedSpriteAsset(resolvedSpriteId);
   if (loaded) return loaded;
-  const legacy = convertLegacySpriteEntryToAsset(spriteId, sprites[spriteId]);
+  const legacy = convertLegacySpriteEntryToAsset(resolvedSpriteId, sprites[resolvedSpriteId]);
   if (!legacy) return null;
   registerSpriteAsset(legacy);
-  return getLoadedSpriteAsset(spriteId) ?? legacy;
+  return getLoadedSpriteAsset(resolvedSpriteId) ?? legacy;
 }
 
-export function getSpriteAnimationFrames(spriteKey, animationState = 'idle') {
-  const asset = getSpriteAsset(spriteKey);
-  return asset?.animations?.[animationState] ?? asset?.animations?.idle ?? [];
+export function getSpriteAnimationFrames(spriteLike, animationState = 'idle') {
+  const spriteId = resolveSpriteId(spriteLike);
+  getSpriteAsset(spriteId);
+  return getLoadedSpriteAnimation(spriteId, animationState) ?? [];
 }
 
-export function getSpriteFrame(spriteKey, animationState = 'idle', frameIndex = 0) {
-  const frames = getSpriteAnimationFrames(spriteKey, animationState);
-  if (!frames.length) return null;
-  const safeFrameIndex = Math.abs(Math.floor(frameIndex)) % frames.length;
-  return normalizeSpriteFrame(frames[safeFrameIndex]);
+export function getSpriteFrame(spriteLike, animationState = 'idle', frameIndex = 0) {
+  const spriteId = resolveSpriteId(spriteLike);
+  getSpriteAsset(spriteId);
+  const frame = getLoadedSpriteFrame(spriteId, animationState, frameIndex);
+  return frame ? normalizeSpriteFrame(frame) : null;
+}
+
+export function getSpriteAnimationFrameCount(spriteLike, animationState = 'idle') {
+  const spriteId = resolveSpriteId(spriteLike);
+  getSpriteAsset(spriteId);
+  return getAnimationFrameCount(spriteId, animationState);
 }
 
 export function getSpriteCollisionOffsets(spriteOrFrame) {

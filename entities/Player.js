@@ -14,19 +14,22 @@ export class Player extends Entity {
       maxMana: 40,
       manaRegen: 8,
       speed: 20,
+      spriteId: 'player',
       spriteKey: 'player',
       gold: 0,
       castCooldown: 0,
       castTimer: 0,
       inventory: createInventory(24),
       animationState: 'idle',
-      frameDurations: {
+      animationTimings: {
         idle: 0.45,
         walk: 0.12,
         cast: 0.08,
       },
+      frameDurations: null,
     });
 
+    this.frameDurations = this.animationTimings;
     this.inventory = ensureInventory(this.inventory, { context: 'Player.constructor' });
     this.unlockedRecipes = new Set();
   }
