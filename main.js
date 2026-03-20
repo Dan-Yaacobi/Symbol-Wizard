@@ -1033,6 +1033,9 @@ function tick(now) {
   }
 
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1, runtimeConfig);
+  for (const enemy of enemies) {
+    updateEntityAnimation(enemy, dt, Math.hypot(enemy.vx, enemy.vy) > 0.1, runtimeConfig);
+  }
 
   if (!diagMinimalMode) {
     dialogueManager.update(dt);
