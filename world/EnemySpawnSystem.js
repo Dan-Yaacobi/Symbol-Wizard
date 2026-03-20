@@ -1,35 +1,9 @@
 import { Enemy } from '../entities/Enemy.js';
+import { BIOME_SPAWN_TABLES } from './BiomeSpawnTables.js';
 
-const DEFAULT_ENEMY_SPAWN_TABLE = {
-  forest: [
-    { type: 'spider', weight: 4 },
-    { type: 'wasp', weight: 3 },
-    { type: 'swarm_bug', weight: 3 },
-    { type: 'forest_beetle', weight: 1 },
-    { type: 'forest_mantis', weight: 2 },
-  ],
-  cave: [
-    { type: 'spider', weight: 3 },
-    { type: 'wasp', weight: 4 },
-    { type: 'forest_beetle', weight: 4 },
-    { type: 'swarm_bug', weight: 2 },
-    { type: 'forest_mantis', weight: 2 },
-  ],
-  river: [
-    { type: 'spider', weight: 4 },
-    { type: 'wasp', weight: 4 },
-    { type: 'forest_beetle', weight: 2 },
-    { type: 'swarm_bug', weight: 3 },
-    { type: 'forest_mantis', weight: 3 },
-  ],
-  mountain: [
-    { type: 'spider', weight: 4 },
-    { type: 'wasp', weight: 2 },
-    { type: 'forest_beetle', weight: 5 },
-    { type: 'swarm_bug', weight: 2 },
-    { type: 'forest_mantis', weight: 2 },
-  ],
-};
+const DEFAULT_ENEMY_SPAWN_TABLE = Object.fromEntries(
+  Object.entries(BIOME_SPAWN_TABLES).map(([biomeId, entries]) => [biomeId, entries.map((entry) => ({ type: entry.enemyId, weight: entry.weight }))]),
+);
 
 const DEFAULT_SETTINGS = {
   enemyDensityFactor: 0.0035,
