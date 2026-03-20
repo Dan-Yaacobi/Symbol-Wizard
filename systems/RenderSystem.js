@@ -100,24 +100,23 @@ function colorForEntity(entity) {
 
 function drawSprite(renderer, camera, entity, color, forceSprite = null) {
   const sprite = forceSprite ?? getEntitySprite(entity);
-  if (!sprite) return;
+  if (!sprite?.cells?.length) return;
 
-  const width = sprite.art[0]?.length ?? 7;
-  const baseX = Math.round(entity.x) - Math.floor(width / 2);
+  const baseX = Math.round(entity.x) - Math.floor(sprite.width / 2);
   const baseY = Math.round(entity.y) - 3 + (sprite.offsetY ?? 0);
 
-  for (let sy = 0; sy < sprite.art.length; sy += 1) {
-    const row = sprite.art[sy];
-    for (let sx = 0; sx < row.length; sx += 1) {
-      const ch = row[sx];
-      if (ch === ' ') continue;
+  for (let sy = 0; sy < sprite.height; sy += 1) {
+    for (let sx = 0; sx < sprite.width; sx += 1) {
+      const cell = sprite.cells[sy]?.[sx];
+      const ch = cell?.ch ?? ' ';
+      if ((ch === ' ' || ch === '\0') && !cell?.bg) continue;
       const screenX = baseX + sx - camera.x;
       const screenY = baseY + sy - camera.y;
       const safeGlyph = toSafeGlyph(ch);
       const densityTier = densityTierForGlyph(safeGlyph);
       const expectedTier = entity.type === 'player' || entity.type === 'enemy' ? 'high' : (entity.category ? 'low' : 'medium');
-      const finalGlyph = expectedTier === 'high' && densityTier === 'low' ? '#' : safeGlyph;
-      drawCell(renderer, { glyph: finalGlyph, fg: color }, screenX, screenY);
+      const finalGlyph = expectedTier === 'high' && densityTier === 'low' && ch !== ' ' ? '#' : safeGlyph;
+      drawCell(renderer, { glyph: finalGlyph, fg: cell?.fg ?? color, bg: cell?.bg ?? c.worldBackground }, screenX, screenY);
     }
   }
 }

@@ -195,8 +195,10 @@ export class Renderer {
     const tctx = tile.getContext('2d', { alpha: true });
     tctx.imageSmoothingEnabled = false;
 
-    tctx.fillStyle = bg;
-    tctx.fillRect(0, 0, this.cellW, this.cellH);
+    if (bg != null && bg !== 'transparent' && bg !== 'rgba(0,0,0,0)') {
+      tctx.fillStyle = bg;
+      tctx.fillRect(0, 0, this.cellW, this.cellH);
+    }
 
     if (this.fontReady && char !== ' ') {
       const coords = this.#getGlyphCoords(char);

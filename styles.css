@@ -810,3 +810,64 @@ body {
     justify-content: flex-start;
   }
 }
+
+.object-editor-button--secondary {
+  top: 52px;
+}
+
+.sprite-editor[hidden] { display: none; }
+.sprite-editor {
+  position: fixed;
+  inset: 0;
+  z-index: 85;
+  background: rgba(4, 8, 14, 0.9);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+.sprite-editor__panel {
+  width: min(1320px, 97vw);
+  max-height: 94vh;
+  overflow: auto;
+  background: #111d2e;
+  border: 1px solid var(--panel-border);
+  color: #e5ecfb;
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1.2fr 1fr;
+}
+.sprite-editor__panel > header,
+.sprite-editor__row,
+.sprite-editor__toolbar,
+.sprite-editor__brush {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.sprite-editor__panel > header { grid-column: 1 / -1; justify-content: space-between; }
+.sprite-editor__left,
+.sprite-editor__right { display: grid; gap: 10px; }
+.sprite-editor__left label,
+.sprite-editor__right label { display: grid; gap: 4px; }
+.sprite-editor__left canvas,
+.sprite-editor__right canvas {
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  border: 1px solid #30415d;
+  background: #0b1016;
+}
+.sprite-editor__brush label { display: flex; align-items: center; gap: 4px; }
+.sprite-editor__swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.sprite-editor__swatch { width: 24px; height: 24px; border: 1px solid #3d5676; cursor: pointer; }
+.sprite-editor textarea {
+  width: 100%;
+  min-height: 320px;
+  background: #0b1016;
+  color: #d7e9ff;
+  border: 1px solid #30415d;
+  font: 12px/1.4 ui-monospace, monospace;
+}
+.sprite-editor__status[data-error='1'] { color: #ff8c8c; }

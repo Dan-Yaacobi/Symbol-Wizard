@@ -4,10 +4,11 @@
   "description": "Browser-based symbol RPG prototype with modular architecture and a design-first documentation set.",
   "type": "module",
   "scripts": {
-    "lint:imports": "eslint . --ext .js",
+    "lint:imports": "eslint .",
     "audit:modules": "node scripts/module-audit.mjs",
     "import:rexpaint": "node tools/rexpaintImporter.js",
-    "import:rexpaint:watch": "node tools/rexpaintImporter.js --watch"
+    "import:rexpaint:watch": "node tools/rexpaintImporter.js --watch",
+    "import:sprite-xp": "node tools/importSpriteXp.js"
   },
   "devDependencies": {
     "eslint": "^8.57.1",

@@ -1,0 +1,22 @@
+{
+  "id": "bush",
+  "anchor": { "x": 3, "y": 3 },
+  "animations": {
+    "idle": [
+      {
+        "width": 7,
+        "height": 7,
+        "offsetY": 0,
+        "cells": [
+          [{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":"%","fg":"#5faa66","bg":"#173a1f"},{"ch":"%","fg":"#73c57e","bg":"#1d4726"},{"ch":"%","fg":"#5faa66","bg":"#173a1f"},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":"%","fg":"#5faa66","bg":"#173a1f"},{"ch":"%","fg":"#73c57e","bg":"#1d4726"},{"ch":"%","fg":"#89d58f","bg":"#22512a"},{"ch":"%","fg":"#73c57e","bg":"#1d4726"},{"ch":"%","fg":"#5faa66","bg":"#173a1f"},{"ch":" ","fg":null,"bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":"%","fg":"#5faa66","bg":"#173a1f"},{"ch":"%","fg":"#73c57e","bg":"#1d4726"},{"ch":"%","fg":"#5faa66","bg":"#173a1f"},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null}]
+        ]
+      }
+    ]
+  }
+}
