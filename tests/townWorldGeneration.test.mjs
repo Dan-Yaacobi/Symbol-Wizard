@@ -1,8 +1,13 @@
+/* global console */
 import assert from 'node:assert/strict';
 import { BiomeGenerator } from '../world/BiomeGenerator.js';
 import { WorldMapManager } from '../world/WorldMapManager.js';
 import { RoomTransitionSystem } from '../world/RoomTransitionSystem.js';
 import { Player } from '../entities/Player.js';
+
+function edgeDistance(width, height, x, y) {
+  return Math.min(x, y, (width - 1) - x, (height - 1) - y);
+}
 
 function run() {
   const biomeGenerator = new BiomeGenerator({ roomWidth: 120, roomHeight: 90, runtimeConfig: null });
@@ -35,9 +40,28 @@ function run() {
 
   const forestExit = town.exits.find((exit) => exit.targetMapType === 'forest');
   assert.ok(forestExit, 'Town should have a forest transition exit.');
+  const walkableEdges = [];
+  const envelopeWalkable = [];
+  const roadEnvelope = [];
+  for (let y = 0; y < town.tiles.length; y += 1) {
+    for (let x = 0; x < town.tiles[0].length; x += 1) {
+      const tile = town.tiles[y][x];
+      const onBorder = x === 0 || y === 0 || x === town.tiles[0].length - 1 || y === town.tiles.length - 1;
+      if (onBorder && tile.walkable) walkableEdges.push({ x, y, type: tile.type });
+      if (edgeDistance(town.tiles[0].length, town.tiles.length, x, y) <= 12) {
+        if (tile.walkable) envelopeWalkable.push({ x, y, type: tile.type });
+        if (tile.type === 'road') roadEnvelope.push({ x, y });
+      }
+    }
+  }
+  assert.equal(walkableEdges.length, forestExit.width, 'Only the road exit should remain open on the map border.');
+  assert.ok(roadEnvelope.length >= forestExit.width * 6, 'Road should carve deeply through the forest envelope.');
+  const envelopeDensity = 1 - ((envelopeWalkable.length - roadEnvelope.length) / Math.max(1, town.metadata.forestEnvelope.envelopeTiles));
+  assert.ok(envelopeDensity >= 0.7, `Forest envelope should stay dense, got ${envelopeDensity.toFixed(3)}.`);
+  assert.ok(town.metadata.forestEnvelope.transitionTiles > 0, 'Town should expose a transition band between town and forest.');
   const forest = worldMapManager.resolveMapByExit(town, forestExit);
   assert.equal(forest.type, 'forest');
-  assert.ok(forest.exits.some((exit) => exit.id === 'forest-town-return'), 'Forest start map should include a town return exit.');
+  assert.ok(forest.exits.some((exit) => exit.targetMapType === 'town'), 'Forest start map should include a town return exit.');
 
   const transitionSystem = new RoomTransitionSystem({ biomeGenerator, worldMapManager, fadeDurationMs: 1 });
   const player = new Player(house.door.x, house.door.y + 2);
