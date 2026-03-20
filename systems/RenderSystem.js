@@ -90,6 +90,11 @@ export function resolveSpriteRenderGlyph(entity, sprite, ch) {
   return expectedTier === 'high' && densityTier === 'low' && ch !== ' ' ? '#' : safeGlyph;
 }
 
+function getSpriteCellX(sprite, facing, sx) {
+  if (facing === 'left') return (sprite.width - 1) - sx;
+  return sx;
+}
+
 function colorForEntity(entity) {
   if (entity.type === 'npc') return palette[entity.role] ?? palette.npc;
   if (entity.type === 'house') {
@@ -124,7 +129,7 @@ function drawSprite(renderer, camera, entity, color, forceSprite = null) {
 
   for (let sy = 0; sy < sprite.height; sy += 1) {
     for (let sx = 0; sx < sprite.width; sx += 1) {
-      const cell = sprite.cells[sy]?.[sx];
+      const cell = sprite.cells[sy]?.[getSpriteCellX(sprite, entity.facing, sx)];
       const ch = cell?.ch ?? ' ';
       if ((ch === ' ' || ch === '\0') && !cell?.bg) continue;
       const screenX = baseX + sx - camera.x;
@@ -468,8 +473,8 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, activ
     }
   }
 
-  if (debugOptions.facingMarker && player?.facing) {
-    drawCell(renderer, { glyph: '→', fg: '#7ce6ff' }, Math.round(player.x + player.facing.x * 2) - camera.x, Math.round(player.y + player.facing.y * 2) - camera.y);
+  if (debugOptions.facingMarker && player?.facingVector) {
+    drawCell(renderer, { glyph: '→', fg: '#7ce6ff' }, Math.round(player.x + player.facingVector.x * 2) - camera.x, Math.round(player.y + player.facingVector.y * 2) - camera.y);
   }
 
   if (debugOptions.cameraCenter) {

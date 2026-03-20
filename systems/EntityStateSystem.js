@@ -7,6 +7,13 @@ function getMovementState(entity) {
   return Math.hypot(entity.vx ?? 0, entity.vy ?? 0) > 0.1 ? 'walk' : 'idle';
 }
 
+export function updateEntityFacingFromVelocity(entity, threshold = 0.01) {
+  if (!entity) return;
+  const vx = entity.vx ?? 0;
+  if (vx > threshold) entity.facing = 'right';
+  else if (vx < -threshold) entity.facing = 'left';
+}
+
 export function createEntityState(type = 'idle') {
   return { type, time: 0 };
 }
