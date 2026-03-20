@@ -59,9 +59,15 @@ function testMeleeAttackAppliesRecoilAfterHit() {
   updateEnemyPlayerInteractions([enemy], player, 0.016, null, createConfig());
 
   assert.equal(player.hp, 18);
-  assert.ok(enemy.vx > 0);
+  assert.ok(enemy.hitKnockbackX > 0);
+  assert.equal(enemy.hitKnockbackY, 0);
+  assert.ok(enemy.hitKnockbackTimer > 0);
   assert.equal(enemy.attackDamageApplied, true);
   assert.ok(enemy.postAttackSlowTimer > 0);
+
+  const beforeX = enemy.x;
+  updateEnemies([enemy], player, 0.05, [], createConfig());
+  assert.ok(enemy.x > beforeX);
 }
 
 function testEnemySpawnAttackTimersAreDesynced() {
