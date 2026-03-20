@@ -12,7 +12,7 @@ import * as LootSystem from './systems/LootSystem.js';
 import { CombatTextSystem } from './systems/CombatTextSystem.js';
 import { renderWorld } from './systems/RenderSystem.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
-import { setEntityState, syncEntityMovementState, updateEntityState } from './systems/EntityStateSystem.js';
+import { setEntityState, syncEntityMovementState, updateEntityFacingFromVelocity, updateEntityState } from './systems/EntityStateSystem.js';
 import { ChatBox } from './ui/ChatBox.js';
 import { drawHUD } from './ui/HUD.js';
 import {
@@ -74,7 +74,7 @@ let pendingDevSeed = String(currentBiomeSeed);
 let activeRoom = startRoom;
 let map = activeRoom.tiles;
 const player = new Player(Math.floor(ROOM_W / 2), Math.floor(ROOM_H / 2));
-player.facing = { x: 0, y: 1 };
+player.facingVector = { x: 0, y: 1 };
 ['fire_bolt', 'frost_beam', 'lightning_beam'].forEach((recipeId) => player.unlockRecipe(recipeId));
 player.addItem('essence', 20);
 player.addItem('stone', 20);
@@ -454,7 +454,7 @@ devToolsPanel.setMapTools({
     regenerateWorld(parsedSeed);
   },
   spawnEnemyGroup: () => {
-    const center = { x: Math.round(player.x + player.facing.x * 5), y: Math.round(player.y + player.facing.y * 5) };
+    const center = { x: Math.round(player.x + player.facingVector.x * 5), y: Math.round(player.y + player.facingVector.y * 5) };
     const group = spawnEnemyGroup('swarm_bug', center.x, center.y, {
       room: activeRoom,
       groupSize: 4,
@@ -758,7 +758,7 @@ function handlePlayer(dt) {
   player.vx += (targetVx - player.vx) * blend;
   player.vy += (targetVy - player.vy) * blend;
   if (Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01) {
-    player.facing = { x: Math.round(moveX), y: Math.round(moveY) };
+    player.facingVector = { x: Math.round(moveX), y: Math.round(moveY) };
   }
 
   movePlayerAxis(player.vx * dt, 0);
@@ -778,6 +778,7 @@ function handlePlayer(dt) {
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
   updateEntityState(player, dt);
+  updateEntityFacingFromVelocity(player);
   syncEntityMovementState(player);
   player.castCooldown = runtimeConfig.get('player.castDuration');
 
@@ -965,6 +966,7 @@ function tick(now) {
     updateTownNpcs(npcs, map, dt);
     for (const npc of npcs) {
       updateEntityAnimation(npc, dt, Math.hypot(npc.vx, npc.vy) > 0.1, runtimeConfig);
+      updateEntityFacingFromVelocity(npc);
     }
   }
 
@@ -1038,6 +1040,7 @@ function tick(now) {
   updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1, runtimeConfig);
   for (const enemy of enemies) {
     updateEntityAnimation(enemy, dt, Math.hypot(enemy.vx, enemy.vy) > 0.1, runtimeConfig);
+    updateEntityFacingFromVelocity(enemy);
   }
 
   if (!diagMinimalMode) {

@@ -17,6 +17,7 @@ export class Entity {
       animationFrames: null,
       frameIndex: 0,
       currentFrame: 0,
+      facing: 'right',
       frameTimer: 0,
       activeStatuses: [],
       state: createEntityState(),

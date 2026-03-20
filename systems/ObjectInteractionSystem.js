@@ -60,7 +60,7 @@ export function interactWithObject(object, context = {}) {
 }
 
 export function tryInteractInFront(player, worldObjects, reach = 2.4) {
-  const facing = player.facing ?? { x: 0, y: 1 };
+  const facing = player.facingVector ?? { x: 0, y: 1 };
   const probeX = Math.round(player.x + facing.x);
   const probeY = Math.round(player.y + facing.y);
 
