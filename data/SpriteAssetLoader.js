@@ -54,13 +54,23 @@ export function getAllSpriteAssets() {
   return [...spriteAssetStore.values()];
 }
 
+const ANIMATION_FALLBACKS = Object.freeze({
+  cast: ['attack', 'idle'],
+  attack: ['cast', 'idle'],
+  walk: ['idle'],
+  idle: ['walk'],
+});
+
 export function getSpriteAnimation(spriteId, animationName = 'idle') {
   const asset = getSpriteAsset(spriteId);
   if (!asset) return null;
-  const requested = asset.animations?.[animationName];
-  if (Array.isArray(requested) && requested.length > 0) return requested;
-  const idle = asset.animations?.idle;
-  if (Array.isArray(idle) && idle.length > 0) return idle;
+
+  const candidates = [animationName, ...(ANIMATION_FALLBACKS[animationName] ?? []), 'idle'];
+  for (const candidate of candidates) {
+    const frames = asset.animations?.[candidate];
+    if (Array.isArray(frames) && frames.length > 0) return frames;
+  }
+
   return null;
 }
 
