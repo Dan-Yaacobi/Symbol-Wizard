@@ -86,12 +86,107 @@ function buildCollisionMap(grid, objects = []) {
   return map;
 }
 
-function createExitCorridor(exit, width = 3, depth = 3) {
+function sideDelta(side) {
+  if (side === 'top') return { x: 0, y: -1 };
+  if (side === 'bottom') return { x: 0, y: 1 };
+  if (side === 'left') return { x: -1, y: 0 };
+  return { x: 1, y: 0 };
+}
+
+function sideDirection(side) {
+  if (side === 'top') return 'north';
+  if (side === 'bottom') return 'south';
+  if (side === 'left') return 'west';
+  return 'east';
+}
+
+function chooseExitLayout(width, height, rng) {
+  const side = pickOne(rng, ['top', 'bottom', 'left', 'right']) ?? 'top';
+  const roadWidth = randomInt(rng, 2, 3);
+  const halfSpan = Math.floor((roadWidth - 1) / 2);
+
+  if (side === 'top' || side === 'bottom') {
+    const minX = 3 + halfSpan;
+    const maxX = width - 4 - halfSpan;
+    const x = randomInt(rng, minX, maxX);
+    return {
+      side,
+      direction: sideDirection(side),
+      roadWidth,
+      edgeTiles: Array.from({ length: roadWidth }, (_, index) => ({
+        x: x - halfSpan + index,
+        y: side === 'top' ? 0 : height - 1,
+      })),
+      interiorAnchor: { x, y: side === 'top' ? 3 : height - 4 },
+      exitPosition: { x, y: side === 'top' ? 0 : height - 1 },
+    };
+  }
+
+  const minY = 3 + halfSpan;
+  const maxY = height - 4 - halfSpan;
+  const y = randomInt(rng, minY, maxY);
+  return {
+    side,
+    direction: sideDirection(side),
+    roadWidth,
+    edgeTiles: Array.from({ length: roadWidth }, (_, index) => ({
+      x: side === 'left' ? 0 : width - 1,
+      y: y - halfSpan + index,
+    })),
+    interiorAnchor: { x: side === 'left' ? 3 : width - 4, y },
+    exitPosition: { x: side === 'left' ? 0 : width - 1, y },
+  };
+}
+
+function enforceTownBoundary(grid, exitLayout, rng) {
+  const boundaryVariants = [tiles.denseTree, tiles.denseTreeSpire, tiles.denseTreeBloom, tiles.denseTreeCanopy, tiles.denseTreeShadow];
+  const allowed = new Set(exitLayout.edgeTiles.map(({ x, y }) => `${x},${y}`));
+
+  for (let y = 0; y < grid.length; y += 1) {
+    for (let x = 0; x < grid[0].length; x += 1) {
+      const isBorder = x === 0 || y === 0 || x === grid[0].length - 1 || y === grid.length - 1;
+      if (!isBorder) continue;
+      if (allowed.has(`${x},${y}`)) {
+        grid[y][x] = cloneTile(tiles.dirt);
+        continue;
+      }
+      const variant = boundaryVariants[Math.floor(rng() * boundaryVariants.length)] ?? tiles.denseTree;
+      grid[y][x] = cloneTile(variant);
+    }
+  }
+}
+
+function validateTownBoundary(grid, exitLayout) {
+  const allowed = new Set(exitLayout.edgeTiles.map(({ x, y }) => `${x},${y}`));
+  const leaks = [];
+  for (let y = 0; y < grid.length; y += 1) {
+    for (let x = 0; x < grid[0].length; x += 1) {
+      const isBorder = x === 0 || y === 0 || x === grid[0].length - 1 || y === grid.length - 1;
+      if (!isBorder) continue;
+      const key = `${x},${y}`;
+      const walkable = Boolean(grid[y][x]?.walkable);
+      if (allowed.has(key)) {
+        if (!walkable) leaks.push({ x, y, reason: 'exit-blocked' });
+        continue;
+      }
+      if (walkable) leaks.push({ x, y, reason: 'border-leak' });
+    }
+  }
+  return { valid: leaks.length === 0, leaks };
+}
+
+function createExitCorridor(exit, direction, width = 3, depth = 3) {
   const tilesOut = [];
-  const halfWidth = Math.max(1, Math.floor(width / 2));
+  const lowOffset = -Math.floor((width - 1) / 2);
+  const highOffset = Math.ceil((width - 1) / 2);
+  const delta = sideDelta(direction === 'north' ? 'top' : direction === 'south' ? 'bottom' : direction === 'west' ? 'left' : 'right');
+  const perp = direction === 'north' || direction === 'south' ? { x: 1, y: 0 } : { x: 0, y: 1 };
   for (let d = 0; d < depth; d += 1) {
-    for (let w = -halfWidth; w <= halfWidth; w += 1) {
-      tilesOut.push({ x: exit.position.x + w, y: exit.position.y + d });
+    for (let w = lowOffset; w <= highOffset; w += 1) {
+      tilesOut.push({
+        x: exit.position.x + (delta.x * d) + (perp.x * w),
+        y: exit.position.y + (delta.y * d) + (perp.y * w),
+      });
     }
   }
   return {
@@ -151,19 +246,33 @@ export class TownGenerator {
     const roadMask = new Set();
     markRect(roadMask, plaza.left, plaza.top, plaza.width, plaza.height, 0);
 
-    const exits = [];
-    const northExitX = center.x + randomInt(rng, -6, 6);
-    const townToForestSeed = hashSeed(seed, 'forest-exit', 0);
-    exits.push({
-      id: 'town-forest-exit-0',
-      position: { x: northExitX, y: 2 },
+    const exitLayout = chooseExitLayout(this.width, this.height, rng);
+    const forestSeed = hashSeed(seed, 'forest_exit');
+    const exitId = 'town_exit_main';
+    const exits = [{
+      id: exitId,
+      position: { ...exitLayout.exitPosition },
+      direction: exitLayout.direction,
+      side: exitLayout.side,
       targetMapType: 'forest',
-      targetSeed: townToForestSeed,
-      targetEntryId: 'forest-town-return',
-      width: 3,
+      targetSeed: forestSeed,
+      targetEntryId: 'forest_entry_from_town',
+      width: exitLayout.roadWidth,
       label: 'Forest Path',
-    });
-    carveWidePath(grid, roadMask, { x: center.x, y: center.y }, { x: northExitX, y: 10 }, rng, 1);
+      meta: {
+        townSeed: seed,
+        forestSeed,
+        exitSide: exitLayout.side,
+        roadWidth: exitLayout.roadWidth,
+      },
+    }];
+
+    carveWidePath(grid, roadMask, { x: center.x, y: center.y }, exitLayout.interiorAnchor, rng, Math.max(1, exitLayout.roadWidth - 1));
+    for (const tile of exitLayout.edgeTiles) {
+      if (!grid[tile.y]?.[tile.x]) continue;
+      grid[tile.y][tile.x] = cloneTile(tiles.dirt);
+      roadMask.add(`${tile.x},${tile.y}`);
+    }
 
     const candidateRows = [plaza.top - 24, plaza.top - 10, plaza.top + plaza.height + 8, plaza.top + plaza.height + 22]
       .filter((y) => y > 10 && y < this.height - 14);
@@ -205,10 +314,16 @@ export class TownGenerator {
       carveWidePath(grid, roadMask, { x: door.x, y: door.y + 2 }, { x: center.x + randomInt(rng, -8, 8), y: center.y + randomInt(rng, -4, 4) }, rng, 1);
     }
 
+    enforceTownBoundary(grid, exitLayout, rng);
+    const boundaryValidation = validateTownBoundary(grid, exitLayout);
+    if (!boundaryValidation.valid) {
+      throw new Error(`Town boundary validation failed for seed ${seed}: ${JSON.stringify(boundaryValidation.leaks.slice(0, 8))}`);
+    }
+
     const objectBlockedMask = new Set(blocked);
     for (const key of roadMask) objectBlockedMask.add(key);
     for (const exit of exits) {
-      for (const tile of createExitCorridor(exit, exit.width, 5).triggerTiles) {
+      for (const tile of createExitCorridor(exit, exit.direction, exit.width, 5).triggerTiles) {
         objectBlockedMask.add(`${tile.x},${tile.y}`);
       }
     }
@@ -240,7 +355,7 @@ export class TownGenerator {
     const roles = ['villager', 'merchant', 'guard', 'villager'];
     const lines = [
       'The square stays busy whenever the forest road is safe.',
-      'Need supplies? The forest trail north is never the same twice.',
+      'Need supplies? The forest trail beyond the gate is never the same twice.',
       'Keep the paths clear and the town will thrive.',
       'Some homes keep their doors open for friendly travelers.',
     ];
@@ -258,9 +373,17 @@ export class TownGenerator {
         landingX: entryX,
         landingY: entryY,
       },
+      [exitId]: {
+        id: exitId,
+        x: exitLayout.interiorAnchor.x,
+        y: exitLayout.interiorAnchor.y,
+        spawn: { x: exitLayout.interiorAnchor.x, y: exitLayout.interiorAnchor.y },
+        landingX: exitLayout.interiorAnchor.x,
+        landingY: exitLayout.interiorAnchor.y,
+      },
     };
 
-    const exitCorridors = exits.map((exit) => createExitCorridor(exit, exit.width, 5));
+    const exitCorridors = exits.map((exit) => createExitCorridor(exit, exit.direction, exit.width, 5));
 
     const map = {
       id: `town-${seed}`,
@@ -278,10 +401,15 @@ export class TownGenerator {
       metadata: {
         plaza,
         houseCount,
-        townExitSeed: townToForestSeed,
+        townExitSeed: forestSeed,
+        townExitSide: exitLayout.side,
+        townExitPosition: { ...exitLayout.exitPosition },
+        boundaryValidation,
       },
     };
 
+    console.log('Town exit side:', exitLayout.side, 'position:', exitLayout.exitPosition.x, exitLayout.exitPosition.y);
+    console.log('Town → Forest', seed, '→', forestSeed);
     console.log('Generated town', seed, houseCount);
     return map;
   }
