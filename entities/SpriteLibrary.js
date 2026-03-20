@@ -1,4 +1,6 @@
 import { visualPalette, visualTheme } from '../data/VisualTheme.js';
+import { getSpriteAsset as getLoadedSpriteAsset, registerSpriteAsset } from '../data/SpriteAssetLoader.js';
+import { normalizeSpriteAsset, normalizeSpriteFrame, isOccupiedSpriteCell } from '../data/SpriteAssetSchema.js';
 
 export const palette = {
   floorFg: visualPalette.ground.floorFg,
@@ -583,36 +585,90 @@ export const sprites = {
   'grass-patch': ['       ', '       ', '  """  ', '  """  ', '       ', '       ', '       '],
 };
 
-export function getSpriteFrame(spriteKey, animationState = 'idle', frameIndex = 0) {
-  const spriteEntry = sprites[spriteKey];
-  if (!spriteEntry) return null;
-  if (Array.isArray(spriteEntry)) return { art: spriteEntry, offsetY: 0 };
-
-  const stateFrames = spriteEntry[animationState] ?? spriteEntry.idle;
-  if (!stateFrames || stateFrames.length === 0) return null;
-
-  const safeFrameIndex = Math.abs(Math.floor(frameIndex)) % stateFrames.length;
-  const frame = stateFrames[safeFrameIndex];
-  if (Array.isArray(frame)) return { art: frame, offsetY: 0 };
-  return frame;
+export function convertLegacyFrameToSpriteFrame(frame) {
+  if (!frame) return null;
+  if (Array.isArray(frame)) {
+    const height = frame.length;
+    const width = frame[0]?.length ?? 0;
+    return normalizeSpriteFrame({
+      width,
+      height,
+      offsetY: 0,
+      cells: frame.map((row) => [...row].map((ch) => ({ ch, fg: null, bg: null }))),
+    });
+  }
+  if (Array.isArray(frame.art)) {
+    const height = frame.art.length;
+    const width = frame.art[0]?.length ?? 0;
+    return normalizeSpriteFrame({
+      width,
+      height,
+      offsetY: frame.offsetY ?? 0,
+      cells: frame.art.map((row) => [...row].map((ch) => ({ ch, fg: null, bg: null }))),
+    });
+  }
+  if (Array.isArray(frame.cells)) return normalizeSpriteFrame(frame);
+  return null;
 }
 
-export function getSpriteCollisionOffsets(sprite) {
-  if (!sprite?.art?.length) return [];
+export function convertLegacySpriteEntryToAsset(spriteId, spriteEntry) {
+  if (!spriteEntry) return null;
+  if (Array.isArray(spriteEntry)) {
+    return normalizeSpriteAsset({
+      id: spriteId,
+      anchor: { x: Math.floor((spriteEntry[0]?.length ?? 1) / 2), y: 3 },
+      animations: { idle: [convertLegacyFrameToSpriteFrame(spriteEntry)] },
+      meta: { source: 'legacy' },
+    });
+  }
 
-  const width = sprite.art[0]?.length ?? 0;
-  const halfWidth = Math.floor(width / 2);
-  const anchorY = -3 + (sprite.offsetY ?? 0);
+  const animations = {};
+  for (const [animationName, frames] of Object.entries(spriteEntry)) {
+    if (!Array.isArray(frames)) continue;
+    animations[animationName] = frames.map((frame) => convertLegacyFrameToSpriteFrame(frame)).filter(Boolean);
+  }
+  const idleFrame = animations.idle?.[0] ?? Object.values(animations)[0]?.[0] ?? convertLegacyFrameToSpriteFrame([[ ' ' ]]);
+  return normalizeSpriteAsset({
+    id: spriteId,
+    anchor: { x: Math.floor((idleFrame?.width ?? 1) / 2), y: 3 },
+    animations,
+    meta: { source: 'legacy' },
+  });
+}
+
+export function getSpriteAsset(spriteId) {
+  const loaded = getLoadedSpriteAsset(spriteId);
+  if (loaded) return loaded;
+  const legacy = convertLegacySpriteEntryToAsset(spriteId, sprites[spriteId]);
+  if (!legacy) return null;
+  registerSpriteAsset(legacy);
+  return getLoadedSpriteAsset(spriteId) ?? legacy;
+}
+
+export function getSpriteAnimationFrames(spriteKey, animationState = 'idle') {
+  const asset = getSpriteAsset(spriteKey);
+  return asset?.animations?.[animationState] ?? asset?.animations?.idle ?? [];
+}
+
+export function getSpriteFrame(spriteKey, animationState = 'idle', frameIndex = 0) {
+  const frames = getSpriteAnimationFrames(spriteKey, animationState);
+  if (!frames.length) return null;
+  const safeFrameIndex = Math.abs(Math.floor(frameIndex)) % frames.length;
+  return normalizeSpriteFrame(frames[safeFrameIndex]);
+}
+
+export function getSpriteCollisionOffsets(spriteOrFrame) {
+  const frame = spriteOrFrame?.cells ? normalizeSpriteFrame(spriteOrFrame) : convertLegacyFrameToSpriteFrame(spriteOrFrame);
+  if (!frame?.cells?.length) return [];
+
+  const halfWidth = Math.floor(frame.width / 2);
+  const anchorY = -3 + (frame.offsetY ?? 0);
   const offsets = [];
 
-  for (let sy = 0; sy < sprite.art.length; sy += 1) {
-    const row = sprite.art[sy] ?? '';
-    for (let sx = 0; sx < row.length; sx += 1) {
-      if (row[sx] === ' ') continue;
-      offsets.push({
-        x: sx - halfWidth,
-        y: sy + anchorY,
-      });
+  for (let sy = 0; sy < frame.height; sy += 1) {
+    for (let sx = 0; sx < frame.width; sx += 1) {
+      if (!isOccupiedSpriteCell(frame.cells[sy]?.[sx])) continue;
+      offsets.push({ x: sx - halfWidth, y: sy + anchorY });
     }
   }
 

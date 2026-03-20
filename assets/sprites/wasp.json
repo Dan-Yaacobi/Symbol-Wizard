@@ -1,0 +1,32 @@
+{
+  "id": "wasp",
+  "anchor": { "x": 2, "y": 2 },
+  "animations": {
+    "idle": [
+      {
+        "width": 5,
+        "height": 5,
+        "offsetY": -1,
+        "cells": [
+          [{"ch":" ","fg":null,"bg":null},{"ch":"~","fg":"#d6f7ff","bg":null},{"ch":"^","fg":"#f7d66a","bg":null},{"ch":"~","fg":"#d6f7ff","bg":null},{"ch":" ","fg":null,"bg":null}],
+          [{"ch":"<","fg":"#d6f7ff","bg":null},{"ch":"=","fg":"#f7d66a","bg":"#47390e"},{"ch":"#","fg":"#1b1b1b","bg":"#f7d66a"},{"ch":"=","fg":"#f7d66a","bg":"#47390e"},{"ch":">","fg":"#d6f7ff","bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":"/","fg":"#9b6b31","bg":null},{"ch":" ","fg":null,"bg":null},{"ch":"\\","fg":"#9b6b31","bg":null},{"ch":" ","fg":null,"bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":"'","fg":"#9b6b31","bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null}]
+        ]
+      },
+      {
+        "width": 5,
+        "height": 5,
+        "offsetY": -1,
+        "cells": [
+          [{"ch":"~","fg":"#d6f7ff","bg":null},{"ch":" ","fg":null,"bg":null},{"ch":"^","fg":"#f7d66a","bg":null},{"ch":" ","fg":null,"bg":null},{"ch":"~","fg":"#d6f7ff","bg":null}],
+          [{"ch":"<","fg":"#d6f7ff","bg":null},{"ch":"=","fg":"#f7d66a","bg":"#47390e"},{"ch":"#","fg":"#1b1b1b","bg":"#f7d66a"},{"ch":"=","fg":"#f7d66a","bg":"#47390e"},{"ch":">","fg":"#d6f7ff","bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":"/","fg":"#9b6b31","bg":null},{"ch":" ","fg":null,"bg":null},{"ch":"\\","fg":"#9b6b31","bg":null},{"ch":" ","fg":null,"bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":"'","fg":"#9b6b31","bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null}],
+          [{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null},{"ch":" ","fg":null,"bg":null}]
+        ]
+      }
+    ]
+  }
+}

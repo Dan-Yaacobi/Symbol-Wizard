@@ -1,4 +1,4 @@
-import { sprites } from '../entities/SpriteLibrary.js';
+import { getSpriteAnimationFrames } from '../entities/SpriteLibrary.js';
 
 export function updateEntityAnimation(entity, dt, moving, config = null) {
   if (!entity.frameDurations) return;
@@ -12,7 +12,7 @@ export function updateEntityAnimation(entity, dt, moving, config = null) {
     entity.frameTimer = 0;
   }
 
-  const stateFrames = sprites[entity.spriteKey]?.[entity.animationState];
+  const stateFrames = getSpriteAnimationFrames(entity.spriteKey, entity.animationState);
   if (!stateFrames || stateFrames.length <= 1) return;
 
   // Base timing per frame is authored per state (idle/walk) on the entity.

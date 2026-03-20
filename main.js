@@ -31,10 +31,12 @@ import { SpellbookWindow } from './ui/SpellbookWindow.js';
 import { SpellCraftingWindow } from './ui/SpellCraftingWindow.js';
 import { InventoryWindow } from './ui/InventoryWindow.js';
 import { PrefabEditorScreen } from './ui/PrefabEditorScreen.js';
+import { SpriteEditorScreen } from './ui/SpriteEditorScreen.js';
 import { palette } from './entities/SpriteLibrary.js';
 import { visualTheme } from './data/VisualTheme.js';
 import { rollObjectLoot, tryInteractInFront } from './systems/ObjectInteractionSystem.js';
 import { loadObjectsFromFolder } from './world/ObjectLibrary.js';
+import { loadSpriteAssetsFromFolder } from './data/SpriteAssetLoader.js';
 import {
   cleanupDestroyedObjects,
   resolveObjectCollision,
@@ -61,6 +63,7 @@ const devToolsPanel = new DevToolsPanel(runtimeConfig);
 runtimeConfig.setLogger((message) => logDev(message));
 
 await loadObjectsFromFolder('./assets/objects');
+await loadSpriteAssetsFromFolder('./assets/sprites');
 
 const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
 const currentBiomeId = 'starting-biome';
@@ -274,6 +277,8 @@ let isCraftingUIOpen = false;
 
 const prefabEditor = new PrefabEditorScreen();
 await prefabEditor.initialize();
+const spriteEditor = new SpriteEditorScreen();
+await spriteEditor.initialize();
 let prefabEditorToggleLatch = false;
 let f1Latch = false;
 let f2Latch = false;
@@ -282,6 +287,7 @@ let f4Latch = false;
 let f5Latch = false;
 let f6Latch = false;
 let f7Latch = false;
+let gridToggleLatch = false;
 let f8Latch = false;
 let f9Latch = false;
 let craftingToggleLatch = false;
@@ -296,6 +302,16 @@ objectEditorButton.addEventListener('click', () => {
   prefabEditor.open();
 });
 document.body.appendChild(objectEditorButton);
+
+const spriteEditorButton = document.createElement('button');
+spriteEditorButton.type = 'button';
+spriteEditorButton.className = 'object-editor-button object-editor-button--secondary';
+spriteEditorButton.textContent = 'Sprite Editor';
+spriteEditorButton.addEventListener('click', () => {
+  if (spriteEditor.isOpen) return;
+  spriteEditor.open();
+});
+document.body.appendChild(spriteEditorButton);
 
 const BOOT_DEBUG_PREFIX = 'BOOT:';
 const DIAG_PREFIX = 'DIAG:';
@@ -841,6 +857,7 @@ function tick(now) {
   }
   inventoryToggleLatch = inventoryDown;
   if (inventoryWindow.isOpen()) inventoryWindow.render();
+  spriteEditor.tick(dt);
   player.frameDurations.walk = runtimeConfig.get('sprites.playerWalkFrameDuration');
   player.frameDurations.idle = runtimeConfig.get('sprites.playerIdleFrameDuration');
   palette.player = runtimeConfig.get('palette.playerPrimary');
@@ -880,9 +897,13 @@ function tick(now) {
   if (f6Down && !f6Latch) runtimeConfig.savePreset(`quick-${new Date().toISOString().slice(11, 19)}`);
   f6Latch = f6Down;
 
-  const f7Down = input.isDown('f7') && !input.isDown('control') && !input.isDown('meta');
-  if (f7Down && !f7Latch) toggleOverlayFlag('debug.grid');
-  f7Latch = f7Down;
+  const spriteEditorToggleDown = input.isDown('f7') && !input.isDown('control') && !input.isDown('meta') && !input.isDown('shift');
+  if (spriteEditorToggleDown && !f7Latch) spriteEditor.toggle();
+  f7Latch = spriteEditorToggleDown;
+
+  const gridToggleDown = input.isDown('f7') && input.isDown('shift') && !input.isDown('control') && !input.isDown('meta');
+  if (gridToggleDown && !gridToggleLatch) toggleOverlayFlag('debug.grid');
+  gridToggleLatch = gridToggleDown;
 
   const f8Down = input.isDown('f8');
   if (f8Down && !f8Latch && !devToolsPanel.isCapturingInput()) resetEncounterState();
