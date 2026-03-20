@@ -187,13 +187,22 @@ export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSys
     enemy.attackDamageApplied = true;
     enemy.attackCooldownTimer = enemy.attackRate ?? 1.2;
 
-    const knockbackDx = enemy.x - player.x;
-    const knockbackDy = enemy.y - player.y;
-    const knockbackLength = Math.hypot(knockbackDx, knockbackDy) || 1;
-    enemy.vx += (knockbackDx / knockbackLength) * 2;
-    enemy.vy += (knockbackDy / knockbackLength) * 2;
+    const dx = enemy.x - player.x;
+    const dy = enemy.y - player.y;
+    const length = Math.hypot(dx, dy) || 1;
+    const normalizedDx = dx / length;
+    const normalizedDy = dy / length;
+    const force = 6;
+    const knockbackDuration = 0.15;
+    const knockbackSpeed = force / knockbackDuration;
+
+    console.log('KNOCKBACK', enemy.id, normalizedDx, normalizedDy, force);
+
+    enemy.hitKnockbackX = normalizedDx * knockbackSpeed;
+    enemy.hitKnockbackY = normalizedDy * knockbackSpeed;
+    enemy.hitKnockbackTimer = Math.max(enemy.hitKnockbackTimer ?? 0, knockbackDuration);
     enemy.targetX = enemy.x;
     enemy.targetY = enemy.y;
-    enemy.postAttackSlowTimer = Math.max(enemy.postAttackSlowTimer ?? 0, 0.15);
+    enemy.postAttackSlowTimer = Math.max(enemy.postAttackSlowTimer ?? 0, knockbackDuration);
   }
 }
