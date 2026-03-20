@@ -4,6 +4,7 @@ import { Input } from './engine/Input.js';
 import { Viewport } from './engine/Viewport.js';
 import { Player } from './entities/Player.js';
 import { BiomeGenerator } from './world/BiomeGenerator.js';
+import { WorldMapManager } from './world/WorldMapManager.js';
 import { RoomTransitionSystem } from './world/RoomTransitionSystem.js';
 import { spawnEnemyGroup } from './world/EnemySpawnSystem.js';
 import { updateEnemies } from './systems/AISystem.js';
@@ -67,11 +68,10 @@ await loadObjectsFromFolder('./assets/objects');
 await loadAllSpriteAssets('./assets/sprites');
 
 const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
-const currentBiomeId = 'starting-biome';
-const { biome, startRoom } = biomeGenerator.enterBiome(currentBiomeId);
-let currentBiomeSeed = biome.seed;
+const worldMapManager = new WorldMapManager({ biomeGenerator, roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
+let currentBiomeSeed = randomSeed();
 let pendingDevSeed = String(currentBiomeSeed);
-let activeRoom = startRoom;
+let activeRoom = worldMapManager.enterStartingWorld(currentBiomeSeed);
 let map = activeRoom.tiles;
 const player = new Player(Math.floor(ROOM_W / 2), Math.floor(ROOM_H / 2));
 player.facingVector = { x: 0, y: 1 };
@@ -86,7 +86,7 @@ let enemyAiEnabled = true;
 let applyEnemyTuningToExistingEnemies = false;
 const npcs = [];
 let worldObjects = activeRoom.objects ?? [];
-const roomTransitionSystem = new RoomTransitionSystem({ biomeGenerator, fadeDurationMs: 150 });
+const roomTransitionSystem = new RoomTransitionSystem({ biomeGenerator, worldMapManager, fadeDurationMs: 150 });
 
 function randomSeed() {
   return Math.floor(Math.random() * 0x7fffffff);
@@ -128,6 +128,12 @@ function syncRoomEnemies(room) {
   }
 }
 
+function syncActiveRoomCollections(room) {
+  worldObjects = room?.objects ?? [];
+  npcs.length = 0;
+  for (const npc of room?.npcs ?? []) npcs.push(npc);
+}
+
 function applyEnemyTuningToAllCurrentEnemies() {
   for (const enemy of enemies) applyEnemyTuningToEnemy(enemy);
 }
@@ -141,6 +147,7 @@ function resolveInitialSpawn(room) {
   return resolveValidRoomSpawn(room, spawnBase);
 }
 
+syncActiveRoomCollections(activeRoom);
 syncRoomEnemies(activeRoom);
 if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
 const initialSpawn = resolveInitialSpawn(activeRoom);
@@ -379,21 +386,19 @@ function resetEncounterState() {
 
 function regenerateWorld(seed = null) {
   const nextSeed = seed === null ? randomSeed() : (Number(seed) >>> 0);
-  const nextBiomeResult = biomeGenerator.regenerateBiome(currentBiomeId, nextSeed);
-  const nextActiveRoom = nextBiomeResult.startRoom;
+  const nextActiveRoom = worldMapManager.regenerate(nextSeed);
   if (!nextActiveRoom) return;
 
-  currentBiomeSeed = nextBiomeResult.biome.seed;
+  currentBiomeSeed = nextSeed;
   pendingDevSeed = String(currentBiomeSeed);
   roomTransitionSystem.reset();
 
   activeRoom = nextActiveRoom;
   map = activeRoom.tiles;
-  worldObjects = activeRoom.objects ?? [];
+  syncActiveRoomCollections(activeRoom);
 
   syncRoomEnemies(activeRoom);
   if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
-  npcs.length = 0;
   projectiles = [];
   goldPiles = [];
   worldDrops = [];
@@ -418,7 +423,7 @@ function regenerateWorld(seed = null) {
   renderer.lastCameraY = Number.NaN;
 
   devToolsPanel.render();
-  logDev('Map regenerated', { seed: currentBiomeSeed, biomeId: currentBiomeId });
+  logDev('Map regenerated', { seed: currentBiomeSeed, mapId: activeRoom?.id });
 }
 
 devToolsPanel.setEnemyTuningTools({
@@ -481,7 +486,7 @@ devToolsPanel.setMapTools({
 logBoot('main scene entered');
 logDiag('app entered main scene');
 logDiag('running startup path', { href: window.location.href, pathname: window.location.pathname });
-logBoot('world node found', { width: map?.[0]?.length ?? 0, height: map?.length ?? 0, biomeId: biome.biomeId, roomId: activeRoom.id });
+logBoot('world node found', { width: map?.[0]?.length ?? 0, height: map?.length ?? 0, mapType: activeRoom?.type, roomId: activeRoom.id });
 logBoot('camera node found', { zoom: 1, current: true, position: { x: camera.x, y: camera.y } });
 logBoot('player spawned', { x: player.x, y: player.y });
 logBoot('map generated');
@@ -785,7 +790,7 @@ function handlePlayer(dt) {
   if (!dialogueManager.isOpen && !isCraftingUIOpen && !inventoryWindow.isOpen()) {
     const interactDown = input.isDown('e');
     if (interactDown && !interactLatch) {
-      tryInteractInFront(player, worldObjects);
+      tryInteractInFront(player, worldObjects, 2.4, { transitionSystem: roomTransitionSystem, activeRoom });
     }
     interactLatch = interactDown;
 
@@ -813,7 +818,6 @@ if (diagMinimalMode) {
     }
   }
   worldObjects = [];
-  npcs.length = 0;
   enemies.length = 0;
   projectiles = [];
   goldPiles = [];
@@ -1026,7 +1030,7 @@ function tick(now) {
   if (transitionResult?.room) {
     activeRoom = transitionResult.room;
     map = activeRoom.tiles;
-    worldObjects = activeRoom.objects ?? [];
+    syncActiveRoomCollections(activeRoom);
     abilitySystem.map = map;
     camera.worldW = map[0]?.length ?? ROOM_W;
     camera.worldH = map.length ?? ROOM_H;

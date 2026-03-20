@@ -45,8 +45,9 @@ function findSpawnPosition(room, preferredX, preferredY, maxRadius = 6) {
 }
 
 export class RoomTransitionSystem {
-  constructor({ biomeGenerator, fadeDurationMs = 150 } = {}) {
+  constructor({ biomeGenerator, worldMapManager = null, fadeDurationMs = 150 } = {}) {
     this.biomeGenerator = biomeGenerator;
+    this.worldMapManager = worldMapManager;
     this.fadeDuration = fadeDurationMs / 1000;
     this.phase = 'idle';
     this.phaseTimer = 0;
@@ -61,6 +62,13 @@ export class RoomTransitionSystem {
     this.fadeAlpha = 0;
     this.pendingExit = null;
     this.exitTriggerLockTimer = 0;
+  }
+
+  requestTransition(exit) {
+    if (!exit) return;
+    this.pendingExit = exit;
+    this.phase = 'fadeOut';
+    this.phaseTimer = 0;
   }
 
   update(dt, context) {
@@ -112,15 +120,34 @@ export class RoomTransitionSystem {
     return hitZone?.exitId ?? null;
   }
 
-  switchRoom(context, exitId) {
-    const exit = context.activeRoom?.exits?.[exitId];
-    if (!exit?.targetRoomId || !exit?.targetEntranceId) return null;
+  resolveExit(activeRoom, exitRef) {
+    if (!exitRef) return null;
+    if (typeof exitRef === 'object') return exitRef;
+    const exits = Array.isArray(activeRoom?.exits)
+      ? activeRoom.exits
+      : Object.entries(activeRoom?.exits ?? {}).map(([id, exit]) => ({ id, ...exit }));
+    return exits.find((entry) => entry.id === exitRef) ?? null;
+  }
 
-    const targetRoom = this.biomeGenerator.loadRoom(exit.targetRoomId);
-    const targetEntrance = targetRoom?.entrances?.[exit.targetEntranceId];
+  switchRoom(context, exitRef) {
+    const exit = this.resolveExit(context.activeRoom, exitRef);
+    if (!exit) return null;
+
+    let targetRoom = null;
+    let targetEntrance = null;
+
+    if (exit.targetMapType && this.worldMapManager) {
+      targetRoom = this.worldMapManager.resolveMapByExit(context.activeRoom, exit);
+      targetEntrance = this.worldMapManager.getEntrance(targetRoom, exit.targetEntryId);
+    } else if (exit.targetRoomId && exit.targetEntranceId) {
+      targetRoom = this.biomeGenerator.loadRoom(exit.targetRoomId);
+      targetEntrance = targetRoom?.entrances?.[exit.targetEntranceId];
+    }
+
     if (!targetRoom || !targetEntrance) return null;
 
     context.activeRoom.state.visited = true;
+    targetRoom.state = targetRoom.state ?? {};
     targetRoom.state.visited = true;
 
     const preferredSpawnX = targetEntrance.landingX ?? targetEntrance.spawn?.x ?? targetEntrance.x;
@@ -129,6 +156,7 @@ export class RoomTransitionSystem {
     context.player.x = spawn.x;
     context.player.y = spawn.y;
 
+    console.log('Transition', context.activeRoom?.id, '→', targetRoom?.id);
     this.exitTriggerLockTimer = 0.2;
 
     return {
@@ -136,3 +164,4 @@ export class RoomTransitionSystem {
     };
   }
 }
+

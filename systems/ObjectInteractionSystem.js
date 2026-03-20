@@ -59,7 +59,7 @@ export function interactWithObject(object, context = {}) {
   return false;
 }
 
-export function tryInteractInFront(player, worldObjects, reach = 2.4) {
+export function tryInteractInFront(player, worldObjects, reach = 2.4, context = {}) {
   const facing = player.facingVector ?? { x: 0, y: 1 };
   const probeX = Math.round(player.x + facing.x);
   const probeY = Math.round(player.y + facing.y);
@@ -76,7 +76,7 @@ export function tryInteractInFront(player, worldObjects, reach = 2.4) {
   }
 
   if (!best) return null;
-  const handled = interactWithObject(best, { player });
+  const handled = interactWithObject(best, { player, ...context });
   return handled ? best : null;
 }
 
