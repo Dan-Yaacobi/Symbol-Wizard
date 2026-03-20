@@ -1,5 +1,6 @@
 import { Entity } from './Entity.js';
 import { addItem, createInventory, ensureInventory, getItemCount, hasItem, removeItem } from '../systems/InventorySystem.js';
+import { createPlayerStateDefinitions } from '../systems/EntityStateSystem.js';
 
 export class Player extends Entity {
   constructor(x, y) {
@@ -17,9 +18,8 @@ export class Player extends Entity {
       spriteId: 'player',
       gold: 0,
       castCooldown: 0,
-      castTimer: 0,
       inventory: createInventory(24),
-      animationState: 'idle',
+      stateDefinitions: createPlayerStateDefinitions(),
       animationTimings: {
         idle: 0.45,
         walk: 0.12,

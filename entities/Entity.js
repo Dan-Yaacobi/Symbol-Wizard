@@ -1,3 +1,5 @@
+import { createEntityState } from '../systems/EntityStateSystem.js';
+
 export class Entity {
   constructor(props) {
     Object.assign(this, {
@@ -17,6 +19,8 @@ export class Entity {
       currentFrame: 0,
       frameTimer: 0,
       activeStatuses: [],
+      state: createEntityState(),
+      stateDefinitions: {},
       ...props,
     });
   }

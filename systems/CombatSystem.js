@@ -1,4 +1,5 @@
 import { SpellEffectSystem } from './spells/SpellEffectSystem.js';
+import { isEntityAttacking } from './EntityStateSystem.js';
 import { collides } from './CollisionSystem.js';
 import { applyAttackToObject, objectIntersectsCircle } from './ObjectInteractionSystem.js';
 
@@ -164,27 +165,27 @@ export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSys
   for (const enemy of enemies) {
     enemy.attackCooldownTimer = Math.max(0, (enemy.attackCooldownTimer ?? 0) - dt);
     if (!enemy.alive) continue;
-    if (!enemy.isAttacking || enemy.attackDamageApplied) continue;
+    if (!isEntityAttacking(enemy) || enemy.behavior === 'ranged' || enemy.attackImpactApplied) continue;
 
-    const hitTime = enemy.attackHitTime ?? 0.08;
-    if ((enemy.attackElapsed ?? 0) < hitTime) continue;
+    const hitTime = (enemy.attackWindup ?? 0.4) + (enemy.attackHitTime ?? 0.08);
+    if ((enemy.state?.time ?? 0) < hitTime) continue;
 
     const distance = Math.hypot(player.x - enemy.x, player.y - enemy.y);
     const attackRange = (enemy.attackRange ?? 3) * (config?.get?.('enemies.attackRangeMultiplier') ?? 1);
     if (distance > attackRange + player.radius * 0.5) {
-      enemy.attackDamageApplied = true;
+      enemy.attackImpactApplied = true;
       continue;
     }
 
     if ((enemy.attackCooldownTimer ?? 0) > 0) {
-      enemy.attackDamageApplied = true;
+      enemy.attackImpactApplied = true;
       continue;
     }
 
     const damage = enemy.attackDamage ?? 1;
     player.hp = Math.max(0, player.hp - damage);
     combatTextSystem?.spawnDamageText(player, damage, false);
-    enemy.attackDamageApplied = true;
+    enemy.attackImpactApplied = true;
     enemy.attackCooldownTimer = enemy.attackRate ?? 1.2;
 
     const dx = enemy.x - player.x;
@@ -195,8 +196,6 @@ export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSys
     const force = 6;
     const knockbackDuration = 0.15;
     const knockbackSpeed = force / knockbackDuration;
-
-    console.log('KNOCKBACK', enemy.id, normalizedDx, normalizedDy, force);
 
     enemy.hitKnockbackX = normalizedDx * knockbackSpeed;
     enemy.hitKnockbackY = normalizedDy * knockbackSpeed;

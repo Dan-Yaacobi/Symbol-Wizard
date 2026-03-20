@@ -1,6 +1,7 @@
 import { Projectile } from '../entities/Projectile.js';
 import { ENEMY_BEHAVIOR } from '../entities/Enemy.js';
 import { applyPush, attemptMoveWithCollision, resolveWallOverlap } from './EnemyCollisionSystem.js';
+import { ensureEntityState, setEntityState, syncEntityMovementState, updateEntityState } from './EntityStateSystem.js';
 
 const ENEMY_POSITION_SMOOTHING = 0.2;
 const ENEMY_VELOCITY_SMOOTHING = 0.2;
@@ -20,61 +21,37 @@ function interpolateEnemyPosition(enemy, smoothingFactor = ENEMY_POSITION_SMOOTH
   enemy.y += (enemy.targetY - enemy.y) * smoothingFactor;
 }
 
-function resetMeleeState(enemy) {
-  enemy.isWindingUp = false;
-  enemy.isAttacking = false;
-  enemy.attackElapsed = 0;
-  enemy.attackDamageApplied = false;
-  enemy.windupTimer = 0;
-}
-
 function stopEnemy(enemy) {
   enemy.vx = 0;
   enemy.vy = 0;
 }
 
-function applyMeleeLogic(enemy, dt, cooldownMultiplier = 1) {
-  stopEnemy(enemy);
-
-  if ((enemy.postAttackSlowTimer ?? 0) > 0) {
-    enemy.postAttackSlowTimer = Math.max(0, enemy.postAttackSlowTimer - dt);
-  }
-
-  if (enemy.isWindingUp) {
-    enemy.windupTimer = Math.max(0, (enemy.windupTimer ?? enemy.windupTime ?? enemy.attackWindup ?? 0.4) - dt);
-    if ((enemy.windupTimer ?? 0) <= 0) {
-      enemy.isWindingUp = false;
-      enemy.isAttacking = true;
-      enemy.attackElapsed = 0;
-      enemy.attackDamageApplied = false;
-    }
-    return;
-  }
-
-  if (enemy.isAttacking) {
-    enemy.attackElapsed = (enemy.attackElapsed ?? 0) + dt;
-    if (enemy.attackElapsed >= (enemy.attackDuration ?? 0.3)) {
-      enemy.isAttacking = false;
-      enemy.attackElapsed = 0;
-      enemy.attackDamageApplied = false;
-      enemy.attackTimer = (enemy.attackCooldown ?? 0.8) * cooldownMultiplier;
-    }
-    return;
-  }
-
-  if ((enemy.attackTimer ?? 0) <= 0 && !enemy.isWindingUp) {
-    enemy.isWindingUp = true;
-    enemy.windupTime = enemy.windupTime ?? enemy.attackWindup ?? 0.4;
-    enemy.windupTimer = enemy.windupTime;
-    enemy.attackElapsed = 0;
-    enemy.attackDamageApplied = false;
-  }
+function hasAttackState(enemy) {
+  return ensureEntityState(enemy).type === 'attack';
 }
 
-function move(enemy, dirX, dirY, dt, speedMultiplier = 1, jitter = 0, collisionMap = null, tileSize = 1) {
+function beginAttack(enemy, duration) {
+  enemy.attackStateDuration = duration;
+  setEntityState(enemy, 'attack');
+}
+
+function updateAttackState(enemy, dt) {
+  if (!hasAttackState(enemy)) return false;
+  const attackDefinition = enemy.stateDefinitions.attack;
+  attackDefinition.duration = enemy.attackStateDuration ?? attackDefinition.duration;
+  updateEntityState(enemy, dt);
+  return true;
+}
+
+function tryStartMeleeAttack(enemy, cooldownMultiplier = 1) {
+  if ((enemy.attackTimer ?? 0) > 0 || hasAttackState(enemy)) return false;
+  enemy.pendingAttackCooldown = (enemy.attackCooldown ?? 0.8) * cooldownMultiplier;
+  beginAttack(enemy, (enemy.attackWindup ?? 0.4) + (enemy.attackDuration ?? 0.3));
+  return true;
+}
+
+function move(enemy, dirX, dirY, dt, speedMultiplier = 1, jitter = 0) {
   void dt;
-  void collisionMap;
-  void tileSize;
   ensureTargetPosition(enemy);
   const len = Math.hypot(dirX, dirY) || 1;
   const recoilSlowMultiplier = (enemy.postAttackSlowTimer ?? 0) > 0 ? 0.35 : 1;
@@ -82,7 +59,6 @@ function move(enemy, dirX, dirY, dt, speedMultiplier = 1, jitter = 0, collisionM
   const targetVy = (dirY / len) * enemy.speed * speedMultiplier * recoilSlowMultiplier;
   enemy.vx += (targetVx - enemy.vx) * ENEMY_VELOCITY_SMOOTHING;
   enemy.vy += (targetVy - enemy.vy) * ENEMY_VELOCITY_SMOOTHING;
-
 }
 
 function applyEnemySeparation(enemy, neighbors) {
@@ -104,7 +80,6 @@ function applyPlayerPersonalSpace(enemy, player) {
   const dy = enemy.targetY - player.y;
   const distanceToPlayer = Math.hypot(dx, dy);
   if (distanceToPlayer >= (enemy.personalSpaceDistance ?? enemy.preferredDistance ?? 2)) return;
-
   enemy.vx *= 0.5;
   enemy.vy *= 0.5;
   enemy.vx += dx * ENEMY_PERSONAL_SPACE_PUSH;
@@ -122,25 +97,20 @@ function resolveEnemyCollisions(enemies, collisionMap) {
   for (let i = 0; i < enemies.length; i += 1) {
     const enemy = enemies[i];
     if (!enemy?.alive) continue;
-
     for (let j = i + 1; j < enemies.length; j += 1) {
       const other = enemies[j];
       if (!other?.alive) continue;
-
       const dx = enemy.x - other.x;
       const dy = enemy.y - other.y;
       const dist = Math.hypot(dx, dy);
       if (dist <= 0 || dist >= ENEMY_COLLISION_MIN_DISTANCE) continue;
-
       const overlap = ENEMY_COLLISION_MIN_DISTANCE - dist;
       const nx = dx / dist;
       const ny = dy / dist;
-
       enemy.x += nx * overlap * 0.5;
       enemy.y += ny * overlap * 0.5;
       other.x -= nx * overlap * 0.5;
       other.y -= ny * overlap * 0.5;
-
       resolveWallOverlap(enemy, collisionMap);
       resolveWallOverlap(other, collisionMap);
       enemy.targetX = enemy.x;
@@ -153,40 +123,27 @@ function resolveEnemyCollisions(enemies, collisionMap) {
 
 export function activateEnemyAggro(enemy, player = null, system = null) {
   if (!enemy || enemy.alive === false) return false;
-
   const wasAggroed = enemy.isAggroed;
-
   enemy.isAggroed = true;
   enemy.aggroLocked = true;
-
   if (player) enemy.target = player;
-
   if (!wasAggroed) {
     enemy.aggroFlashTimer = 0.3;
-
-    system?.spawnEffect?.({
-      type: 'aggro-flash',
-      x: enemy.x,
-      y: enemy.y,
-      color: '#ff4d4d',
-      ttl: 0.2,
-    });
+    system?.spawnEffect?.({ type: 'aggro-flash', x: enemy.x, y: enemy.y, color: '#ff4d4d', ttl: 0.2 });
   }
-
   return true;
 }
-
 
 function enterOrbitReposition(enemy) {
   enemy.orbitPhase = 'reposition';
   enemy.orbitWaitTimer = 0;
 }
 
-function fireOrbitShot(enemy, player, projectiles, rangedCooldown, rangedOrbitWaitDuration) {
+function fireOrbitShot(enemy, player, projectiles, rangedCooldown) {
   projectiles.push(createEnemyProjectile(enemy, player));
   enemy.attackTimer = Math.max(enemy.attackCooldown ?? rangedCooldown, rangedCooldown);
   enemy.orbitPhase = 'wait';
-  enemy.orbitWaitTimer = enemy.orbitWaitDuration ?? rangedOrbitWaitDuration;
+  enemy.orbitWaitTimer = enemy.orbitWaitDuration ?? 0.35;
 }
 
 function createEnemyProjectile(enemy, player) {
@@ -231,6 +188,8 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
     ensureTargetPosition(enemy);
+    ensureEntityState(enemy);
+    enemy.stateContext = { player, projectiles, system, config };
     aliveEnemies.push(enemy);
 
     if (enemy.hitFlashTimer > 0) enemy.hitFlashTimer = Math.max(0, enemy.hitFlashTimer - dt);
@@ -252,17 +211,12 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       stopEnemy(enemy);
       enemy.targetX = enemy.x;
       enemy.targetY = enemy.y;
-      resetMeleeState(enemy);
+      if (hasAttackState(enemy)) setEntityState(enemy, 'idle');
       continue;
     }
 
     enemy.attackTimer = Math.max(0, (enemy.attackTimer ?? 0) - dt);
-
-    const targetPlayerX = player.x + (enemy.offsetX ?? 0);
-    const targetPlayerY = player.y + (enemy.offsetY ?? 0);
-    const dx = player.x - enemy.targetX;
-    const dy = player.y - enemy.targetY;
-    const distance = Math.hypot(dx, dy);
+    const distance = Math.hypot(player.x - enemy.targetX, player.y - enemy.targetY);
     const enemyDetectRadius = enemy.aggroRadius ?? detectRadius;
     const wasAggroed = Boolean(enemy.isAggroed);
     const shouldDetectPlayer = distance <= enemyDetectRadius;
@@ -287,38 +241,20 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
   }
 
   const visitedSwarmEnemies = new Set();
-
   function propagateSwarmAggro(source, depth = 0) {
     if (!source || depth > swarmAggroChainDepth) return;
-
     visitedSwarmEnemies.add(source);
-
     for (const other of aliveEnemies) {
-      if (visitedSwarmEnemies.has(other)) continue;
-      if (other.behavior !== ENEMY_BEHAVIOR.SWARM) continue;
-      if (other.isAggroed) continue;
-
+      if (visitedSwarmEnemies.has(other) || other.behavior !== ENEMY_BEHAVIOR.SWARM || other.isAggroed) continue;
       const dx = other.targetX - source.targetX;
       const dy = other.targetY - source.targetY;
       if (Math.hypot(dx, dy) > swarmAggroRadius) continue;
-
       activateEnemyAggro(other, player, aggroEffectSystem);
-      system?.spawnEffect?.({
-        type: 'swarm-link',
-        x: other.x,
-        y: other.y,
-        color: '#ff6a6a',
-        ttl: 0.15,
-      });
+      system?.spawnEffect?.({ type: 'swarm-link', x: other.x, y: other.y, color: '#ff6a6a', ttl: 0.15 });
       propagateSwarmAggro(other, depth + 1);
     }
   }
-
-  for (const enemy of newlyAggroed) {
-    if (enemy.behavior === ENEMY_BEHAVIOR.SWARM) {
-      propagateSwarmAggro(enemy, 0);
-    }
-  }
+  for (const enemy of newlyAggroed) if (enemy.behavior === ENEMY_BEHAVIOR.SWARM) propagateSwarmAggro(enemy, 0);
 
   for (const enemy of aliveEnemies) {
     const targetPlayerX = player.x + (enemy.offsetX ?? 0);
@@ -331,7 +267,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
 
     if (!enemy.isAggroed) {
       stopEnemy(enemy);
-      resetMeleeState(enemy);
+      syncEntityMovementState(enemy);
       interpolateEnemyPosition(enemy);
       continue;
     }
@@ -340,68 +276,42 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
 
     switch (enemy.behavior) {
       case ENEMY_BEHAVIOR.RANGED: {
-        resetMeleeState(enemy);
-        const targetRange = enemy.attackRange ?? rangedAttackRange;
-        const minDistance = enemy.minShootDistance ?? targetRange * 0.6;
-        if (!enemy.orbitPhase) {
-          enterOrbitReposition(enemy);
+        if (hasAttackState(enemy)) {
+          const finishedAttack = enemy.state.time + dt >= (enemy.chargeDuration ?? 0.35);
+          updateAttackState(enemy, dt);
+          if (finishedAttack) {
+            fireOrbitShot(enemy, player, projectiles, rangedCooldown, rangedOrbitWaitDuration);
+          }
+          break;
         }
 
+        const targetRange = enemy.attackRange ?? rangedAttackRange;
+        const minDistance = enemy.minShootDistance ?? targetRange * 0.6;
+        if (!enemy.orbitPhase) enterOrbitReposition(enemy);
         switch (enemy.orbitPhase) {
-          case 'shoot': {
+          case 'shoot':
             stopEnemy(enemy);
-
-            if (!enemy.isChargingShot) {
-              enemy.isChargingShot = true;
-              enemy.chargeTimer = 0;
-            }
-
-            enemy.chargeTimer += dt;
-
-            system?.spawnEffect?.({
-              type: 'charge',
-              x: enemy.x,
-              y: enemy.y,
-              color: '#ffb893',
-              ttl: 0.1,
-            });
-
-            if (enemy.chargeTimer >= (enemy.chargeDuration ?? 0.35)) {
-              fireOrbitShot(enemy, player, projectiles, rangedCooldown, rangedOrbitWaitDuration);
-              enemy.isChargingShot = false;
-              enemy.chargeTimer = 0;
-            }
-
+            beginAttack(enemy, enemy.chargeDuration ?? 0.35);
             break;
-          }
-          case 'wait': {
+          case 'wait':
             stopEnemy(enemy);
             enemy.orbitWaitTimer = Math.max(0, (enemy.orbitWaitTimer ?? 0) - dt);
-            if ((enemy.orbitWaitTimer ?? 0) <= 0) {
-              enterOrbitReposition(enemy);
-            }
+            if ((enemy.orbitWaitTimer ?? 0) <= 0) enterOrbitReposition(enemy);
+            syncEntityMovementState(enemy);
             break;
-          }
           case 'reposition': {
-            const dx = targetPlayerX - enemy.targetX;
-            const dy = targetPlayerY - enemy.targetY;
-            const distance = Math.hypot(dx, dy);
-
-            // too close → run away
+            const orbitDx = targetPlayerX - enemy.targetX;
+            const orbitDy = targetPlayerY - enemy.targetY;
+            const distance = Math.hypot(orbitDx, orbitDy);
             if (distance < minDistance) {
-              move(enemy, -dx, -dy, dt, speedMult, 0, collisionMap, tileSize);
-              break;
+              move(enemy, -orbitDx, -orbitDy, dt, speedMult);
+            } else if (distance > targetRange) {
+              move(enemy, orbitDx, orbitDy, dt, speedMult);
+            } else {
+              enemy.orbitPhase = 'shoot';
+              stopEnemy(enemy);
             }
-
-            // too far → move closer
-            if (distance > targetRange) {
-              move(enemy, dx, dy, dt, speedMult, 0, collisionMap, tileSize);
-              break;
-            }
-
-            // good distance → shoot
-            enemy.orbitPhase = 'shoot';
-            stopEnemy(enemy);
+            syncEntityMovementState(enemy);
             break;
           }
           default:
@@ -410,46 +320,37 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
         }
         break;
       }
-      case ENEMY_BEHAVIOR.TANK: {
-        if (!inAttackRange) {
-          resetMeleeState(enemy);
-          move(enemy, dx, dy, dt, speedMult * tankSpeedMultiplier, 0, collisionMap, tileSize);
-        } else {
-          applyMeleeLogic(enemy, dt, cooldownMult);
-        }
-        break;
-      }
-      case ENEMY_BEHAVIOR.SWARM: {
-        if (!inAttackRange) {
-          resetMeleeState(enemy);
-          move(enemy, dx, dy, dt, speedMult, 0, collisionMap, tileSize);
-        } else {
-          applyMeleeLogic(enemy, dt, cooldownMult);
-        }
-        break;
-      }
-      case ENEMY_BEHAVIOR.FLANKER: {
-        if (!inAttackRange) {
-          resetMeleeState(enemy);
-          const angleToPlayer = Math.atan2(enemy.targetY - targetPlayerY, enemy.targetX - targetPlayerX);
-          enemy.flankAngleOffset = (enemy.flankAngleOffset ?? 0) + dt * (enemy.flankOrbitSpeed ?? 1.2) * (enemy.flankDirection ?? 1);
-          const orbitAngle = angleToPlayer + (enemy.flankDirection ?? 1) * (Math.PI / 2) + enemy.flankAngleOffset;
-          const targetX = targetPlayerX + Math.cos(orbitAngle) * flankerOffsetDistance;
-          const targetY = targetPlayerY + Math.sin(orbitAngle) * flankerOffsetDistance;
-          move(enemy, targetX - enemy.targetX, targetY - enemy.targetY, dt, speedMult, 0, collisionMap, tileSize);
-        } else {
-          applyMeleeLogic(enemy, dt, cooldownMult);
-        }
-        break;
-      }
+      case ENEMY_BEHAVIOR.TANK:
+      case ENEMY_BEHAVIOR.SWARM:
+      case ENEMY_BEHAVIOR.FLANKER:
       case ENEMY_BEHAVIOR.CHASER:
       default: {
+        if (hasAttackState(enemy)) {
+          const finishedAttack = enemy.state.time + dt >= ((enemy.attackWindup ?? 0.4) + (enemy.attackDuration ?? 0.3));
+          updateAttackState(enemy, dt);
+          if (finishedAttack) enemy.attackTimer = enemy.pendingAttackCooldown ?? ((enemy.attackCooldown ?? 0.8) * cooldownMult);
+          break;
+        }
+
         if (!inAttackRange) {
-          resetMeleeState(enemy);
-          const jitter = enemy.enemyType === 'spider' ? Math.sin(performance.now() * 0.01 + enemy.targetX) * 0.3 : 0;
-          move(enemy, dx, dy, dt, speedMult, jitter, collisionMap, tileSize);
+          if (enemy.behavior === ENEMY_BEHAVIOR.TANK) {
+            move(enemy, dx, dy, dt, speedMult * tankSpeedMultiplier);
+          } else if (enemy.behavior === ENEMY_BEHAVIOR.FLANKER) {
+            const angleToPlayer = Math.atan2(enemy.targetY - targetPlayerY, enemy.targetX - targetPlayerX);
+            enemy.flankAngleOffset = (enemy.flankAngleOffset ?? 0) + dt * (enemy.flankOrbitSpeed ?? 1.2) * (enemy.flankDirection ?? 1);
+            const orbitAngle = angleToPlayer + (enemy.flankDirection ?? 1) * (Math.PI / 2) + enemy.flankAngleOffset;
+            const targetX = targetPlayerX + Math.cos(orbitAngle) * flankerOffsetDistance;
+            const targetY = targetPlayerY + Math.sin(orbitAngle) * flankerOffsetDistance;
+            move(enemy, targetX - enemy.targetX, targetY - enemy.targetY, dt, speedMult);
+          } else {
+            const jitter = enemy.enemyType === 'spider' ? Math.sin(performance.now() * 0.01 + enemy.targetX) * 0.3 : 0;
+            move(enemy, dx, dy, dt, speedMult, jitter);
+          }
+          syncEntityMovementState(enemy);
         } else {
-          applyMeleeLogic(enemy, dt, cooldownMult);
+          stopEnemy(enemy);
+          tryStartMeleeAttack(enemy, cooldownMult);
+          syncEntityMovementState(enemy);
         }
         break;
       }
@@ -459,6 +360,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     applyPlayerPersonalSpace(enemy, player);
     commitEnemyVelocity(enemy, dt, collisionMap, tileSize);
     interpolateEnemyPosition(enemy);
+    syncEntityMovementState(enemy);
   }
 
   resolveEnemyCollisions(aliveEnemies, collisionMap);

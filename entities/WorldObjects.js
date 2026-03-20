@@ -1,4 +1,5 @@
 import { Entity } from './Entity.js';
+import { createNpcStateDefinitions } from '../systems/EntityStateSystem.js';
 
 export class WorldObject extends Entity {
   constructor(props = {}) {
@@ -126,7 +127,7 @@ export class TownNPC extends WorldObject {
       speed: 4 + Math.random() * 2,
       vx: 0,
       vy: 0,
-      animationState: 'idle',
+      stateDefinitions: createNpcStateDefinitions(),
       frameDurations: { idle: 0.45, walk: 0.2 },
       dialogueEngaged: false,
       dialoguePulse: 0,

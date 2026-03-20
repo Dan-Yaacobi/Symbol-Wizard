@@ -1,4 +1,5 @@
 import { getSpriteFrame } from '../data/SpriteAssetLoader.js';
+import { isEntityAttacking } from './EntityStateSystem.js';
 import { palette } from '../data/SpritePalette.js';
 import { getItemDefinition } from '../data/ItemRegistry.js';
 import { glyphDensity, renderLayers, toRenderCell, toSafeGlyph, visualPalette, visualTheme } from '../data/VisualTheme.js';
@@ -592,7 +593,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
 
     if (enemy.hitFlashTimer > 0) {
       renderColor = '#f4f7ff';
-    } else if (enemy.isChargingShot) {
+    } else if (enemy.behavior === 'ranged' && isEntityAttacking(enemy)) {
       renderColor = '#ffb893';
     } else if (enemy.aggroFlashTimer > 0) {
       renderColor = '#ff7a7a';
@@ -600,7 +601,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
 
     drawSprite(renderer, camera, enemy, renderColor);
 
-    if (enemy.isWindingUp) {
+    if (isEntityAttacking(enemy) && enemy.behavior !== 'ranged' && (enemy.state?.time ?? 0) < (enemy.attackWindup ?? 0.4)) {
       const sx = Math.round(enemy.x) - camera.x;
       const sy = Math.round(enemy.y) - camera.y;
       drawCell(renderer, { glyph: '!', fg: '#ffd166' }, sx, sy);

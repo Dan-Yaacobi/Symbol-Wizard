@@ -1,4 +1,5 @@
 import { objectIntersectsCircle } from './ObjectInteractionSystem.js';
+import { syncEntityMovementState } from './EntityStateSystem.js';
 
 function collisionNodes(object) {
   if (Array.isArray(object.footprint) && object.footprint.length > 0) {
@@ -12,6 +13,7 @@ export function updateTownNpcs(npcs, map, dt) {
     if (npc.dialogueEngaged) {
       npc.vx = 0;
       npc.vy = 0;
+      syncEntityMovementState(npc);
       continue;
     }
 
@@ -19,6 +21,7 @@ export function updateTownNpcs(npcs, map, dt) {
     if (npc.wanderRadius <= 0) {
       npc.vx = 0;
       npc.vy = 0;
+      syncEntityMovementState(npc);
       continue;
     }
 
@@ -33,6 +36,7 @@ export function updateTownNpcs(npcs, map, dt) {
     if (npc.targetX == null || npc.targetY == null) {
       npc.vx = 0;
       npc.vy = 0;
+      syncEntityMovementState(npc);
       continue;
     }
 
@@ -44,6 +48,7 @@ export function updateTownNpcs(npcs, map, dt) {
       npc.vy = 0;
       npc.targetX = null;
       npc.targetY = null;
+      syncEntityMovementState(npc);
       continue;
     }
 
@@ -58,11 +63,13 @@ export function updateTownNpcs(npcs, map, dt) {
       npc.targetY = null;
       npc.vx = 0;
       npc.vy = 0;
+      syncEntityMovementState(npc);
       continue;
     }
 
     npc.x = nx;
     npc.y = ny;
+    syncEntityMovementState(npc);
   }
 }
 

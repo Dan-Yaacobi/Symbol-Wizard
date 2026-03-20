@@ -3,6 +3,7 @@ import { activateEnemyAggro } from './AISystem.js';
 import { visualPalette } from '../data/VisualTheme.js';
 import { castSpell, updateSpellInstances } from './spells/SpellCaster.js';
 import { elementInteractionSystem } from './ElementInteractionSystem.js';
+import { setEntityState } from './EntityStateSystem.js';
 
 const STATUS_TICK_DAMAGE = {
   burn: 2,
@@ -157,9 +158,7 @@ export class AbilitySystem {
     enemy.freezeGlow = '#d8f4ff';
     enemy.vx = 0;
     enemy.vy = 0;
-    enemy.isAttacking = false;
-    enemy.attackElapsed = 0;
-    enemy.attackDamageApplied = false;
+    setEntityState(enemy, 'idle');
 
     if (resetTimer) {
       enemy.attackTimer = Math.max(enemy.attackTimer ?? 0, freezeData.freezeDuration * 0.5);
@@ -271,7 +270,7 @@ export class AbilitySystem {
 
     this.player.mana -= spell.manaCost;
     this.cooldowns.set(spell.id, spell.cooldown);
-    this.player.castTimer = Math.max(this.player.castTimer ?? 0, 0.24);
+    setEntityState(this.player, 'attack');
 
     try {
       if (spell.behavior) {
