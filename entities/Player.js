@@ -15,7 +15,6 @@ export class Player extends Entity {
       manaRegen: 8,
       speed: 20,
       spriteId: 'player',
-      spriteKey: 'player',
       gold: 0,
       castCooldown: 0,
       castTimer: 0,
@@ -24,7 +23,7 @@ export class Player extends Entity {
       animationTimings: {
         idle: 0.45,
         walk: 0.12,
-        cast: 0.08,
+        attack: 0.08,
       },
       frameDurations: null,
     });

@@ -1,18 +1,18 @@
 {
-  "id": "bush",
+  "id": "barrel-break-1",
   "anchor": {
     "x": 3,
     "y": 3
   },
   "defaultGrid": {
     "width": 7,
-    "height": 7
+    "height": 4
   },
   "animations": {
     "idle": [
       {
         "width": 7,
-        "height": 7,
+        "height": 4,
         "offsetY": 0,
         "cells": [
           [
@@ -27,7 +27,7 @@
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "*",
               "fg": null,
               "bg": null
             },
@@ -37,155 +37,7 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
-            },
-            {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
-            },
-            {
-              "ch": "%",
-              "fg": "#89d58f",
-              "bg": "#22512a"
-            },
-            {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
-            },
-            {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
-            },
-            {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
+              "ch": "*",
               "fg": null,
               "bg": null
             },
@@ -207,7 +59,27 @@
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "*",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "=",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "=",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "=",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "*",
               "fg": null,
               "bg": null
             },
@@ -215,19 +87,36 @@
               "ch": " ",
               "fg": null,
               "bg": null
-            },
+            }
+          ],
+          [
             {
               "ch": " ",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "*",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "=",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "=",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "=",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "*",
               "fg": null,
               "bg": null
             },
@@ -249,17 +138,17 @@
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "*",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "*",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "*",
               "fg": null,
               "bg": null
             },
@@ -281,8 +170,9 @@
     "attack": []
   },
   "meta": {
+    "source": "legacy",
     "isEnemy": false,
-    "enemyId": "bush",
+    "enemyId": "barrel-break-1",
     "biomes": [],
     "spawnWeight": 1
   }

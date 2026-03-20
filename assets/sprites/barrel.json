@@ -1,5 +1,5 @@
 {
-  "id": "bush",
+  "id": "barrel",
   "anchor": {
     "x": 3,
     "y": 3
@@ -64,19 +64,19 @@
               "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
+              "ch": "_",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
+              "ch": "_",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
+              "ch": "_",
+              "fg": null,
+              "bg": null
             },
             {
               "ch": " ",
@@ -96,64 +96,27 @@
               "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
-            },
-            {
-              "ch": "%",
-              "fg": "#89d58f",
-              "bg": "#22512a"
-            },
-            {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
-            },
-            {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
+              "ch": "/",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "=",
               "fg": null,
               "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
+              "ch": "=",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
+              "ch": "=",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": " ",
+              "ch": "\\",
               "fg": null,
               "bg": null
             },
@@ -170,7 +133,27 @@
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "|",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "=",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "=",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "=",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "|",
               "fg": null,
               "bg": null
             },
@@ -178,19 +161,36 @@
               "ch": " ",
               "fg": null,
               "bg": null
-            },
+            }
+          ],
+          [
             {
               "ch": " ",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "\\",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "_",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "_",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "_",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "/",
               "fg": null,
               "bg": null
             },
@@ -281,8 +281,9 @@
     "attack": []
   },
   "meta": {
+    "source": "legacy",
     "isEnemy": false,
-    "enemyId": "bush",
+    "enemyId": "barrel",
     "biomes": [],
     "spawnWeight": 1
   }

@@ -1,9 +1,10 @@
-import { getSpriteFrame, palette } from '../entities/SpriteLibrary.js';
+import { getSpriteFrame } from '../data/SpriteAssetLoader.js';
+import { palette } from '../data/SpritePalette.js';
 import { getItemDefinition } from '../data/ItemRegistry.js';
 import { glyphDensity, renderLayers, toRenderCell, toSafeGlyph, visualPalette, visualTheme } from '../data/VisualTheme.js';
 
 function getEntitySprite(entity) {
-  return getSpriteFrame(entity.spriteId ?? entity.spriteKey, entity.animationState ?? 'idle', entity.currentFrame ?? entity.frameIndex ?? 0);
+  return getSpriteFrame(entity.spriteId, entity.animationState ?? 'idle', entity.currentFrame ?? entity.frameIndex ?? 0);
 }
 
 const c = visualTheme.colors;
@@ -101,12 +102,12 @@ function colorForEntity(entity) {
     return '#976d45';
   }
   if (entity.category === 'decorative' || entity.category === 'terrain') {
-    if (entity.spriteId ?? entity.spriteKey?.includes('flower-red')) return '#d1788a';
-    if (entity.spriteId ?? entity.spriteKey?.includes('flower-yellow')) return '#d8bc6b';
-    if (entity.spriteId ?? entity.spriteKey?.includes('flower-blue')) return '#78aeda';
-    if (entity.spriteId ?? entity.spriteKey?.includes('tree-dark')) return '#4f8459';
-    if (entity.spriteId ?? entity.spriteKey?.includes('tree-bright')) return '#65a96f';
-    if (entity.spriteId ?? entity.spriteKey?.includes('stone')) return '#8a98ab';
+    if (entity.spriteId?.includes('flower-red')) return '#d1788a';
+    if (entity.spriteId?.includes('flower-yellow')) return '#d8bc6b';
+    if (entity.spriteId?.includes('flower-blue')) return '#78aeda';
+    if (entity.spriteId?.includes('tree-dark')) return '#4f8459';
+    if (entity.spriteId?.includes('tree-bright')) return '#65a96f';
+    if (entity.spriteId?.includes('stone')) return '#8a98ab';
     return '#6aa574';
   }
   if (entity.type === 'fence') return c.woodFg;
@@ -391,8 +392,16 @@ function drawAbilityEffect(renderer, camera, effect) {
 
 
 
-function drawWorldObject(renderer, camera, object, overrideTiles = null) {
-  const tiles = Array.isArray(overrideTiles) ? overrideTiles : (object.tileVariants ?? object.tiles ?? []);
+function drawWorldObject(renderer, camera, object, spriteId = object.spriteId) {
+  if (spriteId) {
+    const sprite = getSpriteFrame(spriteId, object.animationState ?? 'idle', object.currentFrame ?? object.frameIndex ?? 0);
+    if (sprite) {
+      drawSprite(renderer, camera, object, colorForEntity(object), sprite);
+      return;
+    }
+  }
+
+  const tiles = object.tileVariants ?? object.tiles ?? [];
   for (const tile of tiles) {
     const sx = Math.round(object.x + (tile.x ?? 0)) - camera.x;
     const sy = Math.round(object.y + (tile.y ?? 0)) - camera.y;
@@ -543,6 +552,8 @@ function drawDebugCursorOverlay(renderer, camera, mouse) {
   renderer.drawCell(toRenderCell({ glyph: '+', fg: '#53f7ff', layer: renderLayers.ui }), mouse.canvasCellX, mouse.canvasCellY);
 }
 export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, worldDrops = [], combatTextSystem = null, abilityEffects = [], mouse = null, debugOptions = {}, activeRoom = null) {
+  const safeAbilityEffects = Array.isArray(abilityEffects) ? abilityEffects : [];
+  const safeWorldDrops = Array.isArray(worldDrops) ? worldDrops : [];
   renderer.renderBackground(map, camera);
 
   for (const object of worldObjects) {
@@ -575,7 +586,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
 
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
-    const baseColor = enemy.spriteKey === 'slime' ? palette.slime : palette.skeleton;
+    const baseColor = enemy.spriteId === 'slime' ? palette.slime : palette.skeleton;
     let renderColor = enemy.frozen ? (enemy.freezeTint ?? '#9edbff') : baseColor;
     renderColor = getEntityTintColor(enemy, renderColor);
 
@@ -605,7 +616,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   }
 
   for (const p of projectiles) drawProjectile(renderer, camera, p);
-  for (const effect of abilityEffects) drawAbilityEffect(renderer, camera, effect);
+  for (const effect of safeAbilityEffects) drawAbilityEffect(renderer, camera, effect);
 
   for (const g of goldPiles) {
     const gx = Math.round(g.x) - camera.x;
@@ -617,7 +628,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     drawCell(renderer, { glyph: '$', fg: palette.gold }, gx, gy);
   }
 
-  for (const drop of worldDrops) drawWorldDrop(renderer, camera, drop);
+  for (const drop of safeWorldDrops) drawWorldDrop(renderer, camera, drop);
 
   const playerColor = getEntityTintColor(player, palette.player);
   drawSprite(renderer, camera, player, playerColor);
@@ -628,5 +639,5 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
 
   drawDebugOverlays(renderer, camera, player, enemies, projectiles, activeRoom, debugOptions);
   drawDebugCursorOverlay(renderer, camera, mouse);
-  combatTextSystem?.render(renderer, camera);
+  if (typeof combatTextSystem?.render === 'function') combatTextSystem.render(renderer, camera);
 }

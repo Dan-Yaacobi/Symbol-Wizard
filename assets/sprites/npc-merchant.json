@@ -1,18 +1,18 @@
 {
-  "id": "player",
+  "id": "npc-merchant",
   "anchor": {
-    "x": 2,
+    "x": 3,
     "y": 3
   },
   "defaultGrid": {
-    "width": 5,
-    "height": 5
+    "width": 7,
+    "height": 7
   },
   "animations": {
     "idle": [
       {
-        "width": 5,
-        "height": 5,
+        "width": 7,
+        "height": 7,
         "offsetY": 0,
         "cells": [
           [
@@ -27,8 +27,18 @@
               "bg": null
             },
             {
-              "ch": "^",
-              "fg": "#cfe7ff",
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "$",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
             {
@@ -44,59 +54,10 @@
           ],
           [
             {
-              "ch": "(",
-              "fg": "#cfe7ff",
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
-            {
-              "ch": "/",
-              "fg": "#cfe7ff",
-              "bg": null
-            },
-            {
-              "ch": "@",
-              "fg": "#8ac3ff",
-              "bg": "#11263a"
-            },
-            {
-              "ch": "\\",
-              "fg": "#cfe7ff",
-              "bg": null
-            },
-            {
-              "ch": ")",
-              "fg": "#cfe7ff",
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": "<",
-              "fg": "#ffd37c",
-              "bg": null
-            },
-            {
-              "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
-            },
-            {
-              "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
-            },
-            {
-              "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
-            },
-            {
-              "ch": ">",
-              "fg": "#ffd37c",
-              "bg": null
-            }
-          ],
-          [
             {
               "ch": " ",
               "fg": null,
@@ -104,17 +65,96 @@
             },
             {
               "ch": "/",
-              "fg": "#d7e9ff",
+              "fg": null,
               "bg": null
             },
             {
               "ch": "|",
-              "fg": "#d7e9ff",
+              "fg": null,
               "bg": null
             },
             {
               "ch": "\\",
-              "fg": "#d7e9ff",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            }
+          ],
+          [
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "<",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "#",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "#",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "#",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": ">",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            }
+          ],
+          [
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "/",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "#",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "\\",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
             {
@@ -131,7 +171,49 @@
             },
             {
               "ch": "/",
-              "fg": "#d7e9ff",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "_",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "_",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "_",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "\\",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            }
+          ],
+          [
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "/",
+              "fg": null,
               "bg": null
             },
             {
@@ -141,7 +223,49 @@
             },
             {
               "ch": "\\",
-              "fg": "#d7e9ff",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            }
+          ],
+          [
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
             {
@@ -155,8 +279,8 @@
     ],
     "walk": [
       {
-        "width": 5,
-        "height": 5,
+        "width": 7,
+        "height": 7,
         "offsetY": 0,
         "cells": [
           [
@@ -171,8 +295,18 @@
               "bg": null
             },
             {
-              "ch": "^",
-              "fg": "#cfe7ff",
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "$",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
             {
@@ -188,59 +322,10 @@
           ],
           [
             {
-              "ch": "(",
-              "fg": "#cfe7ff",
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
-            {
-              "ch": "/",
-              "fg": "#cfe7ff",
-              "bg": null
-            },
-            {
-              "ch": "@",
-              "fg": "#8ac3ff",
-              "bg": "#11263a"
-            },
-            {
-              "ch": "\\",
-              "fg": "#cfe7ff",
-              "bg": null
-            },
-            {
-              "ch": ")",
-              "fg": "#cfe7ff",
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": "<",
-              "fg": "#ffd37c",
-              "bg": null
-            },
-            {
-              "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
-            },
-            {
-              "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
-            },
-            {
-              "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
-            },
-            {
-              "ch": ">",
-              "fg": "#ffd37c",
-              "bg": null
-            }
-          ],
-          [
             {
               "ch": " ",
               "fg": null,
@@ -248,73 +333,17 @@
             },
             {
               "ch": "/",
-              "fg": "#d7e9ff",
+              "fg": null,
               "bg": null
             },
             {
               "ch": "|",
-              "fg": "#d7e9ff",
-              "bg": null
-            },
-            {
-              "ch": "\\",
-              "fg": "#d7e9ff",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": "/",
-              "fg": "#d7e9ff",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
               "fg": null,
               "bg": null
             },
             {
               "ch": "\\",
-              "fg": "#d7e9ff",
-              "bg": null
-            }
-          ]
-        ]
-      },
-      {
-        "width": 5,
-        "height": 5,
-        "offsetY": 0,
-        "cells": [
-          [
-            {
-              "ch": " ",
               "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "^",
-              "fg": "#cfe7ff",
               "bg": null
             },
             {
@@ -330,77 +359,33 @@
           ],
           [
             {
-              "ch": "(",
-              "fg": "#cfe7ff",
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
-            {
-              "ch": "/",
-              "fg": "#cfe7ff",
-              "bg": null
-            },
-            {
-              "ch": "@",
-              "fg": "#8ac3ff",
-              "bg": "#11263a"
-            },
-            {
-              "ch": "\\",
-              "fg": "#cfe7ff",
-              "bg": null
-            },
-            {
-              "ch": ")",
-              "fg": "#cfe7ff",
-              "bg": null
-            }
-          ],
-          [
             {
               "ch": "<",
-              "fg": "#ffd37c",
+              "fg": null,
               "bg": null
             },
             {
               "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
+              "fg": null,
+              "bg": null
             },
             {
               "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
+              "fg": null,
+              "bg": null
             },
             {
               "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
+              "fg": null,
+              "bg": null
             },
             {
               "ch": ">",
-              "fg": "#ffd37c",
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
               "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "<",
-              "fg": "#d7e9ff",
-              "bg": null
-            },
-            {
-              "ch": "/",
-              "fg": "#d7e9ff",
-              "bg": null
-            },
-            {
-              "ch": "\\",
-              "fg": "#d7e9ff",
               "bg": null
             },
             {
@@ -416,8 +401,23 @@
               "bg": null
             },
             {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "/",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "#",
+              "fg": null,
+              "bg": null
+            },
+            {
               "ch": "\\",
-              "fg": "#d7e9ff",
+              "fg": null,
               "bg": null
             },
             {
@@ -426,8 +426,114 @@
               "bg": null
             },
             {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            }
+          ],
+          [
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
               "ch": "/",
-              "fg": "#d7e9ff",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "_",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "_",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "_",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "\\",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            }
+          ],
+          [
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "/",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "|",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "\\",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            }
+          ],
+          [
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
             {
@@ -439,154 +545,12 @@
         ]
       }
     ],
-    "attack": [
-      {
-        "width": 5,
-        "height": 5,
-        "offsetY": 0,
-        "cells": [
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "^",
-              "fg": "#cfe7ff",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": "(",
-              "fg": "#cfe7ff",
-              "bg": null
-            },
-            {
-              "ch": "/",
-              "fg": "#cfe7ff",
-              "bg": null
-            },
-            {
-              "ch": "@",
-              "fg": "#8ac3ff",
-              "bg": "#11263a"
-            },
-            {
-              "ch": "\\",
-              "fg": "#cfe7ff",
-              "bg": null
-            },
-            {
-              "ch": ")",
-              "fg": "#cfe7ff",
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": "<",
-              "fg": "#ffd37c",
-              "bg": null
-            },
-            {
-              "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
-            },
-            {
-              "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
-            },
-            {
-              "ch": "#",
-              "fg": "#8ac3ff",
-              "bg": "#23374d"
-            },
-            {
-              "ch": ">",
-              "fg": "#ffd37c",
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "/",
-              "fg": "#d7e9ff",
-              "bg": null
-            },
-            {
-              "ch": "|",
-              "fg": "#d7e9ff",
-              "bg": null
-            },
-            {
-              "ch": "\\",
-              "fg": "#d7e9ff",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": "/",
-              "fg": "#d7e9ff",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "\\",
-              "fg": "#d7e9ff",
-              "bg": null
-            }
-          ]
-        ]
-      }
-    ]
+    "attack": []
   },
   "meta": {
+    "source": "legacy",
     "isEnemy": false,
-    "enemyId": "player",
+    "enemyId": "npc-merchant",
     "biomes": [],
     "spawnWeight": 1
   }

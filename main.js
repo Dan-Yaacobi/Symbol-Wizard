@@ -32,11 +32,11 @@ import { SpellCraftingWindow } from './ui/SpellCraftingWindow.js';
 import { InventoryWindow } from './ui/InventoryWindow.js';
 import { PrefabEditorScreen } from './ui/PrefabEditorScreen.js';
 import { SpriteEditorScreen } from './ui/SpriteEditorScreen.js';
-import { palette } from './entities/SpriteLibrary.js';
+import { palette } from './data/SpritePalette.js';
 import { visualTheme } from './data/VisualTheme.js';
 import { rollObjectLoot, tryInteractInFront } from './systems/ObjectInteractionSystem.js';
 import { loadObjectsFromFolder } from './world/ObjectLibrary.js';
-import { loadSpriteAssetsFromFolder } from './data/SpriteAssetLoader.js';
+import { loadAllSpriteAssets } from './data/SpriteAssetLoader.js';
 import {
   cleanupDestroyedObjects,
   resolveObjectCollision,
@@ -63,7 +63,7 @@ const devToolsPanel = new DevToolsPanel(runtimeConfig);
 runtimeConfig.setLogger((message) => logDev(message));
 
 await loadObjectsFromFolder('./assets/objects');
-await loadSpriteAssetsFromFolder('./assets/sprites');
+await loadAllSpriteAssets('./assets/sprites');
 
 const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
 const currentBiomeId = 'starting-biome';

@@ -122,7 +122,7 @@ function testPrefabLoadToRendererColorPipeline() {
 
   const camera = { x: 0, y: 0, worldToScreen: (x, y) => ({ x, y }) };
   const map = [[{ char: '.', fg: '#000000', bg: '#000000' }]];
-  const player = { x: 999, y: 999, type: 'player', spriteKey: 'none' };
+  const player = { x: 999, y: 999, type: 'player', spriteId: 'none' };
 
   renderWorld(renderer, camera, map, player, [], [], [object], [], [], null, [], null, {});
   const renderCell = drawCalls.find((cell) => cell.glyph === '═');

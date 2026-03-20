@@ -170,7 +170,6 @@ export class Enemy extends Entity {
       postAttackSlowTimer: 0,
       hitKnockback: def.hitKnockback ?? 8,
       spriteId: def.spriteId,
-      spriteKey: def.spriteId,
       animationState: 'idle',
       frozen: false,
       freezeTint: null,

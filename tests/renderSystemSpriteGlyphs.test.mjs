@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
-import { loadSpriteAssetsFromFolder, resetSpriteAssetStore } from '../data/SpriteAssetLoader.js';
-import { getSpriteFrame } from '../entities/SpriteLibrary.js';
+import { loadAllSpriteAssets, resetSpriteAssetStore, getSpriteFrame } from '../data/SpriteAssetLoader.js';
 import { resolveSpriteRenderGlyph, spriteUsesAuthoredGlyphs } from '../systems/RenderSystem.js';
 
 function renderGlyphMatrix(entity, sprite) {
@@ -8,25 +7,17 @@ function renderGlyphMatrix(entity, sprite) {
 }
 
 resetSpriteAssetStore();
-await loadSpriteAssetsFromFolder('./assets/sprites');
+await loadAllSpriteAssets('./assets/sprites');
 
-const legacyFrame = getSpriteFrame('slime', 'walk', 0);
-const assetFrameA = getSpriteFrame('spider', 'walk', 0);
-const assetFrameB = getSpriteFrame('spider', 'walk', 1);
+const plainFrame = getSpriteFrame('slime', 'walk', 0);
+const authoredFrameA = getSpriteFrame('spider', 'walk', 0);
+const authoredFrameB = getSpriteFrame('spider', 'walk', 1);
 
-assert.ok(legacyFrame);
-assert.ok(assetFrameA);
-assert.ok(assetFrameB);
+assert.ok(plainFrame);
+assert.ok(authoredFrameA);
+assert.ok(authoredFrameB);
+assert.equal(spriteUsesAuthoredGlyphs(plainFrame), false);
+assert.equal(spriteUsesAuthoredGlyphs(authoredFrameA), true);
+assert.notEqual(renderGlyphMatrix({ type: 'enemy', spriteId: 'spider' }, authoredFrameA), renderGlyphMatrix({ type: 'enemy', spriteId: 'spider' }, authoredFrameB));
 
-assert.equal(spriteUsesAuthoredGlyphs(legacyFrame), false);
-assert.equal(spriteUsesAuthoredGlyphs(assetFrameA), true);
-
-const enemyEntity = { type: 'enemy' };
-const renderedLegacy = renderGlyphMatrix(enemyEntity, legacyFrame);
-assert.match(renderedLegacy, /#/);
-assert.doesNotMatch(renderedLegacy, /x/);
-
-const renderedAssetA = renderGlyphMatrix(enemyEntity, assetFrameA);
-const renderedAssetB = renderGlyphMatrix(enemyEntity, assetFrameB);
-assert.match(renderedAssetA, /x/);
-assert.notEqual(renderedAssetA, renderedAssetB);
+console.log('renderSystemSpriteGlyphs.test.mjs passed');

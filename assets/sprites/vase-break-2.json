@@ -1,0 +1,142 @@
+{
+  "id": "vase-break-2",
+  "anchor": {
+    "x": 3,
+    "y": 3
+  },
+  "defaultGrid": {
+    "width": 7,
+    "height": 3
+  },
+  "animations": {
+    "idle": [
+      {
+        "width": 7,
+        "height": 3,
+        "offsetY": 0,
+        "cells": [
+          [
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": ".",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": ".",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            }
+          ],
+          [
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": ".",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": ".",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            }
+          ],
+          [
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": ".",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": ".",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            }
+          ]
+        ]
+      }
+    ],
+    "walk": [],
+    "attack": []
+  },
+  "meta": {
+    "source": "legacy",
+    "isEnemy": false,
+    "enemyId": "vase-break-2",
+    "biomes": [],
+    "spawnWeight": 1
+  }
+}

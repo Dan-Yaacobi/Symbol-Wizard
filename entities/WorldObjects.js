@@ -10,7 +10,7 @@ export class WorldObject extends Entity {
       x: 0,
       y: 0,
       radius: 1,
-      spriteKey: null,
+      spriteId: null,
       category: 'decorative',
       collision,
       interaction: null,
@@ -34,7 +34,7 @@ export class StaticObject extends WorldObject {
 
 export class House extends StaticObject {
   constructor(x, y, variant = 'red') {
-    super({ type: 'house', x, y, radius: 4.2, spriteKey: `house-${variant}`, variant, logicalShape: { kind: 'building', tiles: [[0, 0], [1, 0], [-1, 0], [2, 0], [-2, 0], [0, 1], [1, 1], [-1, 1], [0, -1], [1, -1], [-1, -1]] } });
+    super({ type: 'house', x, y, radius: 4.2, spriteId: `house-${variant}`, variant, logicalShape: { kind: 'building', tiles: [[0, 0], [1, 0], [-1, 0], [2, 0], [-2, 0], [0, 1], [1, 1], [-1, 1], [0, -1], [1, -1], [-1, -1]] } });
   }
 }
 
@@ -98,7 +98,7 @@ export class BreakableProp extends DestructibleObject {
       x,
       y,
       radius: isBarrel ? 1.4 : 1.2,
-      spriteKey: kind,
+      spriteId: kind,
       hp,
       maxHp: hp,
       breakFrames: [`${kind}-break-1`, `${kind}-break-2`],
@@ -114,7 +114,7 @@ export class TownNPC extends WorldObject {
       x,
       y,
       radius: 1.8,
-      spriteKey: `npc-${role}`,
+      spriteId: `npc-${role}`,
       name,
       role,
       dialogue,
