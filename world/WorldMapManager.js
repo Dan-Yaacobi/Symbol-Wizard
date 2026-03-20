@@ -1,5 +1,103 @@
 import { TownGenerator } from './TownGenerator.js';
 import { hashSeed } from './SeededRandom.js';
+import { tiles } from './TilePalette.js';
+
+
+
+function cloneTile(tile) {
+  return { ...tile };
+}
+
+function buildCollisionMap(grid, objects = []) {
+  const map = Array.from({ length: grid.length }, (_, y) => Array.from({ length: grid[0].length }, (_, x) => !grid[y][x].walkable));
+  for (const object of objects) {
+    if (!object?.collision) continue;
+    const footprint = object.footprint ?? object.logicalShape?.tiles ?? [[0, 0]];
+    for (const cell of footprint) {
+      const dx = Array.isArray(cell) ? cell[0] : cell.x;
+      const dy = Array.isArray(cell) ? cell[1] : cell.y;
+      const x = Math.round(object.x + dx);
+      const y = Math.round(object.y + dy);
+      if (map[y]?.[x] == null) continue;
+      map[y][x] = true;
+    }
+  }
+  return map;
+}
+
+function oppositeDirection(direction) {
+  if (direction === 'north') return 'south';
+  if (direction === 'south') return 'north';
+  if (direction === 'west') return 'east';
+  return 'west';
+}
+
+function carveForestEntry(room, entryId, direction, roadWidth = 3) {
+  if (!room?.tiles?.length || !room.tiles[0]?.length) return null;
+
+  const width = room.tiles[0].length;
+  const height = room.tiles.length;
+  const existingEntrance = room.entrances?.[entryId];
+  const fallbackDirection = oppositeDirection(direction);
+  const targetDirection = existingEntrance?.direction ?? fallbackDirection;
+
+  let anchor = existingEntrance
+    ? { x: Math.round(existingEntrance.x), y: Math.round(existingEntrance.y), direction: targetDirection }
+    : null;
+
+  if (!anchor) {
+    if (targetDirection === 'north') anchor = { x: Math.floor(width / 2), y: 2, direction: targetDirection };
+    else if (targetDirection === 'south') anchor = { x: Math.floor(width / 2), y: height - 3, direction: targetDirection };
+    else if (targetDirection === 'west') anchor = { x: 2, y: Math.floor(height / 2), direction: targetDirection };
+    else anchor = { x: width - 3, y: Math.floor(height / 2), direction: targetDirection };
+  }
+
+  const landingX = Math.max(1, Math.min(width - 2, existingEntrance?.landingX ?? (targetDirection === 'west' ? 4 : targetDirection === 'east' ? width - 5 : anchor.x)));
+  const landingY = Math.max(1, Math.min(height - 2, existingEntrance?.landingY ?? (targetDirection === 'north' ? 4 : targetDirection === 'south' ? height - 5 : anchor.y)));
+  const landing = { x: landingX, y: landingY };
+  const perpendicular = targetDirection === 'north' || targetDirection === 'south' ? { x: 1, y: 0 } : { x: 0, y: 1 };
+  const halfWidth = Math.max(1, Math.floor(roadWidth / 2));
+  const triggerTiles = [];
+
+  for (let step = 0; step <= 5; step += 1) {
+    const cx = Math.round(anchor.x + ((landing.x - anchor.x) * (step / 5)));
+    const cy = Math.round(anchor.y + ((landing.y - anchor.y) * (step / 5)));
+    for (let offset = -halfWidth; offset <= halfWidth; offset += 1) {
+      const tx = cx + (perpendicular.x * offset);
+      const ty = cy + (perpendicular.y * offset);
+      if (!room.tiles[ty]?.[tx]) continue;
+      room.tiles[ty][tx] = cloneTile(offset === -halfWidth || offset === halfWidth ? tiles.dirtEdge : tiles.dirt);
+      triggerTiles.push({ x: tx, y: ty });
+    }
+  }
+
+  for (let oy = -3; oy <= 3; oy += 1) {
+    for (let ox = -3; ox <= 3; ox += 1) {
+      const tx = landing.x + ox;
+      const ty = landing.y + oy;
+      if (!room.tiles[ty]?.[tx]) continue;
+      if ((ox * ox) + (oy * oy) > 10) continue;
+      room.tiles[ty][tx] = cloneTile(Math.abs(ox) === 3 || Math.abs(oy) === 3 ? tiles.dirtEdge : tiles.dirt);
+    }
+  }
+
+  room.entrances = room.entrances ?? {};
+  room.entrances[entryId] = {
+    id: entryId,
+    x: anchor.x,
+    y: anchor.y,
+    direction: targetDirection,
+    spawn: { ...landing },
+    landingX: landing.x,
+    landingY: landing.y,
+  };
+
+  return {
+    anchor,
+    landing,
+    triggerTiles,
+  };
+}
 
 function cloneExit(exit) {
   return {
@@ -24,28 +122,31 @@ function normalizeForestRoom(room, { biomeId, biomeSeed, returnLink = null } = {
   const exitCorridors = Array.isArray(room.exitCorridors) ? [...room.exitCorridors] : [];
 
   if (returnLink) {
-    const returnExitId = 'forest-town-return';
+    const entry = carveForestEntry(room, 'forest_entry_from_town', returnLink.townExitSide ?? 'top', returnLink.roadWidth ?? 3);
+    const returnExitId = 'forest_exit_to_town';
     const existing = exits.find((exit) => exit.id === returnExitId);
+    const landing = entry?.landing ?? room?.entrances?.['forest_entry_from_town']?.spawn ?? { x: Math.floor(room.tiles[0].length / 2), y: Math.floor(room.tiles.length / 2) };
     if (!existing) {
-      const spawn = room?.entrances?.['initial-spawn']?.spawn ?? { x: Math.floor(room.tiles[0].length / 2), y: Math.floor(room.tiles.length / 2) };
       exits.push({
         id: returnExitId,
-        position: { x: spawn.x, y: Math.max(1, spawn.y - 2) },
+        position: { x: landing.x, y: landing.y },
         targetMapType: 'town',
         targetSeed: returnLink.targetSeed,
-        targetEntryId: returnLink.targetEntryId,
-        width: 2,
-      });
-      exitCorridors.push({
-        exitId: returnExitId,
-        triggerTiles: [
-          { x: spawn.x, y: Math.max(1, spawn.y - 2) },
-          { x: spawn.x - 1, y: Math.max(1, spawn.y - 2) },
-          { x: spawn.x + 1, y: Math.max(1, spawn.y - 2) },
-        ],
+        targetEntryId: returnLink.targetEntryId ?? 'town_exit_main',
+        width: Math.max(2, returnLink.roadWidth ?? 3),
+        meta: {
+          originForestSeed: biomeSeed,
+        },
       });
     }
+    exitCorridors.push({
+      exitId: returnExitId,
+      triggerTiles: entry?.triggerTiles?.length ? entry.triggerTiles : [{ x: landing.x, y: landing.y }],
+    });
+    console.log('Forest → Town', biomeSeed, '→', returnLink.targetSeed);
   }
+
+  room.collisionMap = buildCollisionMap(room.tiles, room.objects ?? []);
 
   return {
     ...room,
@@ -178,7 +279,9 @@ export class WorldMapManager {
       return this.loadForest(exit.targetSeed, {
         returnLink: {
           targetSeed: currentMap.seed,
-          targetEntryId: exit.targetEntryId ?? 'initial-spawn',
+          targetEntryId: 'town_exit_main',
+          townExitSide: exit.meta?.exitSide ?? currentMap.metadata?.townExitSide ?? 'top',
+          roadWidth: exit.width ?? exit.meta?.roadWidth ?? 3,
         },
       });
     }
@@ -198,7 +301,7 @@ export class WorldMapManager {
     return map.entrances?.[entryId] ?? null;
   }
 
-  deriveForestSeedFromTown(townSeed, exitIndex = 0) {
-    return hashSeed(townSeed, 'forest-exit', exitIndex);
+  deriveForestSeedFromTown(townSeed) {
+    return hashSeed(townSeed, 'forest_exit');
   }
 }
