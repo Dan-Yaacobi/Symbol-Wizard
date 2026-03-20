@@ -1,4 +1,5 @@
 import { Entity } from './Entity.js';
+import { getAllEnemyDefinitions, getEnemyDefinition } from '../data/EnemyRegistry.js';
 
 export const ENEMY_BEHAVIOR = {
   CHASER: 'chaser',
@@ -8,89 +9,17 @@ export const ENEMY_BEHAVIOR = {
   FLANKER: 'flanker',
 };
 
-export const ENEMY_TYPE_DEFS = {
-  spider: {
-    spriteId: 'spider',
-    behavior: ENEMY_BEHAVIOR.CHASER,
-    hp: 14,
-    speed: 10.5,
-    attackDamage: 2,
-    attackRange: 3.2,
-    attackCooldown: 0.7,
-    attackWindup: 0.35,
-    attackDuration: 0.3,
-    attackHitTime: 0.08,
-    hitKnockback: 7,
-    radius: 1.6,
-    aggroRadius: 20,
-  },
-  wasp: {
-    spriteId: 'wasp',
-    behavior: ENEMY_BEHAVIOR.RANGED,
-    hp: 6,
-    speed: 13,
-    attackDamage: 2,
-    attackRange: 10,
-    orbitRadius: 8,
-    orbitRepositionThreshold: 0.75,
-    orbitPlayerDriftThreshold: 1.5,
-    orbitWaitDuration: 0.35,
-    attackCooldown: 1.2,
-    attackWindup: 0.4,
-    attackDuration: 0.3,
-    attackHitTime: 0.08,
-    hitKnockback: 6,
-    radius: 1.4,
-    aggroRadius: 24,
-    projectileType: 'stingerProjectile',
-  },
-  forest_beetle: {
-    spriteId: 'forest_beetle',
-    behavior: ENEMY_BEHAVIOR.TANK,
-    hp: 56,
-    speed: 4,
-    attackDamage: 6,
-    attackRange: 3.8,
-    attackCooldown: 1.2,
-    attackWindup: 0.5,
-    attackDuration: 0.4,
-    attackHitTime: 0.14,
-    hitKnockback: 12,
-    radius: 2.2,
-    aggroRadius: 18,
-  },
-  swarm_bug: {
-    spriteId: 'swarm_bug',
-    behavior: ENEMY_BEHAVIOR.SWARM,
-    hp: 4,
-    speed: 16.5,
-    attackDamage: 1,
-    attackRange: 2.8,
-    attackCooldown: 0.45,
-    attackWindup: 0.2,
-    attackDuration: 0.24,
-    attackHitTime: 0.06,
-    hitKnockback: 5,
-    radius: 1.3,
-    aggroRadius: 16,
-  },
-  forest_mantis: {
-    spriteId: 'forest_mantis',
-    behavior: ENEMY_BEHAVIOR.FLANKER,
-    hp: 16,
-    speed: 12,
-    attackDamage: 3,
-    attackRange: 3.2,
-    attackCooldown: 0.8,
-    attackWindup: 0.34,
-    attackDuration: 0.32,
-    attackHitTime: 0.1,
-    hitKnockback: 8,
-    radius: 1.6,
-    flankOrbitSpeed: 1.6,
-    aggroRadius: 22,
-  },
-};
+export const ENEMY_TYPE_DEFS = Object.fromEntries(
+  getAllEnemyDefinitions().map((definition) => [definition.id, {
+    spriteId: definition.spriteId,
+    behavior: definition.behavior ?? ENEMY_BEHAVIOR.CHASER,
+    hp: definition.stats?.hp ?? 10,
+    speed: definition.stats?.speed ?? 1,
+    attackDamage: definition.stats?.damage ?? 2,
+    attackCooldown: definition.stats?.attackCooldown ?? 1.2,
+    ...(definition.combat ?? {}),
+  }]),
+);
 
 export const ENEMY_TUNABLE_PARAMS = [
   'hp',
@@ -131,7 +60,7 @@ const LEGACY_KIND_ALIASES = {
 
 function resolveEnemyType(type) {
   const normalized = LEGACY_KIND_ALIASES[type] ?? type;
-  if (ENEMY_TYPE_DEFS[normalized]) return normalized;
+  if (getEnemyDefinition(normalized)) return normalized;
   return 'spider';
 }
 

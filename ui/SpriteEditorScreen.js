@@ -73,7 +73,7 @@ export class SpriteEditorScreen {
       const asset = getSpriteAsset(this.elements.spriteSelect.value);
       if (asset) this.#loadAsset(asset);
     }, { signal });
-    this.elements.idInput.addEventListener('input', () => { this.asset.id = this.elements.idInput.value.trim() || 'sprite'; this.#renderEditor(); }, { signal });
+    this.elements.idInput.addEventListener('input', () => { const previousId = this.asset.id; this.asset.id = this.elements.idInput.value.trim() || 'sprite'; if (!this.asset.meta.enemyId || this.asset.meta.enemyId === previousId) this.asset.meta.enemyId = this.asset.id; this.#renderEditor(); }, { signal });
     this.elements.animationSelect.addEventListener('change', () => this.#switchAnimation(this.elements.animationSelect.value), { signal });
     this.elements.seedAction.addEventListener('click', () => this.#seedEmptyAnimation(), { signal });
     this.elements.copyFirstButton.addEventListener('click', () => this.#copyFromAnimation('first'), { signal });
@@ -87,6 +87,10 @@ export class SpriteEditorScreen {
     this.elements.frameSelect.addEventListener('change', () => this.#setFrameIndex(Number(this.elements.frameSelect.value) || 0), { signal });
     this.elements.clearFrameButton.addEventListener('click', () => { const frame = this.getCurrentFrame(); if (!frame) return; frame.cells = frame.cells.map((row) => row.map(() => createEmptyCell())); this.#renderEditor(); }, { signal });
     this.elements.playToggle.addEventListener('click', () => { this.previewPlaying = !this.previewPlaying; this.elements.playToggle.textContent = this.previewPlaying ? 'Pause Preview' : 'Play Preview'; }, { signal });
+    this.elements.enemyToggle.addEventListener('change', () => { this.asset.meta.isEnemy = this.elements.enemyToggle.checked; if (!this.asset.meta.enemyId) this.asset.meta.enemyId = this.asset.id; this.#renderEditor(); }, { signal });
+    this.elements.enemyId.addEventListener('input', () => { this.asset.meta.enemyId = this.elements.enemyId.value.trim() || this.asset.id || 'sprite'; this.#renderEditor(); }, { signal });
+    this.elements.biomes.addEventListener('change', () => { this.asset.meta.biomes = [...this.elements.biomes.selectedOptions].map((option) => option.value); this.#renderEditor(); }, { signal });
+    this.elements.spawnWeight.addEventListener('input', () => { this.asset.meta.spawnWeight = Math.max(1, Number(this.elements.spawnWeight.value) || 1); this.#renderEditor(); }, { signal });
     this.elements.anchorX.addEventListener('input', () => { this.asset.anchor.x = Number(this.elements.anchorX.value) || 0; this.#renderEditor(); }, { signal });
     this.elements.anchorY.addEventListener('input', () => { this.asset.anchor.y = Number(this.elements.anchorY.value) || 0; this.#renderEditor(); }, { signal });
     this.elements.offsetY.addEventListener('input', () => { const frame = this.getCurrentFrame(); if (frame) frame.offsetY = Number(this.elements.offsetY.value) || 0; this.#renderEditor(); }, { signal });
@@ -235,6 +239,14 @@ export class SpriteEditorScreen {
   }
 
   #setStatus(message, error = false) { this.elements.status.textContent = message; this.elements.status.dataset.error = error ? '1' : '0'; }
+
+  #syncEnemyMetaUi() {
+    this.elements.enemyToggle.checked = Boolean(this.asset.meta?.isEnemy);
+    this.elements.enemyId.value = this.asset.meta?.enemyId ?? this.asset.id;
+    this.elements.spawnWeight.value = String(this.asset.meta?.spawnWeight ?? 1);
+    const selectedBiomes = new Set(this.asset.meta?.biomes ?? []);
+    for (const option of this.elements.biomes.options) option.selected = selectedBiomes.has(option.value);
+  }
   #syncBrushUi() {
     this.elements.charInput.value = this.brush.ch === ' ' ? '' : this.brush.ch;
     this.elements.fgInput.value = this.brush.fg ?? '#ffffff';
@@ -254,6 +266,7 @@ export class SpriteEditorScreen {
   #syncUiFromAsset() {
     ensureRequiredAnimations(this.asset);
     this.elements.idInput.value = this.asset.id;
+    this.#syncEnemyMetaUi();
     this.elements.anchorX.value = String(this.asset.anchor.x ?? 0);
     this.elements.anchorY.value = String(this.asset.anchor.y ?? 0);
     this.elements.animationSelect.innerHTML = Object.keys(this.asset.animations).map((name) => `<option value="${name}">${name}</option>`).join('');
@@ -334,6 +347,8 @@ export class SpriteEditorScreen {
         <section class="sprite-editor__left">
           <label>Load Existing <select data-sprite-select></select></label>
           <label>Sprite ID <input data-id type="text"></label>
+          <div class="sprite-editor__row"><label><input data-enemy-toggle type="checkbox"> Enemy</label><label>Enemy ID <input data-enemy-id type="text" placeholder="Defaults to sprite id"></label><label>Spawn Weight <input data-spawn-weight type="number" min="1" step="1"></label></div>
+          <div class="sprite-editor__row"><label>Biomes <select data-biomes multiple size="4"><option value="forest">forest</option><option value="cave">cave</option><option value="river">river</option><option value="mountain">mountain</option></select></label></div>
           <div class="sprite-editor__row"><label>Anchor X <input data-anchor-x type="number"></label><label>Anchor Y <input data-anchor-y type="number"></label><label>Frame offsetY <input data-offset-y type="number"></label></div>
           <div class="sprite-editor__row"><label>Animation <select data-animation></select></label><button type="button" data-import-xp>Import XP</button><input data-xp-input type="file" accept=".xp" hidden></div>
           <div data-empty-animation-actions class="sprite-editor__stack" hidden>
@@ -371,6 +386,10 @@ export class SpriteEditorScreen {
       newButton: root.querySelector('[data-new]'),
       spriteSelect: root.querySelector('[data-sprite-select]'),
       idInput: root.querySelector('[data-id]'),
+      enemyToggle: root.querySelector('[data-enemy-toggle]'),
+      enemyId: root.querySelector('[data-enemy-id]'),
+      biomes: root.querySelector('[data-biomes]'),
+      spawnWeight: root.querySelector('[data-spawn-weight]'),
       anchorX: root.querySelector('[data-anchor-x]'),
       anchorY: root.querySelector('[data-anchor-y]'),
       offsetY: root.querySelector('[data-offset-y]'),

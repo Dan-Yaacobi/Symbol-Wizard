@@ -31,6 +31,22 @@ function cloneJson(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function normalizeSpriteMeta(meta, spriteId = 'sprite') {
+  const source = meta && typeof meta === 'object' ? meta : {};
+  const enemyId = String(source.enemyId ?? spriteId).trim() || spriteId;
+  const biomes = Array.isArray(source.biomes)
+    ? [...new Set(source.biomes.map((entry) => String(entry ?? '').trim().toLowerCase()).filter(Boolean))]
+    : [];
+  const spawnWeight = Number(source.spawnWeight);
+  return {
+    ...source,
+    isEnemy: Boolean(source.isEnemy),
+    enemyId,
+    biomes,
+    spawnWeight: Number.isFinite(spawnWeight) && spawnWeight > 0 ? Math.max(1, Math.round(spawnWeight)) : 1,
+  };
+}
+
 export function createEmptyCell() {
   return { ch: ' ', fg: null, bg: null };
 }
@@ -90,7 +106,12 @@ export function createEmptySpriteAsset(id = 'sprite', width = 7, height = 7) {
       walk: [],
       attack: [],
     },
-    meta: {},
+    meta: {
+      isEnemy: false,
+      enemyId: String(id || 'sprite').trim() || 'sprite',
+      biomes: [],
+      spawnWeight: 1,
+    },
   };
   return ensureRequiredAnimations(asset);
 }
@@ -119,7 +140,7 @@ export function normalizeSpriteAsset(asset) {
     },
     defaultGrid: inferredGrid,
     animations: {},
-    meta: asset?.meta && typeof asset.meta === 'object' ? { ...asset.meta } : {},
+    meta: normalizeSpriteMeta(asset?.meta, id),
   };
 
   for (const [animationName, frames] of Object.entries(sourceAnimations)) {
@@ -138,6 +159,8 @@ export function validateSpriteAsset(asset) {
   if (!asset?.id) errors.push('Asset requires an id.');
   if (!asset?.defaultGrid || typeof asset.defaultGrid !== 'object') errors.push('Asset requires defaultGrid.');
   if (!asset?.animations || typeof asset.animations !== 'object') errors.push('Asset requires animations.');
+  if (asset?.meta && typeof asset.meta !== 'object') errors.push('Asset meta must be an object.');
+  if (asset?.meta?.biomes && !Array.isArray(asset.meta.biomes)) errors.push('Asset meta.biomes must be an array when provided.');
 
   for (const animationName of REQUIRED_GAMEPLAY_ANIMATIONS) {
     if (!Array.isArray(asset?.animations?.[animationName])) errors.push(`Animation "${animationName}" must exist as an array.`);
