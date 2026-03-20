@@ -73,6 +73,21 @@ function densityTierForGlyph(glyph) {
   return 'low';
 }
 
+export function spriteUsesAuthoredGlyphs(sprite) {
+  if (!sprite?.cells?.length) return false;
+  return sprite.cells.some((row) => row.some((cell) => cell?.fg != null || cell?.bg != null));
+}
+
+export function resolveSpriteRenderGlyph(entity, sprite, ch) {
+  const safeGlyph = toSafeGlyph(ch);
+  const preserveAuthoredGlyphs = spriteUsesAuthoredGlyphs(sprite);
+  if (preserveAuthoredGlyphs) return safeGlyph;
+
+  const densityTier = densityTierForGlyph(safeGlyph);
+  const expectedTier = entity.type === 'player' || entity.type === 'enemy' ? 'high' : (entity.category ? 'low' : 'medium');
+  return expectedTier === 'high' && densityTier === 'low' && ch !== ' ' ? '#' : safeGlyph;
+}
+
 function colorForEntity(entity) {
   if (entity.type === 'npc') return palette[entity.role] ?? palette.npc;
   if (entity.type === 'house') {
@@ -112,10 +127,7 @@ function drawSprite(renderer, camera, entity, color, forceSprite = null) {
       if ((ch === ' ' || ch === '\0') && !cell?.bg) continue;
       const screenX = baseX + sx - camera.x;
       const screenY = baseY + sy - camera.y;
-      const safeGlyph = toSafeGlyph(ch);
-      const densityTier = densityTierForGlyph(safeGlyph);
-      const expectedTier = entity.type === 'player' || entity.type === 'enemy' ? 'high' : (entity.category ? 'low' : 'medium');
-      const finalGlyph = expectedTier === 'high' && densityTier === 'low' && ch !== ' ' ? '#' : safeGlyph;
+      const finalGlyph = resolveSpriteRenderGlyph(entity, sprite, ch);
       drawCell(renderer, { glyph: finalGlyph, fg: cell?.fg ?? color, bg: cell?.bg ?? c.worldBackground }, screenX, screenY);
     }
   }
