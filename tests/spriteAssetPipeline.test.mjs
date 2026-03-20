@@ -11,7 +11,7 @@ import {
 } from '../data/SpriteAssetSchema.js';
 import { convertLegacyFrameToSpriteFrame, convertLegacySpriteEntryToAsset, getSpriteFrame as getLegacyCompatibleSpriteFrame, getSpriteCollisionOffsets } from '../entities/SpriteLibrary.js';
 import { convertXpToSpriteAsset } from '../data/SpriteXpImporter.js';
-import { loadSpriteAssetsFromFolder, resetSpriteAssetStore, getSpriteAsset, getSpriteAnimation, getSpriteFrame, getAnimationFrameCount } from '../data/SpriteAssetLoader.js';
+import { loadSpriteAssetsFromFolder, resetSpriteAssetStore, registerSpriteAsset, getSpriteAsset, getSpriteAnimation, getSpriteFrame, getAnimationFrameCount } from '../data/SpriteAssetLoader.js';
 
 function createXp(width, height, layers) {
   const header = Buffer.alloc(8);
@@ -78,6 +78,7 @@ assert.equal(imported.animations.attack[0].cells[0][0].ch, '@');
 assert.equal(imported.animations.attack[1].cells[0][0].ch, '!');
 assert.equal(imported.animations.attack[1].cells[0][0].bg, '#400000');
 assert.equal(imported.animations.idle.length, 1);
+assert.equal(imported.animations.walk.length, 0);
 
 resetSpriteAssetStore();
 await loadSpriteAssetsFromFolder('./assets/sprites');
@@ -89,4 +90,24 @@ assert.equal(playerFrame.cells[1][2].ch, '@');
 assert.equal(playerFrame.cells[2][1].bg, '#23374d');
 const fallbackFrame = getLegacyCompatibleSpriteFrame('player', 'missing', 0);
 assert.equal(fallbackFrame.cells[1][2].ch, '@');
+
+resetSpriteAssetStore();
+const castFallbackAsset = normalizeSpriteAsset({
+  id: 'cast-fallback',
+  animations: {
+    idle: [createEmptyFrame(1, 1)],
+    walk: [],
+    attack: [
+      { width: 1, height: 1, cells: [[{ ch: 'x', fg: null, bg: null }]] },
+      { width: 1, height: 1, cells: [[{ ch: 'y', fg: null, bg: null }]] },
+    ],
+  },
+});
+assert.equal(validateSpriteAsset(castFallbackAsset).valid, true);
+const registeredCastFallback = getSpriteAsset(registerSpriteAsset(castFallbackAsset).id);
+assert.ok(registeredCastFallback);
+assert.equal(getSpriteAnimation('cast-fallback', 'cast').length, 2);
+assert.equal(getAnimationFrameCount('cast-fallback', 'cast'), 2);
+assert.equal(getSpriteFrame('cast-fallback', 'cast', 1).cells[0][0].ch, 'y');
+
 console.log('spriteAssetPipeline.test.mjs passed');
