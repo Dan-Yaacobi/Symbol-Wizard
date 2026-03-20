@@ -236,3 +236,16 @@ export function resizeSpriteAsset(asset, newWidth, newHeight, scope = 'whole spr
 export function isOccupiedSpriteCell(cell) {
   return Boolean(cell && typeof cell.ch === 'string' && cell.ch !== ' ' && cell.ch !== '\0');
 }
+
+
+export function getSpriteCollisionOffsets(frame) {
+  const normalized = normalizeSpriteFrame(frame);
+  const offsets = [];
+  for (let sy = 0; sy < normalized.height; sy += 1) {
+    for (let sx = 0; sx < normalized.width; sx += 1) {
+      if (!isOccupiedSpriteCell(normalized.cells[sy]?.[sx])) continue;
+      offsets.push({ x: sx - Math.floor(normalized.width / 2), y: sy - (normalized.offsetY ?? 0) - Math.floor(normalized.height / 2) });
+    }
+  }
+  return offsets;
+}

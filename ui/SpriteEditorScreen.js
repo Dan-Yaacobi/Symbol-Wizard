@@ -11,7 +11,7 @@ import {
   resizeAnimationFrames,
   resizeSpriteAsset,
 } from '../data/SpriteAssetSchema.js';
-import { getAllSpriteAssets, getSpriteAsset, registerSpriteAsset, saveSpriteAsset } from '../data/SpriteAssetLoader.js';
+import { getAllSpriteAssets, getSpriteAsset, registerSpriteAsset, reloadSpriteAssets, saveSpriteAsset } from '../data/SpriteAssetLoader.js';
 import { convertXpToSpriteAsset } from '../data/SpriteXpImporter.js';
 
 const PALETTE = ['#ffffff', '#d7e9ff', '#8ac3ff', '#ffd37c', '#73c57e', '#5faa66', '#bb4f4f', '#1b1b1b', '#173a1f', '#23374d', '#11263a', '#000000'];
@@ -105,7 +105,7 @@ export class SpriteEditorScreen {
     this.elements.paintFg.addEventListener('change', () => { this.brush.paintFg = this.elements.paintFg.checked; }, { signal });
     this.elements.paintBg.addEventListener('change', () => { this.brush.paintBg = this.elements.paintBg.checked; }, { signal });
     this.elements.eraseButton.addEventListener('click', () => { this.brush = { ...this.brush, ch: ' ', fg: null, bg: null, paintChar: true, paintFg: true, paintBg: true }; this.#syncBrushUi(); }, { signal });
-    this.elements.exportButton.addEventListener('click', async () => { const text = await saveSpriteAsset(this.asset); this.elements.jsonArea.value = text; downloadText(`${this.asset.id}.json`, text); registerSpriteAsset(this.asset); this.#refreshSpriteList(); this.#setStatus(`Exported ${this.asset.id}.json`, false); }, { signal });
+    this.elements.exportButton.addEventListener('click', async () => { await this.#exportAsset(); }, { signal });
     this.elements.importJsonButton.addEventListener('click', () => { try { this.#loadAsset(JSON.parse(this.elements.jsonArea.value)); } catch (error) { this.#setStatus(error.message, true); } }, { signal });
     this.elements.xpInput.addEventListener('change', async (event) => {
       const file = event.target.files?.[0];
@@ -119,6 +119,28 @@ export class SpriteEditorScreen {
     this.elements.showAnchor.addEventListener('change', () => this.#renderEditor(), { signal });
     this.elements.showOccupied.addEventListener('change', () => this.#renderEditor(), { signal });
     this.elements.canvas.addEventListener('click', (event) => this.#paintAt(event), { signal });
+  }
+
+
+  async #exportAsset() {
+    const normalized = normalizeSpriteAsset(clone(this.asset));
+    const text = await saveSpriteAsset(normalized);
+    this.elements.jsonArea.value = text;
+    registerSpriteAsset(normalized);
+
+    if (typeof process !== 'undefined' && process.versions?.node) {
+      const path = await import('node:path');
+      const outputPath = path.default.join(process.cwd(), 'assets', 'sprites', `${normalized.id}.json`);
+      await saveSpriteAsset(normalized, outputPath);
+      await reloadSpriteAssets('./assets/sprites');
+      this.#refreshSpriteList();
+      this.#setStatus(`Saved ${normalized.id}.json to assets/sprites and reloaded sprite assets.`, false);
+      return;
+    }
+
+    downloadText(`${normalized.id}.json`, text);
+    this.#refreshSpriteList();
+    this.#setStatus(`Exported ${normalized.id}.json for download.`, false);
   }
 
   #loadAsset(asset, animation = null) {

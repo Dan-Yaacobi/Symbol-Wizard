@@ -1,23 +1,23 @@
 {
-  "id": "bush",
+  "id": "house-blue-chimney",
   "anchor": {
-    "x": 3,
+    "x": 4,
     "y": 3
   },
   "defaultGrid": {
-    "width": 7,
-    "height": 7
+    "width": 9,
+    "height": 5
   },
   "animations": {
     "idle": [
       {
-        "width": 7,
-        "height": 7,
+        "width": 9,
+        "height": 5,
         "offsetY": 0,
         "cells": [
           [
             {
-              "ch": " ",
+              "ch": "B",
               "fg": null,
               "bg": null
             },
@@ -27,59 +27,32 @@
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "B",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "B",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "B",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "B",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
+              "ch": "B",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
-            },
-            {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": " ",
+              "ch": "B",
               "fg": null,
               "bg": null
             },
@@ -91,81 +64,69 @@
           ],
           [
             {
-              "ch": " ",
+              "ch": "|",
               "fg": null,
               "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
-            },
-            {
-              "ch": "%",
-              "fg": "#89d58f",
-              "bg": "#22512a"
-            },
-            {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
-            },
-            {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
+              "ch": "/",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "B",
               "fg": null,
               "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
-            },
-            {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
-            },
-            {
-              "ch": " ",
+              "ch": "B",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "B",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "B",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "B",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "B",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "\\",
               "fg": null,
               "bg": null
             }
           ],
           [
             {
-              "ch": " ",
+              "ch": "|",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "|",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "[",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "]",
               "fg": null,
               "bg": null
             },
@@ -175,7 +136,7 @@
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "_",
               "fg": null,
               "bg": null
             },
@@ -185,24 +146,19 @@
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "[",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
+              "ch": "]",
               "fg": null,
               "bg": null
             }
           ],
           [
             {
-              "ch": " ",
+              "ch": "|",
               "fg": null,
               "bg": null
             },
@@ -222,7 +178,7 @@
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "|",
               "fg": null,
               "bg": null
             },
@@ -233,43 +189,63 @@
             },
             {
               "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "|",
               "fg": null,
               "bg": null
             }
           ],
           [
             {
-              "ch": " ",
+              "ch": "|",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "_",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "_",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "_",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "|",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "_",
               "fg": null,
               "bg": null
             },
             {
-              "ch": " ",
+              "ch": "_",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "_",
+              "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "|",
               "fg": null,
               "bg": null
             }
@@ -281,8 +257,9 @@
     "attack": []
   },
   "meta": {
+    "source": "legacy",
     "isEnemy": false,
-    "enemyId": "bush",
+    "enemyId": "house-blue-chimney",
     "biomes": [],
     "spawnWeight": 1
   }

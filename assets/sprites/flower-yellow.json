@@ -1,5 +1,5 @@
 {
-  "id": "bush",
+  "id": "flower-yellow",
   "anchor": {
     "x": 3,
     "y": 3
@@ -64,19 +64,19 @@
               "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
+              "ch": " ",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
+              "ch": "+",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
+              "ch": " ",
+              "fg": null,
+              "bg": null
             },
             {
               "ch": " ",
@@ -96,29 +96,29 @@
               "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
+              "ch": " ",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
+              "ch": " ",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#89d58f",
-              "bg": "#22512a"
+              "ch": "|",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
+              "ch": " ",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
+              "ch": " ",
+              "fg": null,
+              "bg": null
             },
             {
               "ch": " ",
@@ -138,19 +138,19 @@
               "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
+              "ch": " ",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#73c57e",
-              "bg": "#1d4726"
+              "ch": " ",
+              "fg": null,
+              "bg": null
             },
             {
-              "ch": "%",
-              "fg": "#5faa66",
-              "bg": "#173a1f"
+              "ch": " ",
+              "fg": null,
+              "bg": null
             },
             {
               "ch": " ",
@@ -281,8 +281,9 @@
     "attack": []
   },
   "meta": {
+    "source": "legacy",
     "isEnemy": false,
-    "enemyId": "bush",
+    "enemyId": "flower-yellow",
     "biomes": [],
     "spawnWeight": 1
   }

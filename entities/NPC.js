@@ -7,7 +7,7 @@ export class NPC extends Entity {
       x,
       y,
       radius: 1.8,
-      spriteKey: 'npc',
+      spriteId: 'npc',
       name: 'Gate Wizard',
       interactRadius: 8,
     });
