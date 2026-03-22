@@ -19,8 +19,8 @@ function buildDebugLogger(debug) {
 }
 
 function normalizeExitInteractable(exit, x, y) {
-  const targetMap = exit?.targetMapType ?? null;
-  const targetBiome = exit?.targetRoomId ?? null;
+  const targetMap = exit?.targetMapType ?? exit?.interactionData?.targetType ?? null;
+  const targetBiome = exit?.targetRoomId ?? exit?.interactionData?.targetId ?? null;
   return {
     id: exit?.id ?? `exit-${x}-${y}`,
     x,
@@ -31,7 +31,7 @@ function normalizeExitInteractable(exit, x, y) {
     interactionType: 'exit',
     targetMap,
     targetBiome,
-    targetEntryId: exit?.targetEntryId ?? null,
+    targetEntryId: exit?.targetEntryId ?? exit?.interactionData?.entryId ?? null,
     targetEntranceId: exit?.targetEntranceId ?? null,
     exitRef: exit,
     source: 'exit',

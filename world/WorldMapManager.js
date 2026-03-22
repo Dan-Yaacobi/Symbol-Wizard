@@ -1,7 +1,7 @@
 import { TownGenerator } from './TownGenerator.js';
-import { hashSeed } from './SeededRandom.js';
 import { tiles } from './TilePalette.js';
 import { buildCollidableMask, carvePath, floodFillWalkable, nearestReachablePoint } from './PathConnectivity.js';
+import { connectRegions, deriveForestSeedFromTown, normalizeExit } from './RegionGenerationSystem.js';
 
 function cloneTile(tile) {
   return { ...tile };
@@ -154,8 +154,9 @@ function ensureForestEntranceReachable(room, exits, entryId, roadWidth = 3) {
 }
 
 function cloneExit(exit) {
+  const normalized = normalizeExit(exit);
   return {
-    ...exit,
+    ...normalized,
     category: exit?.category ?? 'interactable',
     isInteractable: exit?.isInteractable ?? true,
     targetMap: exit?.targetMap ?? exit?.targetMapType ?? null,
@@ -258,7 +259,7 @@ export class WorldMapManager {
   loadTown(seed) {
     const mapId = this.buildMapId('town', seed);
     if (this.mapCache.has(mapId)) return this.mapCache.get(mapId);
-    const town = this.townGenerator.generateTown(seed);
+    const town = this.townGenerator.generateTown(seed, { townType: 'forestTown' });
     this.installTownHouseInteractions(town);
     this.mapCache.set(mapId, town);
     return town;
@@ -307,6 +308,11 @@ export class WorldMapManager {
       biomeSeed: seed,
       returnLink: options.returnLink ?? null,
     });
+    if (normalized && options.returnLink?.targetSeed) {
+      const town = this.loadTown(options.returnLink.targetSeed);
+      connectRegions({ fromRegion: town, toRegion: normalized, options: { debug: this.runtimeConfig?.get?.('generation.debug') ?? false, fromExit: town.exits?.[0], toExit: normalized.exits?.find((exit) => exit.targetMapType === 'town') ?? normalized.exits?.[0] } });
+      this.mapCache.set(town.id, town);
+    }
     if (normalized) this.mapCache.set(normalized.id, normalized);
     return normalized;
   }
@@ -364,6 +370,6 @@ export class WorldMapManager {
   }
 
   deriveForestSeedFromTown(townSeed) {
-    return hashSeed(townSeed, 'forest_exit');
+    return deriveForestSeedFromTown(townSeed);
   }
 }
