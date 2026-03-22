@@ -1,4 +1,4 @@
-import { getInteractableAt } from './InteractableResolver.js';
+import { getBestInteractableAt } from '../systems/InteractionSystem.js';
 
 function isWalkableTile(room, x, y) {
   const row = room?.tiles?.[y];
@@ -83,8 +83,8 @@ export class RoomTransitionSystem {
     }
     this.log('Transition trigger called', {
       exitId: exit.id ?? null,
-      targetMapType: exit.targetMapType ?? exit.targetMap ?? null,
-      targetRoomId: exit.targetRoomId ?? exit.targetBiome ?? null,
+      targetMapType: exit.targetMapType ?? exit.targetMap ?? exit.interactionData?.targetMap ?? null,
+      targetRoomId: exit.targetRoomId ?? exit.targetBiome ?? exit.interactionData?.targetBiome ?? null,
     });
     this.pendingExit = exit;
     this.phase = 'fadeOut';
@@ -133,26 +133,27 @@ export class RoomTransitionSystem {
     const tx = Math.round(player.x);
     const ty = Math.round(player.y);
     this.log('Player movement tick', { x: player.x, y: player.y, tile: { x: tx, y: ty } });
-    const interactable = getInteractableAt(activeRoom, tx, ty, {
-      enabled: this.debug,
-      prefix: '[ExitFlow]',
+
+    const interactable = getBestInteractableAt(activeRoom, tx, ty, {
+      triggerMode: 'touch',
+      debug: this.debug ? { enabled: true, prefix: '[ExitFlow]' } : null,
     });
 
     if (!interactable) {
-      this.log('FAIL: exit detection — player tile has no interactable exit', { x: tx, y: ty });
+      this.log('FAIL: exit detection — player tile has no touch interactable', { x: tx, y: ty });
       return null;
     }
-    if (interactable.source !== 'exit') {
-      this.log('FAIL: exit detection — interactable found but is not an exit', {
+    if (interactable.interactionType !== 'exit') {
+      this.log('FAIL: exit detection — touch interactable found but is not an exit', {
         x: tx,
         y: ty,
-        source: interactable.source,
+        interactionType: interactable.interactionType,
         id: interactable.id ?? null,
       });
       return null;
     }
 
-    return interactable.exitRef ?? interactable;
+    return interactable.source ?? interactable;
   }
 
   resolveExit(activeRoom, exitRef) {
@@ -175,26 +176,51 @@ export class RoomTransitionSystem {
       return null;
     }
 
+    const data = exit.interactionData ?? {};
+    const normalizedExit = {
+      ...exit,
+      targetMapType: exit.targetMapType ?? exit.targetMap ?? data.targetMap ?? null,
+      targetMap: exit.targetMap ?? exit.targetMapType ?? data.targetMap ?? null,
+      targetRoomId: exit.targetRoomId ?? exit.targetBiome ?? data.targetBiome ?? null,
+      targetBiome: exit.targetBiome ?? exit.targetRoomId ?? data.targetBiome ?? null,
+      targetEntryId: exit.targetEntryId ?? exit.targetEntranceId ?? data.targetEntryId ?? data.targetExitId ?? null,
+      targetEntranceId: exit.targetEntranceId ?? data.targetEntryId ?? data.targetExitId ?? null,
+      targetSeed: exit.targetSeed ?? data.targetSeed ?? null,
+      meta: exit.meta ?? data.meta ?? null,
+    };
+
+    if (normalizedExit.targetMapType === 'house_interior') {
+      normalizedExit.meta = {
+        ...(normalizedExit.meta ?? {}),
+        houseId: normalizedExit.meta?.houseId ?? exit.id,
+        parentTownSeed: normalizedExit.meta?.parentTownSeed ?? context.activeRoom?.seed,
+        houseIndex: normalizedExit.meta?.houseIndex ?? (Number.parseInt(String(exit.id).split('-').pop(), 10) || 0),
+        returnPosition: normalizedExit.meta?.returnPosition ?? (exit.door ? { x: exit.door.x, y: exit.door.y + 2 } : null),
+        returnMapId: normalizedExit.meta?.returnMapId ?? context.activeRoom?.id,
+        returnEntryId: normalizedExit.meta?.returnEntryId ?? `return-${exit.id}`,
+      };
+    }
+
     let targetRoom = null;
     let targetEntrance = null;
 
-    if (exit.targetMapType && this.worldMapManager) {
-      targetRoom = this.worldMapManager.resolveMapByExit(context.activeRoom, exit);
-      targetEntrance = this.worldMapManager.getEntrance(targetRoom, exit.targetEntryId);
-    } else if (exit.targetRoomId && exit.targetEntranceId) {
-      targetRoom = this.biomeGenerator.loadRoom(exit.targetRoomId);
-      targetEntrance = targetRoom?.entrances?.[exit.targetEntranceId];
+    if (normalizedExit.targetMapType && this.worldMapManager) {
+      targetRoom = this.worldMapManager.resolveMapByExit(context.activeRoom, normalizedExit);
+      targetEntrance = this.worldMapManager.getEntrance(targetRoom, normalizedExit.targetEntryId);
+    } else if (normalizedExit.targetRoomId && normalizedExit.targetEntranceId) {
+      targetRoom = this.biomeGenerator.loadRoom(normalizedExit.targetRoomId);
+      targetEntrance = targetRoom?.entrances?.[normalizedExit.targetEntranceId];
     }
 
     if (!targetRoom || !targetEntrance) {
       this.log('FAIL: transition called but failed — target room or entrance missing', {
-        exitId: exit.id ?? null,
+        exitId: normalizedExit.id ?? null,
         targetRoomResolved: Boolean(targetRoom),
         targetEntranceResolved: Boolean(targetEntrance),
-        targetMapType: exit.targetMapType ?? null,
-        targetRoomId: exit.targetRoomId ?? null,
-        targetEntryId: exit.targetEntryId ?? null,
-        targetEntranceId: exit.targetEntranceId ?? null,
+        targetMapType: normalizedExit.targetMapType ?? null,
+        targetRoomId: normalizedExit.targetRoomId ?? null,
+        targetEntryId: normalizedExit.targetEntryId ?? null,
+        targetEntranceId: normalizedExit.targetEntranceId ?? null,
       });
       return null;
     }

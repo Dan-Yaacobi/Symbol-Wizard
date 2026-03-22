@@ -159,6 +159,17 @@ function cloneExit(exit) {
     ...normalized,
     category: exit?.category ?? 'interactable',
     isInteractable: exit?.isInteractable ?? true,
+    interactionType: exit?.interactionType ?? 'exit',
+    interactionMode: exit?.interactionMode ?? 'touch',
+    interactionPriority: exit?.interactionPriority ?? 100,
+    interactionData: exit?.interactionData ?? {
+      targetMap: exit?.targetMap ?? exit?.targetMapType ?? null,
+      targetBiome: exit?.targetBiome ?? exit?.targetRoomId ?? null,
+      targetExitId: exit?.targetExitId ?? null,
+      targetEntryId: exit?.targetEntryId ?? exit?.targetEntranceId ?? null,
+      targetSeed: exit?.targetSeed ?? null,
+      meta: exit?.meta ?? null,
+    },
     targetMap: exit?.targetMap ?? exit?.targetMapType ?? null,
     targetBiome: exit?.targetBiome ?? exit?.targetRoomId ?? null,
     position: exit?.position ? { ...exit.position } : null,
@@ -190,6 +201,15 @@ function normalizeForestRoom(room, { biomeId, biomeSeed, returnLink = null } = {
         id: returnExitId,
         category: 'interactable',
         isInteractable: true,
+        interactionType: 'exit',
+        interactionMode: 'touch',
+        interactionPriority: 100,
+        interactionData: {
+          targetMap: 'town',
+          targetBiome: null,
+          targetEntryId: returnLink.targetEntryId ?? 'town_exit_main',
+          targetSeed: returnLink.targetSeed,
+        },
         position: { x: landing.x, y: landing.y },
         targetMapType: 'town',
         targetMap: 'town',
@@ -265,30 +285,6 @@ export class WorldMapManager {
     return town;
   }
 
-  installTownHouseInteractions(town) {
-    for (const object of town.objects ?? []) {
-      if (!object.enterable || !object.mapRef) continue;
-      object.interact = ({ transitionSystem } = {}) => {
-        const targetSeed = object.mapRef.targetSeed;
-        console.log('Entering house', object.id, targetSeed);
-        transitionSystem?.requestTransition({
-          id: `${object.id}-enter`,
-          position: { ...object.door },
-          targetMapType: 'house_interior',
-          targetSeed,
-          targetEntryId: 'house-door',
-          meta: {
-            houseId: object.id,
-            parentTownSeed: town.seed,
-            houseIndex: Number.parseInt(String(object.id).split('-').pop(), 10) || 0,
-            returnPosition: { x: object.door.x, y: object.door.y + 2 },
-            returnMapId: town.id,
-            returnEntryId: `return-${object.id}`,
-          },
-        });
-      };
-    }
-  }
 
   loadHouseInterior(seed, context = {}) {
     const mapId = this.buildMapId('house', seed);

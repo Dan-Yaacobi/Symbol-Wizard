@@ -410,8 +410,25 @@ function createHouseObject({ houseId, x, y, variant, footprint, interiorSeed, do
   house.enterable = true;
   house.interiorSeed = interiorSeed;
   house.door = door;
+  house.isInteractable = true;
   house.interactable = true;
-  house.interactionType = 'enter';
+  house.interactionType = 'door';
+  house.interactionMode = 'button';
+  house.interactionPriority = 70;
+  house.targetMapType = 'house_interior';
+  house.targetMap = 'house_interior';
+  house.targetSeed = interiorSeed;
+  house.targetEntryId = 'house-door';
+  house.meta = {
+    houseId,
+  };
+  house.interactionData = {
+    targetMap: 'house_interior',
+    targetRoom: 'house_interior',
+    targetSeed: interiorSeed,
+    targetEntryId: 'house-door',
+    houseId,
+  };
   return house;
 }
 
@@ -466,6 +483,16 @@ export class TownGenerator {
       id: exitId,
       category: 'interactable',
       isInteractable: true,
+      interactionType: 'exit',
+      interactionMode: 'touch',
+      interactionPriority: 100,
+      interactionData: {
+        targetMap: 'forest',
+        targetBiome: null,
+        targetExitId: null,
+        targetEntryId: 'forest_entry_from_town',
+        targetSeed: forestSeed,
+      },
       position: { ...exitLayout.exitPosition },
       direction: exitLayout.direction,
       side: exitLayout.side,
@@ -516,11 +543,6 @@ export class TownGenerator {
         interiorSeed,
         door,
       });
-      house.mapRef = {
-        targetMapType: 'house_interior',
-        targetSeed: interiorSeed,
-        targetEntryId: 'house-door',
-      };
       houses.push(house);
       markRect(blocked, left, top, houseWidth, houseHeight, 3);
       carveWidePath(grid, roadMask, { x: door.x, y: door.y + 2 }, { x: center.x + randomInt(rng, -8, 8), y: center.y + randomInt(rng, -4, 4) }, rng, 1);
@@ -688,6 +710,16 @@ export class TownGenerator {
       id: 'house-exit',
       category: 'interactable',
       isInteractable: true,
+      interactionType: 'exit',
+      interactionMode: 'touch',
+      interactionPriority: 100,
+      interactionData: {
+        targetMap: 'town',
+        targetBiome: null,
+        targetExitId: options.returnEntryId ?? 'house-return',
+        targetEntryId: options.returnEntryId ?? 'house-return',
+        targetSeed: options.parentTownSeed ?? seed,
+      },
       position: { x: doorX, y: height - 1 },
       targetMapType: 'town',
       targetMap: 'town',
