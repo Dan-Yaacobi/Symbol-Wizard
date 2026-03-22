@@ -17,6 +17,11 @@ export class WorldObject extends Entity {
       interaction: null,
       logicalShape: { kind: 'single', tiles: [[0, 0]] },
       blocksMovement: collision,
+      isInteractable: false,
+      interactionType: 'none',
+      interactionMode: 'button',
+      interactionPriority: 0,
+      interactionData: {},
       ...props,
     });
 
@@ -24,6 +29,12 @@ export class WorldObject extends Entity {
     this.blocksMovement = this.collision;
     this.interaction = this.interaction ?? null;
     this.logicalShape = this.logicalShape ?? { kind: 'single', tiles: [[0, 0]] };
+    this.isInteractable = Boolean(this.isInteractable ?? this.interactable ?? false);
+    this.interactable = this.isInteractable;
+    this.interactionType = this.interactionType ?? 'none';
+    this.interactionMode = this.interactionMode === 'touch' || this.interactionMode === 'either' ? this.interactionMode : 'button';
+    this.interactionPriority = Number.isFinite(this.interactionPriority) ? this.interactionPriority : 0;
+    this.interactionData = this.interactionData ?? {};
   }
 }
 
@@ -120,6 +131,11 @@ export class TownNPC extends WorldObject {
       role,
       dialogue,
       interactRadius: 8,
+      isInteractable: true,
+      interactionType: 'dialogue',
+      interactionMode: 'button',
+      interactionPriority: 80,
+      interactionData: { dialogueId: `npc-dialogue-${role}` },
       wanderRadius,
       homeX: x,
       homeY: y,

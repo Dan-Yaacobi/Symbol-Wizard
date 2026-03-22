@@ -37,7 +37,8 @@ import { PrefabEditorScreen } from './ui/PrefabEditorScreen.js';
 import { SpriteEditorScreen } from './ui/SpriteEditorScreen.js';
 import { palette } from './data/SpritePalette.js';
 import { visualTheme } from './data/VisualTheme.js';
-import { rollObjectLoot, tryInteractInFront } from './systems/ObjectInteractionSystem.js';
+import { rollObjectLoot } from './systems/ObjectInteractionSystem.js';
+import { tryInteract } from './systems/InteractionSystem.js';
 import { loadObjectsFromFolder } from './world/ObjectLibrary.js';
 import { loadAllSpriteAssets } from './data/SpriteAssetLoader.js';
 import {
@@ -795,14 +796,29 @@ function handlePlayer(dt) {
   syncEntityMovementState(player);
   player.castCooldown = runtimeConfig.get('player.castDuration');
 
-  if (!dialogueManager.isOpen && !isCraftingUIOpen && !inventoryWindow.isOpen()) {
+  if (!isCraftingUIOpen && !inventoryWindow.isOpen()) {
     const interactDown = input.isDown('e');
     if (interactDown && !interactLatch) {
-      tryInteractInFront(player, worldObjects, 2.4, {
-        transitionSystem: roomTransitionSystem,
-        activeRoom,
-        debug: exitDebugMode ? { enabled: true, prefix: '[ExitFlow]' } : null,
-      });
+      if (dialogueManager.isOpen) {
+        dialogueManager.closeDialogue();
+      } else {
+        const facing = player.facingVector ?? { x: 0, y: 1 };
+        tryInteract({
+          actor: player,
+          room: activeRoom,
+          positions: [
+            { x: Math.round(player.x), y: Math.round(player.y) },
+            { x: Math.round(player.x + facing.x), y: Math.round(player.y + facing.y) },
+          ],
+          triggerMode: 'button',
+          context: {
+            transitionSystem: roomTransitionSystem,
+            activeRoom,
+            dialogueManager,
+          },
+          debug: exitDebugMode ? { enabled: true, prefix: '[Interaction]' } : null,
+        });
+      }
     }
     interactLatch = interactDown;
 

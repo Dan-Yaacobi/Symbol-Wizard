@@ -1,4 +1,4 @@
-import { getInteractableAt } from '../world/InteractableResolver.js';
+import { tryInteract } from './InteractionSystem.js';
 
 function objectCollisionNodes(object) {
   if (Array.isArray(object.footprint) && object.footprint.length > 0) {
@@ -26,90 +26,29 @@ export function applyAttackToObject(object, damage = 1) {
   object.collision = false;
   object.attackable = false;
   object.interactable = false;
+  object.isInteractable = false;
   object.breakDuration = Number.isFinite(object.breakDuration) ? object.breakDuration : 0.28;
   object.breakTimer = object.breakDuration;
   return { destroyed: true, damaged: true };
 }
 
-export function interactWithObject(object, context = {}) {
-  if (!object?.interactable || object.destroyed) return false;
-  if (object.interactionType === 'activate') {
-    object.state.activated = true;
-    return true;
-  }
-  if (object.interactionType === 'open') {
-    if (object.state.opened) return false;
-    object.state.opened = true;
-    return true;
-  }
-  if (object.interactionType === 'rest') {
-    object.state.rested = true;
-    return true;
-  }
-  if (object.interactionType === 'heal') {
-    object.state.used = true;
-    return true;
-  }
-  if (object.interactionType === 'message') {
-    object.state.read = true;
-    return true;
-  }
-  if (typeof object.interact === 'function') {
-    object.interact(context);
-    return true;
-  }
-  return false;
-}
-
-export function tryInteractInFront(player, worldObjects, reach = 2.4, context = {}) {
+export function tryInteractInFront(player, worldObjects, context = {}) {
   const facing = player.facingVector ?? { x: 0, y: 1 };
-  const probeX = Math.round(player.x + facing.x);
-  const probeY = Math.round(player.y + facing.y);
-  const activeRoom = context.activeRoom ?? { objects: worldObjects };
-  const debug = context.debug ?? null;
-  const log = typeof debug === 'function'
-    ? debug
-    : (debug?.enabled ? (message, details) => {
-      if (details === undefined) console.info(debug.prefix ?? '[Interaction]', message);
-      else console.info(debug.prefix ?? '[Interaction]', message, details);
-    } : () => {});
+  const positions = [
+    { x: Math.round(player.x), y: Math.round(player.y) },
+    { x: Math.round(player.x + facing.x), y: Math.round(player.y + facing.y) },
+  ];
 
-  log('Interaction check runs', {
-    playerPosition: { x: player.x, y: player.y },
-    probePosition: { x: probeX, y: probeY },
-    facing,
+  const result = tryInteract({
+    actor: player,
+    room: context.activeRoom ?? { objects: worldObjects },
+    positions,
+    triggerMode: 'button',
+    context,
+    debug: context.debug ?? null,
   });
 
-  const interactable = getInteractableAt(activeRoom, probeX, probeY, debug);
-  if (interactable?.source === 'exit') {
-    log('Transition trigger called', {
-      exitId: interactable.id,
-      targetMap: interactable.targetMap,
-      targetBiome: interactable.targetBiome,
-    });
-    context.transitionSystem?.requestTransition(interactable.exitRef ?? interactable);
-    return interactable;
-  }
-
-  if (interactable?.source === 'object') {
-    const handled = interactWithObject(interactable, { player, ...context });
-    return handled ? interactable : null;
-  }
-
-  let best = null;
-  let bestDist = Infinity;
-  for (const object of worldObjects) {
-    if (object.destroyed || !object.interactable) continue;
-    if (!objectIntersectsCircle(object, probeX, probeY, 0.8)) continue;
-    const distance = Math.hypot(object.x - player.x, object.y - player.y);
-    if (distance > reach || distance >= bestDist) continue;
-    best = object;
-    bestDist = distance;
-  }
-
-  if (!best) return null;
-  const handled = interactWithObject(best, { player, ...context });
-  return handled ? best : null;
+  return result.success ? result : null;
 }
 
 export function rollObjectLoot(object) {
