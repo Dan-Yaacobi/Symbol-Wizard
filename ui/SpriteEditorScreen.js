@@ -132,7 +132,7 @@ export class SpriteEditorScreen {
       const path = await import('node:path');
       const outputPath = path.default.join(process.cwd(), 'assets', 'sprites', `${normalized.id}.json`);
       await saveSpriteAsset(normalized, outputPath);
-      await reloadSpriteAssets('./assets/sprites');
+      await reloadSpriteAssets('./assets');
       this.#refreshSpriteList();
       this.#setStatus(`Saved ${normalized.id}.json to assets/sprites and reloaded sprite assets.`, false);
       return;

@@ -1,4 +1,5 @@
-import { objectLibrary, spawnObject, OBJECT_CATEGORY } from './ObjectLibrary.js';
+import { spawnObject, OBJECT_CATEGORY } from './ObjectLibrary.js';
+import { getSpawnDefinitionsByCategory, spawnByCategory } from '../data/SpawnDefinitionRegistry.js';
 
 function randomInt(rng, min, max) {
   return Math.floor(rng() * (max - min + 1)) + min;
@@ -230,19 +231,21 @@ const OBJECT_RULES = {
     basePadding: 3,
     preferredZones: ['clearing', 'denseForest'],
   },
+  [OBJECT_CATEGORY.PROP]: {
+    categoryTag: 'PROP',
+    clusterAllowed: true,
+    basePadding: 0,
+    preferredZones: ['clearing', 'sparseForest'],
+  },
 };
 
 function buildBiomePool(biome, category) {
-  const entries = [];
-  for (const definition of Object.values(objectLibrary)) {
-    if (!definition) continue;
-    if (category && definition.category !== category) continue;
-    if (!isValidFootprint(definition.footprint)) continue;
-    const tags = Array.isArray(definition.biomeTags) ? definition.biomeTags : [];
-    if (biome && !tags.includes(biome)) continue;
-    entries.push([definition, definition.spawnWeight ?? 1]);
+  if (category === OBJECT_CATEGORY.LANDMARK) {
+    return getSpawnDefinitionsByCategory(null, biome)
+      .filter((definition) => definition?.placementCategory === OBJECT_CATEGORY.LANDMARK && isValidFootprint(definition.footprint));
   }
-  return entries;
+  return getSpawnDefinitionsByCategory(category, biome)
+    .filter((definition) => definition && isValidFootprint(definition.footprint));
 }
 
 function violatesAnchorDistance(tilesToCheck, anchors = [], minDistance = 0) {
@@ -435,7 +438,10 @@ function placeFromPool(params) {
   const objects = [];
 
   for (let i = 0; i < targetCount; i += 1) {
-    const definition = weightedChoice(rng, pools);
+    const weightedPool = pools.map((definition) => [definition, definition.spawnWeight ?? 1]);
+    const definition = category === OBJECT_CATEGORY.LANDMARK
+      ? weightedChoice(rng, weightedPool)
+      : (spawnByCategory(category, biomeType, rng) ?? weightedChoice(rng, weightedPool));
     if (!definition) continue;
 
     const center = selectBestCenter({
@@ -519,7 +525,7 @@ export class ObjectPlacementSystem {
       occupiedFootprintTiles: [],
     };
 
-    const categories = [OBJECT_CATEGORY.ENVIRONMENT, OBJECT_CATEGORY.DESTRUCTIBLE, OBJECT_CATEGORY.INTERACTABLE];
+    const categories = [OBJECT_CATEGORY.ENVIRONMENT, OBJECT_CATEGORY.DESTRUCTIBLE, OBJECT_CATEGORY.INTERACTABLE, OBJECT_CATEGORY.PROP];
     const objects = [];
 
     for (const category of categories) {
@@ -531,8 +537,8 @@ export class ObjectPlacementSystem {
         roomId,
         biomeType,
         category,
-        targetMin: 8,
-        targetMax: 16,
+        targetMin: category === OBJECT_CATEGORY.PROP ? 0 : 8,
+        targetMax: category === OBJECT_CATEGORY.PROP ? 0 : 16,
         idPrefix: 'object',
         allowClusters: true,
         safetyConfig,
@@ -577,8 +583,13 @@ export class ObjectPlacementSystem {
 }
 
 export function listObjectDefinitions(category = null) {
-  if (category) return buildBiomePool(null, category).map(([definition]) => definition.id);
-  return Object.values(objectLibrary).map((def) => def.id);
+  if (category) return buildBiomePool(null, category).map((definition) => definition.id);
+  return [
+    ...buildBiomePool(null, OBJECT_CATEGORY.ENVIRONMENT),
+    ...buildBiomePool(null, OBJECT_CATEGORY.DESTRUCTIBLE),
+    ...buildBiomePool(null, OBJECT_CATEGORY.INTERACTABLE),
+    ...buildBiomePool(null, OBJECT_CATEGORY.PROP),
+  ].map((definition) => definition.id);
 }
 
 export { buildBiomePool, placeCluster };

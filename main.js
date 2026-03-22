@@ -65,7 +65,7 @@ const devToolsPanel = new DevToolsPanel(runtimeConfig);
 runtimeConfig.setLogger((message) => logDev(message));
 
 await loadObjectsFromFolder('./assets/objects');
-await loadAllSpriteAssets('./assets/sprites');
+await loadAllSpriteAssets('./assets');
 
 const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
 const worldMapManager = new WorldMapManager({ biomeGenerator, roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
