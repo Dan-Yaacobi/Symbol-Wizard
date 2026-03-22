@@ -9,7 +9,7 @@ function renderGlyphMatrix(entity, sprite) {
 }
 
 resetSpriteAssetStore();
-await loadAllSpriteAssets('./assets/sprites');
+await loadAllSpriteAssets('./assets');
 
 const plainFrame = getSpriteFrame('slime', 'walk', 0);
 const authoredFrameA = getSpriteFrame('spider', 'walk', 0);

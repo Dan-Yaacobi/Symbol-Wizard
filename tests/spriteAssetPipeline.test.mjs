@@ -64,7 +64,7 @@ assert.equal(imported.animations.idle.length, 1);
 assert.equal(imported.animations.walk.length, 0);
 
 resetSpriteAssetStore();
-await loadAllSpriteAssets('./assets/sprites');
+await loadAllSpriteAssets('./assets');
 assert.ok(getSpriteAsset('player'));
 assert.equal(getSpriteAnimation('wasp', 'walk').length > 0, true);
 const playerFrame = getSpriteFrame('player', 'walk', 1);

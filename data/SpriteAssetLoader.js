@@ -1,6 +1,7 @@
+import { getAssetPath, loadAssetRegistry } from './AssetRegistry.js';
 import { normalizeSpriteAsset, validateSpriteAsset } from './SpriteAssetSchema.js';
 
-const DEFAULT_SPRITE_ASSET_FOLDER = './assets/sprites';
+const DEFAULT_SPRITE_ASSET_FOLDER = './assets';
 const spriteAssetStore = new Map();
 let loadedAssetFolder = null;
 
@@ -25,19 +26,16 @@ async function resolveFolder(folder) {
 }
 
 async function listSpriteAssetFiles(folder) {
-  const resolvedFolder = await resolveFolder(folder);
-  if (canUseNodeFs()) {
-    const [fs, path] = await Promise.all([import('node:fs/promises'), import('node:path')]);
-    const entries = await fs.default.readdir(resolvedFolder, { withFileTypes: true });
-    return entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.json') && entry.name !== 'registry.json')
-      .map((entry) => path.default.join(resolvedFolder, entry.name))
-      .sort();
-  }
+  await loadAssetRegistry();
+  const assetEntries = [...spriteAssetStore.keys()];
+  if (assetEntries.length > 0) return assetEntries.map((assetId) => getAssetPath(assetId)).filter(Boolean);
 
-  const registry = await readJson(`${resolvedFolder.replace(/\/$/, '')}/registry.json`);
-  const files = Array.isArray(registry?.sprites) ? registry.sprites : [];
-  return files.map((file) => `${resolvedFolder.replace(/\/$/, '')}/${file}`);
+  const resolvedFolder = await resolveFolder(folder);
+  const registry = await readJson(canUseNodeFs() ? `${resolvedFolder}/registry.json` : './assets/registry.json');
+  return Object.values(registry?.assets ?? {})
+    .filter((file) => typeof file === 'string' && file.endsWith('.json') && !file.startsWith('objects/'))
+    .map((file) => `${folder.replace(/\/$/, '')}/${file}`)
+    .sort();
 }
 
 export function registerSpriteAsset(asset) {
@@ -84,9 +82,16 @@ export async function loadSpriteAsset(assetPath) {
 export async function loadAllSpriteAssets(folder = DEFAULT_SPRITE_ASSET_FOLDER) {
   const resolvedFolder = await resolveFolder(folder);
   if (loadedAssetFolder === resolvedFolder && spriteAssetStore.size > 0) return getAllSpriteAssets();
-  const files = await listSpriteAssetFiles(resolvedFolder);
+  await loadAssetRegistry();
+  const files = [...new Set((await listSpriteAssetFiles(folder)).filter(Boolean))];
   resetSpriteAssetStore();
-  await Promise.all(files.map((file) => loadSpriteAsset(file)));
+  await Promise.all(files.map(async (file) => {
+    try {
+      await loadSpriteAsset(file);
+    } catch (error) {
+      console.warn(`[SpriteAssetLoader] Failed to load sprite asset at ${file}.`, error);
+    }
+  }));
   loadedAssetFolder = resolvedFolder;
   return getAllSpriteAssets();
 }

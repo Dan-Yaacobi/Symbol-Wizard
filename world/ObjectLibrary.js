@@ -1,8 +1,10 @@
+import { createDefinition as createSpawnDefinition, SPAWN_CATEGORY } from '../data/DefinitionUtils.js';
 const OBJECT_CATEGORY = {
-  ENVIRONMENT: 'environment',
-  DESTRUCTIBLE: 'destructible',
-  INTERACTABLE: 'interactable',
+  ENVIRONMENT: SPAWN_CATEGORY.ENVIRONMENT,
+  DESTRUCTIBLE: SPAWN_CATEGORY.LOOT,
+  INTERACTABLE: SPAWN_CATEGORY.INTERACTABLE,
   LANDMARK: 'landmark',
+  PROP: SPAWN_CATEGORY.PROP,
 };
 
 function normalizeFootprint(footprint) {
@@ -67,8 +69,7 @@ function visual(char, fg, bg = null) {
 export function parseBlueprint(blueprint, glyphPalette = {}) {
   if (!Array.isArray(blueprint) || blueprint.length === 0) {
     return {
-      footprint: [{ x: 0, y: 0 }],
-      tileVariants: [{ x: 0, y: 0, char: '•', fg: '#d8d2c4', bg: null }],
+        tileVariants: [{ x: 0, y: 0, char: '•', fg: '#d8d2c4', bg: null }],
       centerOffset: { x: 0, y: 0 },
     };
   }
@@ -121,7 +122,9 @@ function createDefinition(definition) {
   const explicitTiles = normalizeTiles(definition.tiles);
   const variants = Array.isArray(definition.variants) ? definition.variants : [];
 
-  return {
+  const placementCategory = definition.category === OBJECT_CATEGORY.LANDMARK ? OBJECT_CATEGORY.LANDMARK : definition.category;
+
+  return createSpawnDefinition({
     hp: null,
     drops: [],
     biomeTags: ['forest'],
@@ -129,24 +132,23 @@ function createDefinition(definition) {
     destructible: false,
     interactable: false,
     rotations: false,
-    footprint: [{ x: 0, y: 0 }],
     clusterMin: undefined,
     clusterMax: undefined,
     clusterRadius: undefined,
     rarity: 'common',
-    variants: [],
-    tiles: [],
     spawnWeight: 1,
     minClusterSize: 1,
     maxClusterSize: 1,
     allowOverlap: false,
     biomeRarity: 'common',
     ...definition,
+    category: definition.category === OBJECT_CATEGORY.LANDMARK ? SPAWN_CATEGORY.ENVIRONMENT : definition.category,
+    placementCategory,
     centerOffset: parsed?.centerOffset ?? { x: 0, y: 0 },
     footprint,
     variants,
     tiles: explicitTiles.length > 0 ? explicitTiles : blueprintTiles,
-  };
+  });
 }
 
 function rotatePoint(x, y, quarterTurns) {
@@ -458,7 +460,7 @@ function definitionFromPrefab(prefab) {
 
   return createDefinition({
     id,
-    category: OBJECT_CATEGORY.ENVIRONMENT,
+    category: prefab.category ?? (Array.isArray(prefab.interaction) && prefab.interaction.length > 0 ? OBJECT_CATEGORY.INTERACTABLE : OBJECT_CATEGORY.ENVIRONMENT),
     biomeTags: tags,
     blocksMovement: collisionFootprint.length > 0,
     interactable: Array.isArray(prefab.interaction) && prefab.interaction.length > 0,
@@ -561,6 +563,7 @@ export function spawnObject(type, position, overrides = {}, rng = Math.random) {
     type,
     name: definition.id,
     category: definition.category,
+    assetId: definition.assetId,
     biomeTags: [...definition.biomeTags],
     x: position.x,
     y: position.y,
