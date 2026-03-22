@@ -16,6 +16,16 @@ function assertReachable(room, spawn, point, label) {
   assert.ok(reachable.has(`${point.x},${point.y}`), `${label} should be reachable from spawn.`);
 }
 
+function isPlayerCenterUsable(room, x, y) {
+  for (let oy = -1; oy <= 1; oy += 1) {
+    for (let ox = -1; ox <= 1; ox += 1) {
+      const tile = room.tiles?.[y + oy]?.[x + ox];
+      if (!tile?.walkable) return false;
+    }
+  }
+  return true;
+}
+
 function run() {
   const biomeGenerator = new BiomeGenerator({ roomWidth: 120, roomHeight: 90, runtimeConfig: null });
   const worldMapManager = new WorldMapManager({ biomeGenerator, roomWidth: 120, roomHeight: 90, runtimeConfig: null });
@@ -44,6 +54,11 @@ function run() {
   assert.equal(interior.type, 'house_interior');
   assert.equal(interior.seed, house.interiorSeed);
   assert.ok(interior.exits.some((exit) => exit.targetMapType === 'town'), 'Interior should contain a return exit.');
+  const houseExitCorridor = interior.exitCorridors.find((corridor) => corridor.exitId === 'house-exit');
+  assert.ok(houseExitCorridor, 'House interior should expose a return trigger corridor.');
+  const usableHouseTrigger = houseExitCorridor.triggerTiles.find((tile) => isPlayerCenterUsable(interior, tile.x, tile.y));
+  assert.ok(usableHouseTrigger, 'House return exit should expose at least one trigger tile the player can occupy.');
+  assert.equal(transitionSystemDetectExit(interior, usableHouseTrigger, biomeGenerator, worldMapManager), 'house-exit', 'House return trigger tile should resolve through the transition system.');
 
   const forestExit = town.exits.find((exit) => exit.targetMapType === 'forest');
   assert.ok(forestExit, 'Town should have a forest transition exit.');
@@ -68,6 +83,15 @@ function run() {
   assert.ok(town.metadata.forestEnvelope.transitionTiles > 0, 'Town should expose a transition band between town and forest.');
   assertReachable(town, town.entrances['initial-spawn'].spawn, forestExit.position, 'Town forest exit');
   assertReachable(town, town.entrances['initial-spawn'].spawn, town.entrances[forestExit.id].spawn, 'Town forest exit landing');
+  const townExitCorridor = town.exitCorridors.find((corridor) => corridor.exitId === forestExit.id);
+  assert.ok(townExitCorridor, 'Town should provide trigger tiles for the forest exit.');
+  assert.ok(
+    townExitCorridor.triggerTiles.every((tile) => tile.x >= 0 && tile.y >= 0 && tile.x < town.tiles[0].length && tile.y < town.tiles.length),
+    'Town exit trigger tiles should stay inside the map bounds.',
+  );
+  const usableTownTrigger = townExitCorridor.triggerTiles.find((tile) => isPlayerCenterUsable(town, tile.x, tile.y));
+  assert.ok(usableTownTrigger, 'Town forest exit should expose at least one trigger tile the player can occupy.');
+  assert.equal(transitionSystemDetectExit(town, usableTownTrigger, biomeGenerator, worldMapManager), forestExit.id, 'Town forest exit trigger tile should resolve through the transition system.');
 
   const forest = worldMapManager.resolveMapByExit(town, forestExit);
   assert.equal(forest.type, 'forest');
@@ -102,6 +126,12 @@ function run() {
   assert.equal(Math.round(player.y), house.door.y + 2);
 
   console.log('Town world generation tests passed.');
+}
+
+function transitionSystemDetectExit(room, tile, biomeGenerator, worldMapManager) {
+  const transitionSystem = new RoomTransitionSystem({ biomeGenerator, worldMapManager, fadeDurationMs: 1 });
+  const player = new Player(tile.x, tile.y);
+  return transitionSystem.detectExit(room, player)?.id ?? null;
 }
 
 run();

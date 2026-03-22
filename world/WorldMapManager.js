@@ -156,6 +156,10 @@ function ensureForestEntranceReachable(room, exits, entryId, roadWidth = 3) {
 function cloneExit(exit) {
   return {
     ...exit,
+    category: exit?.category ?? 'interactable',
+    isInteractable: exit?.isInteractable ?? true,
+    targetMap: exit?.targetMap ?? exit?.targetMapType ?? null,
+    targetBiome: exit?.targetBiome ?? exit?.targetRoomId ?? null,
     position: exit?.position ? { ...exit.position } : null,
   };
 }
@@ -183,8 +187,11 @@ function normalizeForestRoom(room, { biomeId, biomeSeed, returnLink = null } = {
     if (!existing) {
       exits.push({
         id: returnExitId,
+        category: 'interactable',
+        isInteractable: true,
         position: { x: landing.x, y: landing.y },
         targetMapType: 'town',
+        targetMap: 'town',
         targetSeed: returnLink.targetSeed,
         targetEntryId: returnLink.targetEntryId ?? 'town_exit_main',
         width: Math.max(2, returnLink.roadWidth ?? 3),
