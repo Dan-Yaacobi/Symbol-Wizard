@@ -128,6 +128,13 @@ function collectExitAt(room, x, y) {
   const exits = Array.isArray(room?.exits)
     ? room.exits
     : Object.entries(room?.exits ?? {}).map(([id, exit]) => ({ id, ...exit }));
+
+  const directExit = exits.find((candidate) => {
+    const position = candidate?.position ?? null;
+    return Math.round(position?.x ?? Number.NaN) === x && Math.round(position?.y ?? Number.NaN) === y;
+  }) ?? null;
+  if (directExit) return normalizeExitInteractable(directExit, x, y);
+
   const corridor = (room?.exitCorridors ?? []).find((candidate) => (candidate?.triggerTiles ?? []).some((tilePos) => tilePos.x === x && tilePos.y === y)) ?? null;
   if (!corridor) return null;
   const exit = exits.find((candidate) => candidate.id === corridor.exitId) ?? null;

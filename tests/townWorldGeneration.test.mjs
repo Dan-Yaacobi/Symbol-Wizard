@@ -117,20 +117,18 @@ function run() {
   assertReachable(forest, forest.entrances['forest_entry_from_town'].spawn, forestReturnExit.position, 'Forest town return exit');
 
   const transitionSystem = new RoomTransitionSystem({ biomeGenerator, worldMapManager, fadeDurationMs: 1 });
-  const player = new Player(house.door.x, house.door.y + 2);
-  transitionSystem.requestTransition({
-    id: 'test-house-enter',
-    targetMapType: 'house_interior',
-    targetSeed: house.interiorSeed,
-    targetEntryId: 'house-door',
-    meta: {
-      parentTownSeed: town.seed,
-      returnEntryId: `return-${house.id}`,
-      returnPosition: { x: house.door.x, y: house.door.y + 2 },
-      houseId: house.id,
-      houseIndex: 0,
-    },
+  const player = new Player(house.door.x, house.door.y);
+  const houseExit = town.exits.find((exit) => exit.id === `return-${house.id}`);
+  assert.ok(houseExit, 'Town should register each house door as a structured exit.');
+  const interactResult = tryInteract({
+    actor: player,
+    room: town,
+    positions: [{ x: house.door.x, y: house.door.y }],
+    triggerMode: 'button',
+    context: { transitionSystem },
   });
+  assert.equal(interactResult.success, true, 'House doors should be interactable via the unified interaction system.');
+  assert.equal(interactResult.reason, 'transition_requested', 'House door interactions should request a room transition.');
   const entered = transitionSystem.update(0.01, { activeRoom: town, player });
   assert.equal(entered.room.type, 'house_interior', 'Transition system should enter interiors.');
   const houseDoorEntrance = entered.room.entrances['house-door'];
