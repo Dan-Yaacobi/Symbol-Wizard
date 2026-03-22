@@ -4,9 +4,16 @@ import { BiomeGenerator } from '../world/BiomeGenerator.js';
 import { WorldMapManager } from '../world/WorldMapManager.js';
 import { RoomTransitionSystem } from '../world/RoomTransitionSystem.js';
 import { Player } from '../entities/Player.js';
+import { buildCollidableMask, floodFillWalkable } from '../world/PathConnectivity.js';
 
 function edgeDistance(width, height, x, y) {
   return Math.min(x, y, (width - 1) - x, (height - 1) - y);
+}
+
+
+function assertReachable(room, spawn, point, label) {
+  const reachable = floodFillWalkable(room.tiles, spawn, buildCollidableMask(room.objects ?? []));
+  assert.ok(reachable.has(`${point.x},${point.y}`), `${label} should be reachable from spawn.`);
 }
 
 function run() {
@@ -59,9 +66,16 @@ function run() {
   const envelopeDensity = 1 - ((envelopeWalkable.length - roadEnvelope.length) / Math.max(1, town.metadata.forestEnvelope.envelopeTiles));
   assert.ok(envelopeDensity >= 0.7, `Forest envelope should stay dense, got ${envelopeDensity.toFixed(3)}.`);
   assert.ok(town.metadata.forestEnvelope.transitionTiles > 0, 'Town should expose a transition band between town and forest.');
+  assertReachable(town, town.entrances['initial-spawn'].spawn, forestExit.position, 'Town forest exit');
+  assertReachable(town, town.entrances['initial-spawn'].spawn, town.entrances[forestExit.id].spawn, 'Town forest exit landing');
+
   const forest = worldMapManager.resolveMapByExit(town, forestExit);
   assert.equal(forest.type, 'forest');
   assert.ok(forest.exits.some((exit) => exit.targetMapType === 'town'), 'Forest start map should include a town return exit.');
+  assertReachable(forest, forest.entrances['forest_entry_from_town'].spawn, forest.entrances['forest_entry_from_town'].spawn, 'Forest entry spawn');
+  const forestReturnExit = forest.exits.find((exit) => exit.targetMapType === 'town');
+  assert.ok(forestReturnExit, 'Forest should expose a town return exit.');
+  assertReachable(forest, forest.entrances['forest_entry_from_town'].spawn, forestReturnExit.position, 'Forest town return exit');
 
   const transitionSystem = new RoomTransitionSystem({ biomeGenerator, worldMapManager, fadeDurationMs: 1 });
   const player = new Player(house.door.x, house.door.y + 2);

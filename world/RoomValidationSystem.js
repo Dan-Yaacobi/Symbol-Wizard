@@ -1,4 +1,5 @@
 import { LANDING_SAFE_RADIUS, PATH_CORRIDOR_WIDTH } from './GenerationConstants.js';
+import { isWalkable as isTileWalkable } from './PathConnectivity.js';
 
 function oppositeDirection(direction) {
   if (direction === 'north') return 'south';
@@ -7,7 +8,8 @@ function oppositeDirection(direction) {
   return 'east';
 }
 
-function walkable(tile) {
+function walkable(tile, grid = null, x = null, y = null) {
+  if (grid && Number.isFinite(x) && Number.isFinite(y)) return isTileWalkable(grid, x, y);
   return Boolean(tile?.walkable);
 }
 
@@ -102,7 +104,7 @@ export class RoomValidationSystem {
         continue;
       }
 
-      if (!walkable(grid[anchor.landingY]?.[anchor.landingX])) {
+      if (!walkable(grid[anchor.landingY]?.[anchor.landingX], grid, anchor.landingX, anchor.landingY)) {
         errors.push({ type: 'LANDING_INVALID', roomId: roomNode.id, anchorId: anchor.id, detail: 'Landing tile not walkable' });
       }
       if (objectCollisionAt(objects, anchor.landingX, anchor.landingY)) {
@@ -112,7 +114,7 @@ export class RoomValidationSystem {
       let landingUnsafe = false;
       for (let oy = -LANDING_SAFE_RADIUS; oy <= LANDING_SAFE_RADIUS && !landingUnsafe; oy += 1) {
         for (let ox = -LANDING_SAFE_RADIUS; ox <= LANDING_SAFE_RADIUS; ox += 1) {
-          if (!walkable(grid[anchor.landingY + oy]?.[anchor.landingX + ox])) {
+          if (!walkable(grid[anchor.landingY + oy]?.[anchor.landingX + ox], grid, anchor.landingX + ox, anchor.landingY + oy)) {
             landingUnsafe = true;
             break;
           }
@@ -124,7 +126,7 @@ export class RoomValidationSystem {
     }
 
     for (const anchor of Object.values(plan.exitAnchors)) {
-      if (!walkable(grid[anchor.y]?.[anchor.x])) {
+      if (!walkable(grid[anchor.y]?.[anchor.x], grid, anchor.x, anchor.y)) {
         errors.push({ type: 'TILE_CONSISTENCY', roomId: roomNode.id, anchorId: anchor.id, detail: 'Anchor tile blocked' });
       }
 

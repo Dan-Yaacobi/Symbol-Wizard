@@ -1,8 +1,7 @@
 import { TownGenerator } from './TownGenerator.js';
 import { hashSeed } from './SeededRandom.js';
 import { tiles } from './TilePalette.js';
-
-
+import { buildCollidableMask, carvePath, floodFillWalkable, nearestReachablePoint } from './PathConnectivity.js';
 
 function cloneTile(tile) {
   return { ...tile };
@@ -99,6 +98,61 @@ function carveForestEntry(room, entryId, direction, roadWidth = 3) {
   };
 }
 
+
+function ensureForestEntranceReachable(room, exits, entryId, roadWidth = 3) {
+  const entrance = room?.entrances?.[entryId];
+  if (!room?.tiles?.length || !entrance) {
+    return { entranceReachable: false, exitReachable: false };
+  }
+
+  const spawn = entrance.spawn ?? { x: entrance.landingX ?? entrance.x, y: entrance.landingY ?? entrance.y };
+  const exit = Array.isArray(exits) ? exits.find((candidate) => candidate.targetMapType === 'town') : null;
+  const roadMask = new Set();
+  const objectMask = buildCollidableMask(room.objects ?? []);
+  let reachable = floodFillWalkable(room.tiles, spawn, objectMask);
+  const entranceKey = `${entrance.landingX},${entrance.landingY}`;
+  const exitPoint = exit?.position ?? { x: entrance.landingX, y: entrance.landingY };
+  const exitKey = `${exitPoint.x},${exitPoint.y}`;
+
+  const connectPoint = !reachable.has(entranceKey)
+    ? nearestReachablePoint(reachable, { x: entrance.landingX, y: entrance.landingY }) ?? spawn
+    : null;
+
+  if (connectPoint && (connectPoint.x !== entrance.landingX || connectPoint.y !== entrance.landingY)) {
+    console.warn('[WorldMapManager] Forest entrance connectivity repair', { entryId, connectPoint });
+    carvePath(room.tiles, { x: entrance.landingX, y: entrance.landingY }, connectPoint, {
+      width: Math.max(3, roadWidth),
+      jitterBias: 0.24,
+      carvedMask: roadMask,
+      removableObjects: room.objects ?? [],
+    });
+    reachable = floodFillWalkable(room.tiles, spawn, buildCollidableMask(room.objects ?? []));
+  }
+
+  if (!reachable.has(exitKey)) {
+    console.warn('[WorldMapManager] Forest town exit connectivity repair', { entryId, exitId: exit?.id ?? null });
+    carvePath(room.tiles, spawn, exitPoint, {
+      width: Math.max(3, roadWidth),
+      jitterBias: 0.3,
+      carvedMask: roadMask,
+      removableObjects: room.objects ?? [],
+    });
+    reachable = floodFillWalkable(room.tiles, spawn, buildCollidableMask(room.objects ?? []));
+    if (exit) exit.position = { ...exitPoint };
+  }
+
+  room.collisionMap = buildCollisionMap(room.tiles, room.objects ?? []);
+  room.metadata = {
+    ...(room.metadata ?? {}),
+    reachability: {
+      entranceReachable: reachable.has(entranceKey),
+      exitReachable: reachable.has(exitKey),
+    },
+  };
+
+  return room.metadata.reachability;
+}
+
 function cloneExit(exit) {
   return {
     ...exit,
@@ -146,7 +200,7 @@ function normalizeForestRoom(room, { biomeId, biomeSeed, returnLink = null } = {
     console.log('Forest → Town', biomeSeed, '→', returnLink.targetSeed);
   }
 
-  room.collisionMap = buildCollisionMap(room.tiles, room.objects ?? []);
+  const reachability = ensureForestEntranceReachable(room, exits, 'forest_entry_from_town', returnLink?.roadWidth ?? 3);
 
   return {
     ...room,
@@ -161,6 +215,7 @@ function normalizeForestRoom(room, { biomeId, biomeSeed, returnLink = null } = {
       ...(room.metadata ?? {}),
       biomeId,
       biomeSeed,
+      reachability,
     },
   };
 }
