@@ -748,6 +748,7 @@ export class TownGenerator {
           id: 'house-door',
           x: doorX,
           y: height - 1,
+          direction: 'south',
           spawn: { x: doorX, y: height - 2 },
           landingX: doorX,
           landingY: height - 2,
