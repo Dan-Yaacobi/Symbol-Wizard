@@ -16,6 +16,45 @@ export function objectOccupiesTile(object, x, y) {
   });
 }
 
+function buildDebugLogger(debug) {
+  if (typeof debug === 'function') return debug;
+  if (!debug?.enabled) return () => {};
+  const prefix = debug.prefix ?? '[InteractableResolver]';
+  return (message, details) => {
+    if (details === undefined) console.info(prefix, message);
+    else console.info(prefix, message, details);
+  };
+}
+
+function normalizeExitInteractable(exit, x, y) {
+  const targetMap = exit?.targetMapType ?? exit?.interactionData?.targetType ?? null;
+  const targetBiome = exit?.targetRoomId ?? exit?.interactionData?.targetId ?? null;
+  return {
+    id: exit?.id ?? `exit-${x}-${y}`,
+    x,
+    y,
+    category: 'interactable',
+    isInteractable: true,
+    interactable: true,
+    interactionType: 'exit',
+    targetMap,
+    targetBiome,
+    targetEntryId: exit?.targetEntryId ?? exit?.interactionData?.entryId ?? null,
+    targetEntranceId: exit?.targetEntranceId ?? null,
+    exitRef: exit,
+    source: 'exit',
+  };
+}
+
+function normalizeObjectInteractable(object) {
+  return {
+    ...object,
+    category: 'interactable',
+    isInteractable: true,
+    source: 'object',
+  };
+}
+
 export function getInteractableAt(room, x, y, debug = null) {
   return getBestInteractableAt(room, x, y, { debug }) ?? null;
 }

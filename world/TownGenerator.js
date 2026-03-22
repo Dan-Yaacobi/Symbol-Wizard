@@ -3,6 +3,7 @@ import { House, StaticObject, TownNPC } from '../entities/WorldObjects.js';
 import { ObjectPlacementSystem } from './ObjectPlacementSystem.js';
 import { createSeededRng, hashSeed, pickOne, randomInt } from './SeededRandom.js';
 import { buildCollidableMask, carvePath, floodFillWalkable } from './PathConnectivity.js';
+import { createRegionResult, ensureRegionConnectivity, normalizeExit, placeRegionExits, townDefinitions } from './RegionGenerationSystem.js';
 
 function cloneTile(tile) {
   return { ...tile };
@@ -453,8 +454,13 @@ export class TownGenerator {
     this.objectPlacementSystem = new ObjectPlacementSystem();
   }
 
-  generateTown(seed) {
+  generateTown(seed, context = {}) {
+    const townType = context.townType ?? 'forestTown';
+    const townDefinition = townDefinitions[townType] ?? townDefinitions.forestTown;
+    const debug = context.options?.debug ?? false;
+    const logDebug = debug ? (message, details = {}) => console.info('[TownGenerator]', message, details) : () => {};
     const rng = createSeededRng(seed);
+    logDebug('generation started', { townType, seed });
     const grid = makeGrid(this.width, this.height, tiles.grass);
     paintGrass(grid, rng);
 
@@ -496,13 +502,16 @@ export class TownGenerator {
       targetEntryId: 'forest_entry_from_town',
       width: exitLayout.roadWidth,
       label: 'Forest Path',
+      targetType: 'biome',
+      targetId: forestSeed,
       meta: {
         townSeed: seed,
         forestSeed,
         exitSide: exitLayout.side,
         roadWidth: exitLayout.roadWidth,
+        townType,
       },
-    }];
+    }].map((exit) => normalizeExit(exit, { targetType: 'biome', targetId: forestSeed, entryId: 'forest_entry_from_town' }));
 
     const candidateRows = [plaza.top - 24, plaza.top - 10, plaza.top + plaza.height + 8, plaza.top + plaza.height + 22]
       .filter((y) => y > 10 && y < this.height - 14);
@@ -623,10 +632,9 @@ export class TownGenerator {
       allowedEdgeTiles: exitLayout.edgeTiles,
     });
 
-    const map = {
+    const map = createRegionResult({
       id: `town-${seed}`,
-      type: 'town',
-      seed,
+      regionType: 'town',
       tiles: grid,
       objects: [...decorativeObjects, ...houses],
       npcs,
@@ -635,8 +643,10 @@ export class TownGenerator {
       entrances,
       exitCorridors,
       collisionMap: buildCollisionMap(grid, [...decorativeObjects, ...houses]),
-      state: { visited: false },
       metadata: {
+        townType,
+        seed,
+        biomeType: townDefinition.biomeType,
         plaza,
         houseCount,
         townExitSeed: forestSeed,
@@ -648,10 +658,14 @@ export class TownGenerator {
           denseTiles: forestEnvelope.denseMask.size,
           transitionTiles: forestEnvelope.transitionMask.size,
         },
+        generationPipeline: ['terrain', 'structures', 'objects', 'exits', 'connectivity'],
         reachability: validation,
       },
-    };
+    });
 
+    placeRegionExits({ region: map, exits, metadataType: 'townType', metadataValue: townType, seed, debug });
+    ensureRegionConnectivity(map, { spawn: { x: entryX, y: entryY }, debug, pathWidth: Math.max(3, exitLayout.roadWidth) });
+    logDebug('exit placement', { exits: map.exits.map((exit) => ({ id: exit.id, x: exit.x, y: exit.y, interactionData: exit.interactionData })) });
     console.log('Town exit side:', exitLayout.side, 'position:', exitLayout.exitPosition.x, exitLayout.exitPosition.y);
     console.log('Town → Forest', seed, '→', forestSeed);
     console.log('Generated town', seed, houseCount);
