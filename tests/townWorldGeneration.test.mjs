@@ -102,6 +102,18 @@ function run() {
   assert.ok(forestReturnExit, 'Forest should expose a town return exit.');
   assertReachable(forest, forest.entrances['forest_entry_from_town'].spawn, forestReturnExit.position, 'Forest town return exit');
 
+  const forestRoomExit = forest.exits.find((exit) => exit.targetRoomId);
+  assert.ok(forestRoomExit, 'Forest start room should expose an internal room transition.');
+  const connectedForestRoom = worldMapManager.resolveMapByExit(forest, forestRoomExit);
+  assert.equal(connectedForestRoom.type, 'forest', 'Forest room transitions should stay inside the forest biome.');
+  assert.notEqual(connectedForestRoom.sourceRoomId, forest.sourceRoomId, 'Forest room transition should load a different room.');
+  assert.equal(connectedForestRoom.seed, forest.seed, 'Forest room transitions should keep the same biome seed.');
+  const forestBackExit = connectedForestRoom.exits.find((exit) => exit.targetRoomId === forest.sourceRoomId);
+  assert.ok(forestBackExit, 'Connected forest room should provide a path back to the start room.');
+  const restoredForestStart = worldMapManager.resolveMapByExit(connectedForestRoom, forestBackExit);
+  assert.equal(restoredForestStart.sourceRoomId, forest.sourceRoomId, 'Returning through the room graph should restore the start room.');
+  assert.ok(restoredForestStart.exits.some((exit) => exit.targetMapType === 'town'), 'Returning to the start room should preserve the town return exit.');
+
   const transitionSystem = new RoomTransitionSystem({ biomeGenerator, worldMapManager, fadeDurationMs: 1 });
   const player = new Player(house.door.x, house.door.y + 2);
   transitionSystem.requestTransition({
