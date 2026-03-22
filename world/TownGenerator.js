@@ -2,6 +2,7 @@ import { tiles, tileFrom } from './TilePalette.js';
 import { House, StaticObject, TownNPC } from '../entities/WorldObjects.js';
 import { ObjectPlacementSystem } from './ObjectPlacementSystem.js';
 import { createSeededRng, hashSeed, pickOne, randomInt } from './SeededRandom.js';
+import { buildCollidableMask, carvePath, floodFillWalkable } from './PathConnectivity.js';
 
 function cloneTile(tile) {
   return { ...tile };
@@ -356,6 +357,50 @@ function sealForestLeaks(grid, envelopeMask, roadMask, exitLayout, rng) {
   };
 }
 
+
+
+function ensureTownExitReachable({ grid, objects, spawn, exit, entrance, roadMask, rng, allowedEdgeTiles = [] }) {
+  const objectMask = buildCollidableMask(objects);
+  const reachable = floodFillWalkable(grid, spawn, objectMask);
+  const exitKey = `${exit.position.x},${exit.position.y}`;
+  const entranceKey = `${entrance.landingX},${entrance.landingY}`;
+
+  if (!reachable.has(exitKey) || !reachable.has(entranceKey)) {
+    console.warn('[TownGenerator] Exit connectivity repair', {
+      exitReachable: reachable.has(exitKey),
+      entranceReachable: reachable.has(entranceKey),
+      exitId: exit.id,
+    });
+    carvePath(grid, spawn, exit.position, {
+      rng,
+      width: Math.max(3, exit.width ?? 3),
+      jitterBias: 0.32,
+      carvedMask: roadMask,
+      removableObjects: objects,
+    });
+
+    const allowedEdge = new Set(allowedEdgeTiles.map(({ x, y }) => `${x},${y}`));
+    const denseVariants = [tiles.denseTree, tiles.denseTreeSpire, tiles.denseTreeBloom, tiles.denseTreeCanopy, tiles.denseTreeShadow];
+    for (let y = 0; y < grid.length; y += 1) {
+      for (let x = 0; x < grid[0].length; x += 1) {
+        const isBorder = x === 0 || y === 0 || x === grid[0].length - 1 || y === grid.length - 1;
+        const key = `${x},${y}`;
+        if (!isBorder || allowedEdge.has(key)) continue;
+        if (!grid[y][x]?.walkable) continue;
+        grid[y][x] = cloneTile(denseVariants[Math.floor(rng() * denseVariants.length)] ?? tiles.denseTree);
+        roadMask.delete(key);
+      }
+    }
+  }
+
+  const repairedMask = buildCollidableMask(objects);
+  const finalReachable = floodFillWalkable(grid, spawn, repairedMask);
+  return {
+    exitReachable: finalReachable.has(exitKey),
+    entranceReachable: finalReachable.has(entranceKey),
+  };
+}
+
 function createHouseObject({ houseId, x, y, variant, footprint, interiorSeed, door }) {
   const house = new House(x, y, variant);
   house.id = houseId;
@@ -541,6 +586,17 @@ export class TownGenerator {
 
     const exitCorridors = exits.map((exit) => createExitCorridor(exit, exit.direction, exit.width, 5));
 
+    const validation = ensureTownExitReachable({
+      grid,
+      objects: decorativeObjects,
+      spawn: { x: entryX, y: entryY },
+      exit: exits[0],
+      entrance: entrances[exitId],
+      roadMask,
+      rng,
+      allowedEdgeTiles: exitLayout.edgeTiles,
+    });
+
     const map = {
       id: `town-${seed}`,
       type: 'town',
@@ -566,6 +622,7 @@ export class TownGenerator {
           denseTiles: forestEnvelope.denseMask.size,
           transitionTiles: forestEnvelope.transitionMask.size,
         },
+        reachability: validation,
       },
     };
 
