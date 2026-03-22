@@ -183,7 +183,8 @@ function createExitCorridor(exit, direction, width = 3, depth = 3) {
   const tilesOut = [];
   const lowOffset = -Math.floor((width - 1) / 2);
   const highOffset = Math.ceil((width - 1) / 2);
-  const delta = sideDelta(direction === 'north' ? 'top' : direction === 'south' ? 'bottom' : direction === 'west' ? 'left' : 'right');
+  const outward = sideDelta(direction === 'north' ? 'top' : direction === 'south' ? 'bottom' : direction === 'west' ? 'left' : 'right');
+  const delta = { x: -outward.x, y: -outward.y };
   const perp = direction === 'north' || direction === 'south' ? { x: 1, y: 0 } : { x: 0, y: 1 };
   for (let d = 0; d < depth; d += 1) {
     for (let w = lowOffset; w <= highOffset; w += 1) {
@@ -457,10 +458,13 @@ export class TownGenerator {
     const exitId = 'town_exit_main';
     const exits = [{
       id: exitId,
+      category: 'interactable',
+      isInteractable: true,
       position: { ...exitLayout.exitPosition },
       direction: exitLayout.direction,
       side: exitLayout.side,
       targetMapType: 'forest',
+      targetMap: 'forest',
       targetSeed: forestSeed,
       targetEntryId: 'forest_entry_from_town',
       width: exitLayout.roadWidth,
@@ -640,8 +644,10 @@ export class TownGenerator {
     fillRect(grid, 1, 1, width - 2, height - 2, tiles.floor);
 
     const doorX = Math.floor(width / 2);
-    grid[height - 1][doorX] = tileFrom(tiles.wood, { walkable: true });
-    grid[height - 2][doorX] = cloneTile(tiles.floor);
+    for (let offset = -1; offset <= 1; offset += 1) {
+      grid[height - 1][doorX + offset] = tileFrom(tiles.wood, { walkable: true });
+      grid[height - 2][doorX + offset] = cloneTile(tiles.floor);
+    }
 
     const objects = [];
     const furniture = [
@@ -666,8 +672,11 @@ export class TownGenerator {
 
     const exits = [{
       id: 'house-exit',
+      category: 'interactable',
+      isInteractable: true,
       position: { x: doorX, y: height - 1 },
       targetMapType: 'town',
+      targetMap: 'town',
       targetSeed: options.parentTownSeed ?? seed,
       targetEntryId: options.returnEntryId ?? 'house-return',
       width: 1,
@@ -698,7 +707,7 @@ export class TownGenerator {
           landingY: height - 2,
         },
       },
-      exitCorridors: [{ exitId: 'house-exit', triggerTiles: [{ x: doorX, y: height - 1 }] }],
+      exitCorridors: [createExitCorridor({ id: 'house-exit', position: { x: doorX, y: height - 1 } }, 'south', 1, 2)],
       collisionMap: buildCollisionMap(grid, objects),
       state: { visited: false },
       metadata: {

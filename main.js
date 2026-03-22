@@ -1,3 +1,4 @@
+/* global performance */
 import { Renderer } from './engine/Renderer.js';
 import { Camera } from './engine/Camera.js';
 import { Input } from './engine/Input.js';
@@ -86,7 +87,12 @@ let enemyAiEnabled = true;
 let applyEnemyTuningToExistingEnemies = false;
 const npcs = [];
 let worldObjects = activeRoom.objects ?? [];
-const roomTransitionSystem = new RoomTransitionSystem({ biomeGenerator, worldMapManager, fadeDurationMs: 150 });
+const roomTransitionSystem = new RoomTransitionSystem({
+  biomeGenerator,
+  worldMapManager,
+  fadeDurationMs: 150,
+  debug: false,
+});
 
 function randomSeed() {
   return Math.floor(Math.random() * 0x7fffffff);
@@ -332,7 +338,9 @@ const query = new URLSearchParams(window.location.search);
 const diagMode = query.get('diag') === '1';
 const diagMinimalMode = query.get('diag_minimal') === '1';
 const dialogueDebugMode = query.get('dialogue_debug') === '1';
+const exitDebugMode = query.get('exit_debug') === '1';
 DialogueManager.DEBUG = dialogueDebugMode;
+roomTransitionSystem.debug = exitDebugMode;
 
 function logBoot(message, details = undefined) {
   if (details === undefined) {
@@ -790,7 +798,11 @@ function handlePlayer(dt) {
   if (!dialogueManager.isOpen && !isCraftingUIOpen && !inventoryWindow.isOpen()) {
     const interactDown = input.isDown('e');
     if (interactDown && !interactLatch) {
-      tryInteractInFront(player, worldObjects, 2.4, { transitionSystem: roomTransitionSystem, activeRoom });
+      tryInteractInFront(player, worldObjects, 2.4, {
+        transitionSystem: roomTransitionSystem,
+        activeRoom,
+        debug: exitDebugMode ? { enabled: true, prefix: '[ExitFlow]' } : null,
+      });
     }
     interactLatch = interactDown;
 

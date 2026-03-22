@@ -1,3 +1,5 @@
+import { getInteractableAt } from './InteractableResolver.js';
+
 function isWalkableTile(room, x, y) {
   const row = room?.tiles?.[y];
   const tile = row?.[x];
@@ -45,10 +47,11 @@ function findSpawnPosition(room, preferredX, preferredY, maxRadius = 6) {
 }
 
 export class RoomTransitionSystem {
-  constructor({ biomeGenerator, worldMapManager = null, fadeDurationMs = 150 } = {}) {
+  constructor({ biomeGenerator, worldMapManager = null, fadeDurationMs = 150, debug = false } = {}) {
     this.biomeGenerator = biomeGenerator;
     this.worldMapManager = worldMapManager;
     this.fadeDuration = fadeDurationMs / 1000;
+    this.debug = debug;
     this.phase = 'idle';
     this.phaseTimer = 0;
     this.fadeAlpha = 0;
@@ -64,8 +67,25 @@ export class RoomTransitionSystem {
     this.exitTriggerLockTimer = 0;
   }
 
+  log(message, details = undefined) {
+    if (!this.debug) return;
+    if (details === undefined) {
+      console.info('[ExitFlow]', message);
+      return;
+    }
+    console.info('[ExitFlow]', message, details);
+  }
+
   requestTransition(exit) {
-    if (!exit) return;
+    if (!exit) {
+      this.log('FAIL: transition trigger — requestTransition called without exit');
+      return;
+    }
+    this.log('Transition trigger called', {
+      exitId: exit.id ?? null,
+      targetMapType: exit.targetMapType ?? exit.targetMap ?? null,
+      targetRoomId: exit.targetRoomId ?? exit.targetBiome ?? null,
+    });
     this.pendingExit = exit;
     this.phase = 'fadeOut';
     this.phaseTimer = 0;
@@ -110,14 +130,29 @@ export class RoomTransitionSystem {
   }
 
   detectExit(activeRoom, player) {
-    if (!activeRoom?.exitCorridors?.length) return null;
-
     const tx = Math.round(player.x);
     const ty = Math.round(player.y);
+    this.log('Player movement tick', { x: player.x, y: player.y, tile: { x: tx, y: ty } });
+    const interactable = getInteractableAt(activeRoom, tx, ty, {
+      enabled: this.debug,
+      prefix: '[ExitFlow]',
+    });
 
-    const hitZone = activeRoom.exitCorridors.find((corridor) => (corridor?.triggerTiles ?? corridor?.edgeTiles ?? []).some((tile) => tile.x === tx && tile.y === ty));
+    if (!interactable) {
+      this.log('FAIL: exit detection — player tile has no interactable exit', { x: tx, y: ty });
+      return null;
+    }
+    if (interactable.source !== 'exit') {
+      this.log('FAIL: exit detection — interactable found but is not an exit', {
+        x: tx,
+        y: ty,
+        source: interactable.source,
+        id: interactable.id ?? null,
+      });
+      return null;
+    }
 
-    return hitZone?.exitId ?? null;
+    return interactable.exitRef ?? interactable;
   }
 
   resolveExit(activeRoom, exitRef) {
@@ -130,8 +165,15 @@ export class RoomTransitionSystem {
   }
 
   switchRoom(context, exitRef) {
+    this.log('Transition trigger called', {
+      exitRefType: typeof exitRef,
+      exitId: typeof exitRef === 'object' ? exitRef?.id ?? null : exitRef,
+    });
     const exit = this.resolveExit(context.activeRoom, exitRef);
-    if (!exit) return null;
+    if (!exit) {
+      this.log('FAIL: transition called but failed — exit could not be resolved', { exitRef });
+      return null;
+    }
 
     let targetRoom = null;
     let targetEntrance = null;
@@ -144,7 +186,18 @@ export class RoomTransitionSystem {
       targetEntrance = targetRoom?.entrances?.[exit.targetEntranceId];
     }
 
-    if (!targetRoom || !targetEntrance) return null;
+    if (!targetRoom || !targetEntrance) {
+      this.log('FAIL: transition called but failed — target room or entrance missing', {
+        exitId: exit.id ?? null,
+        targetRoomResolved: Boolean(targetRoom),
+        targetEntranceResolved: Boolean(targetEntrance),
+        targetMapType: exit.targetMapType ?? null,
+        targetRoomId: exit.targetRoomId ?? null,
+        targetEntryId: exit.targetEntryId ?? null,
+        targetEntranceId: exit.targetEntranceId ?? null,
+      });
+      return null;
+    }
 
     context.activeRoom.state.visited = true;
     targetRoom.state = targetRoom.state ?? {};
@@ -156,7 +209,7 @@ export class RoomTransitionSystem {
     context.player.x = spawn.x;
     context.player.y = spawn.y;
 
-    console.log('Transition', context.activeRoom?.id, '→', targetRoom?.id);
+    this.log('Transition succeeded', { fromRoomId: context.activeRoom?.id ?? null, toRoomId: targetRoom?.id ?? null, spawn });
     this.exitTriggerLockTimer = 0.2;
 
     return {
@@ -164,4 +217,3 @@ export class RoomTransitionSystem {
     };
   }
 }
-

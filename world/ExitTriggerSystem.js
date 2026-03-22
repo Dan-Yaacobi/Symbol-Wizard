@@ -39,6 +39,11 @@ export class ExitTriggerSystem {
     for (const anchor of Object.values(plan.exitAnchors)) {
       const span = buildEdgeSpan(anchor, width, height);
       exits[anchor.id] = {
+        id: anchor.id,
+        category: 'interactable',
+        isInteractable: true,
+        targetMap: null,
+        targetBiome: anchor.targetRoomId ?? null,
         direction: anchor.direction,
         edgeStart: span.edgeStart,
         edgeEnd: span.edgeEnd,

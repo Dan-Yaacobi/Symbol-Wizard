@@ -1,3 +1,5 @@
+import { getInteractableAt } from '../world/InteractableResolver.js';
+
 function objectCollisionNodes(object) {
   if (Array.isArray(object.footprint) && object.footprint.length > 0) {
     return object.footprint.map(([ox, oy]) => ({ x: object.x + ox, y: object.y + oy, radius: 0.7 }));
@@ -63,6 +65,36 @@ export function tryInteractInFront(player, worldObjects, reach = 2.4, context = 
   const facing = player.facingVector ?? { x: 0, y: 1 };
   const probeX = Math.round(player.x + facing.x);
   const probeY = Math.round(player.y + facing.y);
+  const activeRoom = context.activeRoom ?? { objects: worldObjects };
+  const debug = context.debug ?? null;
+  const log = typeof debug === 'function'
+    ? debug
+    : (debug?.enabled ? (message, details) => {
+      if (details === undefined) console.info(debug.prefix ?? '[Interaction]', message);
+      else console.info(debug.prefix ?? '[Interaction]', message, details);
+    } : () => {});
+
+  log('Interaction check runs', {
+    playerPosition: { x: player.x, y: player.y },
+    probePosition: { x: probeX, y: probeY },
+    facing,
+  });
+
+  const interactable = getInteractableAt(activeRoom, probeX, probeY, debug);
+  if (interactable?.source === 'exit') {
+    log('Transition trigger called', {
+      exitId: interactable.id,
+      targetMap: interactable.targetMap,
+      targetBiome: interactable.targetBiome,
+    });
+    context.transitionSystem?.requestTransition(interactable.exitRef ?? interactable);
+    return interactable;
+  }
+
+  if (interactable?.source === 'object') {
+    const handled = interactWithObject(interactable, { player, ...context });
+    return handled ? interactable : null;
+  }
 
   let best = null;
   let bestDist = Infinity;
