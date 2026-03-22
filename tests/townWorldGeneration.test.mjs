@@ -5,6 +5,7 @@ import { WorldMapManager } from '../world/WorldMapManager.js';
 import { RoomTransitionSystem } from '../world/RoomTransitionSystem.js';
 import { Player } from '../entities/Player.js';
 import { buildCollidableMask, floodFillWalkable } from '../world/PathConnectivity.js';
+import { tryInteract } from '../systems/InteractionSystem.js';
 
 function edgeDistance(width, height, x, y) {
   return Math.min(x, y, (width - 1) - x, (height - 1) - y);
@@ -124,6 +125,25 @@ function run() {
   assert.equal(returned.room.type, 'town', 'Interior exit should return to town.');
   assert.equal(Math.round(player.x), house.door.x);
   assert.equal(Math.round(player.y), house.door.y + 2);
+
+
+  const malformedRoom = {
+    tiles: [[{ walkable: true, interaction: { id: 'broken-pickup', isInteractable: true, interactionMode: 'touch' } }]],
+    objects: [],
+    npcs: [],
+    entities: [],
+    exits: [],
+    exitCorridors: [],
+  };
+  const malformedResult = tryInteract({
+    actor: player,
+    room: malformedRoom,
+    positions: [{ x: 0, y: 0 }],
+    triggerMode: 'touch',
+    debug: { enabled: true, prefix: '[InteractionTest]' },
+  });
+  assert.equal(malformedResult.success, false, 'Malformed interactables should be skipped without crashing.');
+  assert.equal(malformedResult.reason, 'missing_interaction_type', 'Malformed interactables should report a clear failure reason.');
 
   console.log('Town world generation tests passed.');
 }

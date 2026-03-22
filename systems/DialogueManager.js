@@ -83,6 +83,7 @@ export class DialogueManager {
     this.currentDialogue = null;
     this.currentNode = null;
     this.activeNpc = null;
+    this.activeInteractable = null;
     this.isOpen = false;
     this.interactLatch = false;
     this.responseLatch = false;
@@ -111,9 +112,10 @@ export class DialogueManager {
     return { npc: nearestNpc, distance: nearestDistance };
   }
 
-  openDialogue(npc) {
+  openDialogue(npc, interactable = null) {
     this.activeNpc = npc;
     this.currentDialogue = buildNpcDialogue(npc, this.baseDialogueTree);
+    this.activeInteractable = interactable;
     this.currentNode = 'start';
     this.isOpen = true;
     this.transitionLocked = false;
@@ -131,6 +133,7 @@ export class DialogueManager {
     this.transitionLocked = false;
     this.setNpcEngagedState(false);
     this.activeNpc = null;
+    this.activeInteractable = null;
   }
 
   setNpcEngagedState(isEngaged) {
@@ -194,7 +197,7 @@ export class DialogueManager {
       }
     }
 
-    queueMicrotask(() => {
+    Promise.resolve().then(() => {
       if (!this.isOpen) return;
 
       if (!response.nextNode) {
@@ -213,6 +216,12 @@ export class DialogueManager {
     });
   }
 
+
+  getPromptNpc() {
+    const { npc: nearestNpc, distance } = this.findNearestNpc();
+    return nearestNpc && distance <= nearestNpc.interactRadius ? nearestNpc : null;
+  }
+
   handleInteractionPrompt(nearNpc) {
     const exitText = 'North Exit → Forest | East Exit → Dungeon | West Exit → Outskirts';
     const prompt = nearNpc
@@ -228,19 +237,7 @@ export class DialogueManager {
       this.activeNpc.dialoguePulse = Math.max(0, this.activeNpc.dialoguePulse - dt);
     }
 
-    const { npc: nearestNpc, distance } = this.findNearestNpc();
-    const nearNpc = nearestNpc && distance <= nearestNpc.interactRadius ? nearestNpc : null;
-    const pressedInteract = this.input.isDown('e');
-
-    if (pressedInteract && !this.interactLatch) {
-      if (this.isOpen) {
-        this.closeDialogue();
-      } else if (nearNpc) {
-        this.openDialogue(nearNpc);
-      }
-    }
-
-    this.interactLatch = pressedInteract;
+    const nearNpc = this.getPromptNpc();
 
     if (!this.isOpen) {
       this.handleInteractionPrompt(nearNpc);
