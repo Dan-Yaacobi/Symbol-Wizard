@@ -369,3 +369,59 @@ export class WorldMapManager {
     return deriveForestSeedFromTown(townSeed);
   }
 }
+installTownHouseInteractions(town) {
+  if (!town || !Array.isArray(town.objects)) return;
+
+  town.exits = town.exits ?? [];
+
+  const houseObjects = town.objects.filter(
+    (obj) =>
+      obj?.type === 'house' ||
+      obj?.tags?.includes?.('house') ||
+      obj?.category === 'building'
+  );
+
+  let houseIndex = 0;
+
+  for (const house of houseObjects) {
+    // Try to find door position
+    const door = house.door ?? house.entrance ?? null;
+
+    if (!door) continue;
+
+    const doorX = Math.round(house.x + (door.x ?? 0));
+    const doorY = Math.round(house.y + (door.y ?? 0));
+
+    const exitId = `house_exit_${houseIndex}`;
+
+    const exit = {
+      id: exitId,
+      category: 'interactable',
+      isInteractable: true,
+      interactionType: 'exit',
+      interactionMode: 'button', // important: not touch
+      interactionPriority: 90,
+
+      position: { x: doorX, y: doorY },
+
+      targetMapType: 'house_interior',
+      targetSeed: `${town.seed}-${houseIndex}`,
+
+      interactionData: {
+        targetMap: 'house_interior',
+        targetId: null,
+        targetEntryId: 'house_entry',
+        meta: {
+          parentTownSeed: town.seed,
+          returnEntryId: exitId,
+          returnPosition: { x: doorX, y: doorY },
+          houseIndex,
+        },
+      },
+    };
+
+    town.exits.push(exit);
+
+    houseIndex++;
+  }
+}
