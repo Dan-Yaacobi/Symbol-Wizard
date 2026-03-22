@@ -27,6 +27,20 @@ function isPlayerCenterUsable(room, x, y) {
   return true;
 }
 
+function expectedOffsetPosition(entrance) {
+  if (!entrance.direction) {
+    return {
+      x: entrance.spawn?.x ?? entrance.landingX ?? entrance.x,
+      y: entrance.spawn?.y ?? entrance.landingY ?? entrance.y,
+    };
+  }
+  if (entrance.direction === 'north') return { x: entrance.x, y: entrance.y + 2 };
+  if (entrance.direction === 'south') return { x: entrance.x, y: entrance.y - 2 };
+  if (entrance.direction === 'west') return { x: entrance.x + 2, y: entrance.y };
+  if (entrance.direction === 'east') return { x: entrance.x - 2, y: entrance.y };
+  return { x: entrance.x, y: entrance.y };
+}
+
 function run() {
   const biomeGenerator = new BiomeGenerator({ roomWidth: 120, roomHeight: 90, runtimeConfig: null });
   const worldMapManager = new WorldMapManager({ biomeGenerator, roomWidth: 120, roomHeight: 90, runtimeConfig: null });
@@ -119,12 +133,42 @@ function run() {
   });
   const entered = transitionSystem.update(0.01, { activeRoom: town, player });
   assert.equal(entered.room.type, 'house_interior', 'Transition system should enter interiors.');
+  const houseDoorEntrance = entered.room.entrances['house-door'];
+  assert.ok(houseDoorEntrance, 'House interior should expose the requested entrance.');
+  const expectedHouseSpawn = expectedOffsetPosition(houseDoorEntrance);
+  assert.deepEqual(
+    { x: Math.round(player.x), y: Math.round(player.y) },
+    expectedHouseSpawn,
+    'House entry spawn should land two tiles inside the room based on entrance direction.',
+  );
+  assert.ok(entered.room.tiles[player.y]?.[player.x]?.walkable, 'Offset house spawn should be walkable.');
+  assert.ok(!entered.room.collisionMap?.[player.y]?.[player.x], 'Offset house spawn should not collide.');
+  assert.equal(transitionSystem.detectExit(entered.room, player), null, 'Entering a room should not immediately retrigger its exit.');
 
   transitionSystem.requestTransition(entered.room.exits[0]);
   const returned = transitionSystem.update(0.01, { activeRoom: entered.room, player });
   assert.equal(returned.room.type, 'town', 'Interior exit should return to town.');
   assert.equal(Math.round(player.x), house.door.x);
   assert.equal(Math.round(player.y), house.door.y + 2);
+  assert.equal(transitionSystem.detectExit(returned.room, player), null, 'Returning to town should not immediately retrigger the forest or house exit.');
+
+  transitionSystem.requestTransition(forestExit);
+  const enteredForest = transitionSystem.update(0.01, { activeRoom: town, player });
+  assert.equal(enteredForest.room.type, 'forest', 'Town exit should enter the forest.');
+  const forestEntrance = enteredForest.room.entrances['forest_entry_from_town'];
+  const expectedForestSpawn = expectedOffsetPosition(forestEntrance);
+  assert.ok(
+    Math.round(player.x) >= expectedForestSpawn.x && Math.round(player.y) === expectedForestSpawn.y,
+    'Forest entry spawn should land at or beyond the two-tile inside offset when avoiding an invalid exit trigger tile.',
+  );
+  assert.ok(enteredForest.room.tiles[player.y]?.[player.x]?.walkable, 'Forest spawn should be walkable.');
+  assert.ok(!enteredForest.room.collisionMap?.[player.y]?.[player.x], 'Forest spawn should not collide.');
+  assert.notDeepEqual(
+    { x: Math.round(player.x), y: Math.round(player.y) },
+    forestReturnExit.position,
+    'Forest spawn should not land directly on the town return exit tile.',
+  );
+  assert.equal(transitionSystem.detectExit(enteredForest.room, player), null, 'Entering forest should not instantly trigger the town return exit.');
 
 
   const malformedRoom = {
