@@ -83,15 +83,6 @@ export function createPlayerStateDefinitions() {
   return {
     idle: createLocomotionState('idle'),
     walk: createLocomotionState('walk'),
-    attack: {
-      type: 'attack',
-      animation: 'attack',
-      duration: 0.24,
-      onEnter(entity) {
-        entity.attackImpactApplied = false;
-      },
-      onUpdate() {},
-    },
   };
 }
 
@@ -138,7 +129,6 @@ export function createEnemyStateDefinitions() {
 
 export function syncEntityMovementState(entity) {
   const state = ensureEntityState(entity);
-  if (state.type === 'attack') return;
   const nextState = getMovementState(entity);
   if (nextState !== state.type) setEntityState(entity, nextState);
 }

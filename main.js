@@ -766,9 +766,10 @@ function handlePlayer(dt) {
   const targetSpeed = runtimeConfig.get('player.speed');
   const accel = runtimeConfig.get('player.acceleration');
   const decel = runtimeConfig.get('player.deceleration');
-  const attackMoveMultiplier = player.state?.type === 'attack' ? 0.15 : 1;
-  const targetVx = moveX * targetSpeed * attackMoveMultiplier;
-  const targetVy = moveY * targetSpeed * attackMoveMultiplier;
+  const movementPolicy = player.activeAction?.movementPolicy;
+  const movementMultiplier = movementPolicy === 'slow' ? 0.15 : 1;
+  const targetVx = movementPolicy === 'blocked' ? 0 : moveX * targetSpeed * movementMultiplier;
+  const targetVy = movementPolicy === 'blocked' ? 0 : moveY * targetSpeed * movementMultiplier;
   const blend = Math.min(1, ((Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01) ? accel : decel) * dt);
   player.vx += (targetVx - player.vx) * blend;
   player.vy += (targetVy - player.vy) * blend;

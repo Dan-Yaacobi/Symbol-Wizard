@@ -17,7 +17,8 @@ export class Player extends Entity {
       speed: 20,
       spriteId: 'player',
       gold: 0,
-      castCooldown: 0,
+      castCooldown: 0.24,
+      activeAction: null,
       inventory: createInventory(24),
       stateDefinitions: createPlayerStateDefinitions(),
       animationTimings: {
