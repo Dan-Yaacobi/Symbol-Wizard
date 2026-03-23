@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { Player } from '../entities/Player.js';
 import { craftSpell, craftRecipeSpell, getCraftableSpellRecipes, getRecipeCraftingState } from '../systems/spells/SpellCrafting.js';
-import { castSpell } from '../systems/spells/SpellCaster.js';
+import { castSpell, updateSpellInstances } from '../systems/spells/SpellCaster.js';
+import { SpellRegistry, defaultSpellSlots } from '../data/spells.js';
 
 function sequenceRng(values) {
   let index = 0;
@@ -18,6 +19,7 @@ function buildCastingSystem() {
     effects: [],
     statuses: [],
     activeSpellInstances: [],
+    enemies: [{ x: 6, y: 4, alive: true, radius: 0.8 }],
     createProjectile(x, y, dx, dy, payload) {
       const projectile = { x, y, dx, dy, ...payload };
       this.projectiles.push(projectile);
@@ -26,10 +28,13 @@ function buildCastingSystem() {
     spawnEffect(effect) {
       this.effects.push(effect);
     },
-    getEntitiesInRadius() {
-      return [];
+    getEntitiesInRadius(x, y, radius) {
+      return this.enemies.filter((enemy) => Math.hypot(enemy.x - x, enemy.y - y) <= radius + (enemy.radius ?? 0));
     },
-    applySpellDamage() {},
+    applySpellDamage(target, damage) {
+      target.lastDamage = damage;
+      target.hitCount = (target.hitCount ?? 0) + 1;
+    },
     applyDamage() {},
     applyStatus(target, type, duration) {
       this.statuses.push({ target, type, duration });
@@ -38,21 +43,45 @@ function buildCastingSystem() {
   };
 }
 
-function testRecipesExposeFixedIdentity() {
+function testRecipesExposeSupportedBehaviorsAndElements() {
   const recipes = getCraftableSpellRecipes();
   assert.deepEqual(recipes.map((recipe) => recipe.name), [
     'Fire Bolt',
     'Frost Beam',
-    'Lightning Beam',
+    'Lightning Chain',
     'Poison Zone',
+    'Fire Aura',
+    'Frost Orbit',
+    'Arcane Nova',
     'Arcane Orb',
   ]);
-  assert.ok(recipes.every((recipe) => recipe.validElements.length >= 1));
+  assert.deepEqual([...new Set(recipes.map((recipe) => recipe.behavior))], [
+    'projectile',
+    'beam',
+    'chain',
+    'zone',
+    'aura',
+    'orbit',
+    'nova',
+  ]);
+  assert.deepEqual([...new Set(recipes.flatMap((recipe) => recipe.validElements))].sort(), [
+    'arcane',
+    'fire',
+    'frost',
+    'lightning',
+    'poison',
+  ]);
   assert.deepEqual(recipes.find((recipe) => recipe.id === 'frost_beam')?.ingredients, [
     { itemId: 'frost_core', amount: 1 },
     { itemId: 'essence', amount: 5 },
     { itemId: 'stone', amount: 10 },
   ]);
+}
+
+function testDefaultSpellbookIsClean() {
+  const defaultSpellbookIds = ['magic-bolt', 'blink', 'fire-burst'];
+  assert.deepEqual(defaultSpellSlots, defaultSpellbookIds);
+  assert.deepEqual(defaultSpellbookIds.map((spellId) => SpellRegistry[spellId]?.name), ['Magic Bolt', 'Blink', 'Fire Burst']);
 }
 
 function testCraftVariationAcrossRolls() {
@@ -66,11 +95,11 @@ function testCraftVariationAcrossRolls() {
 }
 
 function testIdentityAndGuaranteedEffectsArePreserved() {
-  const spell = craftSpell({ recipeId: 'lightning_beam', random: sequenceRng([0.1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]) });
+  const spell = craftSpell({ recipeId: 'lightning_chain', random: sequenceRng([0.1, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]) });
 
-  assert.equal(spell.recipeId, 'lightning_beam');
+  assert.equal(spell.recipeId, 'lightning_chain');
   assert.equal(spell.element, 'lightning');
-  assert.equal(spell.behavior, 'beam');
+  assert.equal(spell.behavior, 'chain');
   assert.deepEqual(spell.components, ['apply_status_on_hit']);
   assert.deepEqual(spell.guaranteedEffects.map((effect) => effect.label), ['Shock']);
   assert.equal(spell.parameters.statusType, 'shock');
@@ -88,23 +117,48 @@ function testBonusEffectsStayWithinValidPoolAndRemainUnique() {
   assert.ok(effectTypes.every((type) => ['pierce', 'knockback', 'explode', 'trail', 'split'].includes(type)));
 }
 
-function testCraftedSpellRemainsRuntimeCastable() {
-  const spell = craftSpell({
-    recipeId: 'poison_zone',
-    random: sequenceRng([0.65, 0.3, 0.4, 0.6, 0.7, 0.2, 0.5, 0.9]),
-  });
+function testEveryCraftableBehaviorCastsAtRuntime() {
+  const recipeIds = ['fire_bolt', 'frost_beam', 'lightning_chain', 'poison_zone', 'fire_aura', 'frost_orbit', 'arcane_nova', 'arcane_orb'];
+
+  for (const recipeId of recipeIds) {
+    const spell = craftSpell({ recipeId, random: sequenceRng([0.4, 0.5, 0.45, 0.55, 0.35, 0.65, 0.5, 0.5, 0.5]) });
+    const system = buildCastingSystem();
+    const result = castSpell(spell, {
+      player: { x: 2, y: 2, facingX: 1, facingY: 0 },
+      system,
+      activeSpellInstances: system.activeSpellInstances,
+      targetPosition: { x: 7, y: 4 },
+    });
+
+    assert.equal(result.ok, true, `Expected ${recipeId} to cast successfully.`);
+
+    if (spell.behavior === 'projectile') {
+      assert.equal(system.projectiles.length, 1, `${recipeId} should spawn a projectile.`);
+    } else {
+      assert.equal(system.activeSpellInstances.length, 1, `${recipeId} should create an active spell instance.`);
+      assert.equal(system.activeSpellInstances[0].instance.base.behavior, spell.behavior);
+    }
+  }
+}
+
+function testOrbitAndAreaSpellsContinueUpdatingAfterCast() {
+  const orbitSpell = craftSpell({ recipeId: 'frost_orbit', random: sequenceRng([0.3, 0.5, 0.5, 0.5, 0.4, 0.6, 0.5, 0.5]) });
+  const zoneSpell = craftSpell({ recipeId: 'poison_zone', random: sequenceRng([0.65, 0.3, 0.4, 0.6, 0.7, 0.2, 0.5, 0.9]) });
   const system = buildCastingSystem();
+  system.enemies = [{ x: 6, y: 4, alive: true, radius: 0.8 }];
+  const player = { x: 2, y: 2, facingX: 1, facingY: 0 };
 
-  const result = castSpell(spell, {
-    player: { x: 2, y: 2, facingX: 1, facingY: 0 },
-    system,
-    activeSpellInstances: system.activeSpellInstances,
-    targetPosition: { x: 5, y: 5 },
-  });
+  assert.equal(castSpell(orbitSpell, { player, system, activeSpellInstances: system.activeSpellInstances, targetPosition: { x: 7, y: 4 } }).ok, true);
+  assert.equal(castSpell(zoneSpell, { player, system, activeSpellInstances: system.activeSpellInstances, targetPosition: { x: 6, y: 4 } }).ok, true);
 
-  assert.equal(result.ok, true);
-  assert.equal(system.activeSpellInstances.length, 1);
-  assert.equal(system.activeSpellInstances[0].instance.base.behavior, 'zone');
+  updateSpellInstances(system.activeSpellInstances, 1, { system, player });
+
+  const orbitInstance = system.activeSpellInstances.find((entry) => entry.instance.base.behavior === 'orbit');
+  const zoneInstance = system.activeSpellInstances.find((entry) => entry.instance.base.behavior === 'zone');
+
+  assert.ok(orbitInstance?.instance.state.orbit?.orbs?.length >= 1);
+  assert.ok(zoneInstance?.instance.state.zone?.tickAccumulator >= 0);
+  assert.ok(system.enemies[0].hitCount >= 1);
 }
 
 function testProfileModifiersChangeStatsFromBaseToFinal() {
@@ -161,11 +215,13 @@ function testRecipeCraftingStateReportsMissingIngredients() {
 }
 
 function run() {
-  testRecipesExposeFixedIdentity();
+  testRecipesExposeSupportedBehaviorsAndElements();
+  testDefaultSpellbookIsClean();
   testCraftVariationAcrossRolls();
   testIdentityAndGuaranteedEffectsArePreserved();
   testBonusEffectsStayWithinValidPoolAndRemainUnique();
-  testCraftedSpellRemainsRuntimeCastable();
+  testEveryCraftableBehaviorCastsAtRuntime();
+  testOrbitAndAreaSpellsContinueUpdatingAfterCast();
   testProfileModifiersChangeStatsFromBaseToFinal();
   testRecipeCraftingConsumesItemsAndAddsSpell();
   testRecipeCraftingStateReportsMissingIngredients();

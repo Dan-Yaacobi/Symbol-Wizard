@@ -86,6 +86,7 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     id: 'fire_bolt',
     name: 'Fire Bolt',
     behavior: 'projectile',
+    targeting: 'cursor',
     icon: '*',
     validElements: ['fire'],
     ingredients: [
@@ -130,6 +131,7 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     id: 'frost_beam',
     name: 'Frost Beam',
     behavior: 'beam',
+    targeting: 'cursor',
     icon: '|',
     validElements: ['frost'],
     ingredients: [
@@ -169,41 +171,40 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     },
   },
   {
-    id: 'lightning_beam',
-    name: 'Lightning Beam',
-    behavior: 'beam',
-    icon: '|',
+    id: 'lightning_chain',
+    name: 'Lightning Chain',
+    behavior: 'chain',
+    targeting: 'cursor',
+    icon: 'ϟ',
     validElements: ['lightning'],
     ingredients: [
       ingredient('lightning_core', 1),
       ingredient('essence', 6),
       ingredient('storm_shard', 4),
     ],
-    craftingSummary: 'A charged beam that always shocks and may arc unpredictably.',
+    craftingSummary: 'A chaining discharge that always shocks the struck target.',
     guaranteedEffects: {
       lightning: [{ type: 'status', label: 'Shock', statusType: 'shock', duration: 1.4 }],
     },
     statRanges: {
       damage: [6, 10],
-      range: [15, 18],
-      width: [1.6, 2.5],
-      duration: [0.28, 0.5],
-      cooldown: [0.45, 0.82],
+      chainCount: [2, 4],
+      chainRange: [4.5, 6.5],
+      cooldown: [0.55, 0.9],
       manaCost: [9, 13],
+      range: [12, 16],
     },
     weightedProfiles: { fast: 5, heavy: 3, efficient: 2 },
     effectPool: {
-      rollCountWeights: { 0: 2, 1: 5, 2: 3 },
+      rollCountWeights: { 0: 4, 1: 5, 2: 1 },
       common: [
-        { type: 'chain', label: 'Chain Arc', weight: 5, count: 1, radius: 4.8, damageMultiplier: 0.68, color: '#ffe76a' },
+        { type: 'knockback', label: 'Static Kick', weight: 3, force: 1.2 },
+        { type: 'explode', label: 'Static Burst', weight: 2, radius: 2.1, damageMultiplier: 0.5, color: '#ffe76a' },
       ],
       uncommon: [
-        { type: 'knockback', label: 'Static Kick', weight: 2, force: 1.2 },
-        { type: 'bounce', label: 'Ricochet', weight: 2, count: 1 },
+        { type: 'trail', label: 'Ion Wake', weight: 2, radius: 1.2, duration: 0.7, damageMultiplier: 0.24, color: '#fff5a8' },
       ],
-      rare: [
-        { type: 'split', label: 'Forked Discharge', weight: 2, count: 2, maxDepth: 1, spreadDegrees: 18 },
-      ],
+      rare: [],
     },
     visuals: {
       color: colorForElement('lightning'),
@@ -214,6 +215,7 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     id: 'poison_zone',
     name: 'Poison Zone',
     behavior: 'zone',
+    targeting: 'cursor',
     icon: 'o',
     validElements: ['poison'],
     ingredients: [
@@ -253,9 +255,134 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     },
   },
   {
+    id: 'fire_aura',
+    name: 'Fire Aura',
+    behavior: 'aura',
+    targeting: 'self',
+    icon: '#',
+    validElements: ['fire'],
+    ingredients: [
+      ingredient('fire_core', 1),
+      ingredient('essence', 6),
+      ingredient('ember_dust', 8),
+    ],
+    craftingSummary: 'A self-centered blaze that always burns anything lingering too close.',
+    guaranteedEffects: {
+      fire: [{ type: 'status', label: 'Burn', statusType: 'burn', duration: 2.4 }],
+    },
+    statRanges: {
+      damage: [4, 7],
+      radius: [4.5, 6.2],
+      duration: [0.35, 0.7],
+      tickInterval: [0.12, 0.2],
+      cooldown: [1.8, 2.7],
+      manaCost: [12, 17],
+    },
+    weightedProfiles: { fast: 2, heavy: 4, efficient: 4 },
+    effectPool: {
+      rollCountWeights: { 0: 4, 1: 5, 2: 1 },
+      common: [
+        { type: 'knockback', label: 'Heat Push', weight: 2, force: 1.1 },
+        { type: 'trail', label: 'Ash Ring', weight: 3, radius: 1.2, duration: 0.6, damageMultiplier: 0.22, color: '#ffb37a' },
+      ],
+      uncommon: [
+        { type: 'explode', label: 'Flare Pop', weight: 2, radius: 2.4, damageMultiplier: 0.58, color: '#ffc28c' },
+      ],
+      rare: [],
+    },
+    visuals: {
+      color: colorForElement('fire'),
+      hitParticleColor: '#ffd3a8',
+    },
+  },
+  {
+    id: 'frost_orbit',
+    name: 'Frost Orbit',
+    behavior: 'orbit',
+    targeting: 'self',
+    icon: '◌',
+    validElements: ['frost'],
+    ingredients: [
+      ingredient('frost_core', 1),
+      ingredient('essence', 6),
+      ingredient('crystal_dust', 4),
+    ],
+    craftingSummary: 'A ring of cold motes that circles the caster and slows on contact.',
+    guaranteedEffects: {
+      frost: [{ type: 'status', label: 'Slow', statusType: 'slow', duration: 2.8 }],
+    },
+    statRanges: {
+      damage: [3, 6],
+      radius: [2.3, 3.6],
+      speed: [2.2, 3.8],
+      duration: [1.8, 3.1],
+      count: [2, 4],
+      hitRadius: [0.75, 1.1],
+      cooldown: [1.5, 2.4],
+      manaCost: [11, 15],
+    },
+    weightedProfiles: { fast: 3, heavy: 2, efficient: 5 },
+    effectPool: {
+      rollCountWeights: { 0: 5, 1: 4, 2: 1 },
+      common: [
+        { type: 'knockback', label: 'Cold Push', weight: 2, force: 0.9 },
+      ],
+      uncommon: [
+        { type: 'trail', label: 'Rime Wake', weight: 2, radius: 1.1, duration: 0.7, damageMultiplier: 0.2, color: '#dff6ff' },
+      ],
+      rare: [],
+    },
+    visuals: {
+      color: colorForElement('frost'),
+      hitParticleColor: '#dff6ff',
+    },
+  },
+  {
+    id: 'arcane_nova',
+    name: 'Arcane Nova',
+    behavior: 'nova',
+    targeting: 'self',
+    icon: '✹',
+    validElements: ['arcane'],
+    ingredients: [
+      ingredient('arcane_shard', 1),
+      ingredient('essence', 7),
+      ingredient('crystal_dust', 5),
+    ],
+    craftingSummary: 'A sudden arcane pulse that erupts from the caster in every direction.',
+    guaranteedEffects: {
+      arcane: [{ type: 'identity', label: 'Unstable Arcana', statusType: null, duration: 0 }],
+    },
+    statRanges: {
+      damage: [6, 10],
+      radius: [3.5, 5.2],
+      duration: [0.25, 0.45],
+      tickInterval: [0.1, 0.16],
+      cooldown: [1.2, 2],
+      manaCost: [10, 14],
+    },
+    weightedProfiles: { fast: 4, heavy: 3, efficient: 3 },
+    effectPool: {
+      rollCountWeights: { 0: 3, 1: 5, 2: 2 },
+      common: [
+        { type: 'knockback', label: 'Arc Pulse', weight: 4, force: 1.4 },
+      ],
+      uncommon: [
+        { type: 'explode', label: 'Arc Burst', weight: 2, radius: 2.6, damageMultiplier: 0.6, color: '#b395ff' },
+        { type: 'trail', label: 'Aether Wake', weight: 2, radius: 1.2, duration: 0.75, damageMultiplier: 0.24, color: '#bca7ff' },
+      ],
+      rare: [],
+    },
+    visuals: {
+      color: colorForElement('arcane'),
+      hitParticleColor: '#d5c2ff',
+    },
+  },
+  {
     id: 'arcane_orb',
     name: 'Arcane Orb',
     behavior: 'projectile',
+    targeting: 'cursor',
     icon: '✦',
     validElements: ['arcane'],
     ingredients: [

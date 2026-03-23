@@ -254,8 +254,9 @@ function handleEnemyDefeat(enemy) {
   return result;
 }
 
+const defaultSpellbookIds = ['magic-bolt', 'blink', 'fire-burst'];
 const abilitySystem = new AbilitySystem({
-  definitions: Object.values(SpellRegistry),
+  definitions: defaultSpellbookIds.map((spellId) => SpellRegistry[spellId]).filter(Boolean),
   player,
   enemies,
   map,
