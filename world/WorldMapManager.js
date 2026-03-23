@@ -176,7 +176,7 @@ function cloneExit(exit) {
   };
 }
 
-function normalizeForestRoom(room, { biomeId, biomeSeed, returnLink = null } = {}) {
+function normalizeForestRoom(room, { biomeId, biomeSeed, mapId, returnLink = null } = {}) {
   if (!room) return null;
   const originalExits = Array.isArray(room.exits)
     ? room.exits
@@ -232,7 +232,7 @@ function normalizeForestRoom(room, { biomeId, biomeSeed, returnLink = null } = {
 
   return {
     ...room,
-    id: `${biomeId}:${room.id}`,
+    id: mapId ?? `forest-${biomeSeed}-${room.id}`,
     sourceRoomId: room.id,
     type: 'forest',
     seed: biomeSeed,
@@ -261,6 +261,18 @@ export class WorldMapManager {
     return `${type}-${seed}${suffix ? `-${suffix}` : ''}`;
   }
 
+  buildTownMapId(seed) {
+    return `town-${seed}`;
+  }
+
+  buildForestBiomeId(seed) {
+    return `forest-biome-${seed}`;
+  }
+
+  buildForestMapId(seed, roomId) {
+    return `forest-${seed}-${roomId}`;
+  }
+
   enterStartingWorld(seed) {
     return this.loadMap({ type: 'town', seed });
   }
@@ -279,10 +291,26 @@ export class WorldMapManager {
   }
 
   loadTown(seed) {
-    const mapId = this.buildMapId('town', seed);
+    const mapId = this.buildTownMapId(seed);
     if (this.mapCache.has(mapId)) return this.mapCache.get(mapId);
+
     const town = this.townGenerator.generateTown(seed, { townType: 'forestTown' });
+    town.seed = seed;
     this.installTownHouseInteractions(town);
+
+    const forestExit = town.exits?.find((candidate) => candidate.targetMapType === 'forest');
+    if (forestExit) {
+      const biomeId = this.buildForestBiomeId(forestExit.targetSeed);
+      const { biome } = this.biomeGenerator.enterBiome(biomeId, forestExit.targetSeed);
+      forestExit.targetRoomId = forestExit.targetRoomId ?? biome?.startRoomId ?? null;
+      forestExit.targetEntryId = forestExit.targetEntryId ?? 'forest_entry_from_town';
+      forestExit.targetEntranceId = forestExit.targetEntranceId ?? forestExit.targetEntryId;
+      if (forestExit.interactionData) {
+        forestExit.interactionData.targetBiome = forestExit.targetRoomId;
+        forestExit.interactionData.targetEntryId = forestExit.targetEntryId;
+      }
+    }
+
     this.mapCache.set(mapId, town);
     return town;
   }
@@ -297,41 +325,77 @@ export class WorldMapManager {
   }
 
   loadForest(seed, options = {}) {
-    const biomeId = this.buildMapId('forest-biome', seed);
+    const biomeId = this.buildForestBiomeId(seed);
     const { biome } = this.biomeGenerator.enterBiome(biomeId, seed);
     const roomId = options.roomId ?? biome?.startRoomId ?? null;
-    const mapId = roomId ? `${biomeId}:${roomId}` : biomeId;
+    const mapId = roomId ? this.buildForestMapId(seed, roomId) : biomeId;
 
-    if (options.returnLink) {
+    if (options.returnLink && roomId === biome?.startRoomId) {
       this.forestReturnLinks.set(biomeId, { ...options.returnLink });
     }
 
-    const rememberedReturnLink = this.forestReturnLinks.get(biomeId) ?? null;
-    const returnLink = options.returnLink ?? (roomId === biome?.startRoomId ? rememberedReturnLink : null);
-
-    if (!options.returnLink && this.mapCache.has(mapId)) {
+    if (this.mapCache.has(mapId)) {
       return this.mapCache.get(mapId);
     }
 
+    const rememberedReturnLink = this.forestReturnLinks.get(biomeId) ?? null;
+    const returnLink = roomId === biome?.startRoomId ? (options.returnLink ?? rememberedReturnLink) : null;
     const room = roomId ? this.biomeGenerator.loadRoom(roomId) : null;
     const normalized = normalizeForestRoom(room, {
       biomeId,
       biomeSeed: seed,
+      mapId,
       returnLink,
     });
+
     if (normalized && returnLink?.targetSeed) {
       const town = this.loadTown(returnLink.targetSeed);
-      connectRegions({ fromRegion: town, toRegion: normalized, options: { debug: this.runtimeConfig?.get?.('generation.debug') ?? false, fromExit: town.exits?.[0], toExit: normalized.exits?.find((exit) => exit.targetMapType === 'town') ?? normalized.exits?.[0] } });
-      this.mapCache.set(town.id, town);
+      const townExit = town.exits?.find((candidate) => candidate.id === (returnLink.targetEntryId ?? 'town_exit_main'))
+        ?? town.exits?.find((candidate) => candidate.targetMapType === 'forest');
+      const forestReturnExit = normalized.exits?.find((candidate) => candidate.targetMapType === 'town')
+        ?? normalized.exits?.[0];
+
+      if (townExit && forestReturnExit) {
+        townExit.targetSeed = seed;
+        townExit.targetRoomId = roomId;
+        townExit.targetEntryId = 'forest_entry_from_town';
+        townExit.targetEntranceId = 'forest_entry_from_town';
+        if (townExit.interactionData) {
+          townExit.interactionData.targetBiome = roomId;
+          townExit.interactionData.targetEntryId = 'forest_entry_from_town';
+          townExit.interactionData.targetSeed = seed;
+        }
+
+        forestReturnExit.targetSeed = returnLink.targetSeed;
+        forestReturnExit.targetEntryId = returnLink.targetEntryId ?? townExit.id;
+        forestReturnExit.targetEntranceId = forestReturnExit.targetEntryId;
+        if (forestReturnExit.interactionData) {
+          forestReturnExit.interactionData.targetSeed = returnLink.targetSeed;
+          forestReturnExit.interactionData.targetEntryId = forestReturnExit.targetEntryId;
+        }
+
+        connectRegions({
+          fromRegion: town,
+          toRegion: normalized,
+          options: {
+            debug: this.runtimeConfig?.get?.('generation.debug') ?? false,
+            fromExit: townExit,
+            toExit: forestReturnExit,
+          },
+        });
+        this.mapCache.set(town.id, town);
+      }
     }
+
     if (normalized) this.mapCache.set(normalized.id, normalized);
     return normalized;
   }
 
   resolveMapByExit(currentMap, exit) {
     if (exit?.targetMapType === 'town') {
-      const town = this.loadTown(exit.targetSeed);
-      if (exit.targetEntryId && exit.meta?.returnPosition) {
+      const townMapId = this.buildTownMapId(exit.targetSeed);
+      const town = this.mapCache.get(townMapId) ?? this.loadTown(exit.targetSeed);
+      if (exit.targetEntryId && exit.meta?.returnPosition && !town.entrances?.[exit.targetEntryId]) {
         town.entrances[exit.targetEntryId] = {
           id: exit.targetEntryId,
           x: exit.meta.returnPosition.x,
@@ -355,17 +419,30 @@ export class WorldMapManager {
     }
 
     if (exit?.targetRoomId) {
-      return this.loadForest(currentMap.seed, {
+      const forestSeed = exit.targetSeed ?? currentMap.seed;
+      const forestMapId = this.buildForestMapId(forestSeed, exit.targetRoomId);
+      const returnLink = currentMap.type === 'town'
+        ? {
+          targetSeed: currentMap.seed,
+          targetEntryId: exit.id,
+          townExitSide: exit.meta?.exitSide ?? currentMap.metadata?.townExitSide ?? 'top',
+          roadWidth: exit.width ?? exit.meta?.roadWidth ?? 3,
+        }
+        : null;
+      return this.mapCache.get(forestMapId) ?? this.loadForest(forestSeed, {
         roomId: exit.targetRoomId,
-        returnLink: currentMap.type === 'town' ? { targetSeed: currentMap.seed, targetEntryId: exit.targetEntryId } : null,
+        returnLink,
       });
     }
 
     if (exit?.targetMapType === 'forest') {
-      return this.loadForest(exit.targetSeed, {
+      const targetRoomId = exit.targetRoomId ?? null;
+      const forestMapId = targetRoomId ? this.buildForestMapId(exit.targetSeed, targetRoomId) : null;
+      return (forestMapId ? this.mapCache.get(forestMapId) : null) ?? this.loadForest(exit.targetSeed, {
+        roomId: targetRoomId,
         returnLink: {
           targetSeed: currentMap.seed,
-          targetEntryId: 'town_exit_main',
+          targetEntryId: exit.id,
           townExitSide: exit.meta?.exitSide ?? currentMap.metadata?.townExitSide ?? 'top',
           roadWidth: exit.width ?? exit.meta?.roadWidth ?? 3,
         },
