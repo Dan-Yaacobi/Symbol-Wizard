@@ -243,4 +243,4 @@ export const SpellRegistry = {
   },
 };
 
-export const defaultSpellSlots = ['magic-bolt', 'fire-burst', 'blink', 'time-freeze'];
+export const defaultSpellSlots = ['magic-bolt', 'blink', 'fire-burst'];

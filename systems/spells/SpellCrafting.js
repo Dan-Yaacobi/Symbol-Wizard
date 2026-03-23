@@ -65,10 +65,24 @@ function buildParameters(recipe, finalStats, element) {
     parameters.duration = finalStats.duration;
   }
 
+  if (recipe.behavior === 'chain') {
+    parameters.range = finalStats.range;
+    parameters.chainCount = finalStats.chainCount;
+    parameters.chainRange = finalStats.chainRange;
+  }
+
   if (['zone', 'aura', 'nova'].includes(recipe.behavior)) {
     parameters.radius = finalStats.radius;
     parameters.duration = finalStats.duration;
     parameters.tickInterval = finalStats.tickInterval;
+  }
+
+  if (recipe.behavior === 'orbit') {
+    parameters.radius = finalStats.radius;
+    parameters.speed = finalStats.speed;
+    parameters.duration = finalStats.duration;
+    parameters.count = finalStats.count;
+    parameters.hitRadius = finalStats.hitRadius;
   }
 
   const statusEffect = getRecipeGuaranteedEffects(recipe, element).find((effect) => effect.type === 'status');
@@ -262,7 +276,7 @@ export function craftSpell({ recipeId, element = null, random = Math.random } = 
     icon: recipe.icon ?? '*',
     description: buildDescription(recipe, profile, guaranteedEffects, bonusEffects),
     behavior: recipe.behavior,
-    targeting: 'cursor',
+    targeting: recipe.targeting ?? 'cursor',
     element: appliedElement,
     components,
     effects: bonusEffects.map((effect) => ({ ...effect })),
