@@ -135,6 +135,13 @@ function run() {
   const townRoadAxis = forestExit.direction === 'north' || forestExit.direction === 'south' ? 'horizontal' : 'vertical';
   assert.ok(contiguousRoadSpan(town, forestExit.position, townRoadAxis) >= MIN_ROAD_WIDTH, 'Town border crossing should preserve the minimum road width.');
   const forestEntry = forest.entrances['forest_entry_from_town'];
+  assert.equal(forestEntry.direction, forestExit.direction, 'Forest entry direction should mirror the connected town exit.');
+  if (forestExit.direction === 'north' || forestExit.direction === 'south') {
+    assert.equal(forestEntry.x, forestExit.position.x, 'Forest entry anchor should align with the town exit lane.');
+  } else {
+    assert.equal(forestEntry.y, forestExit.position.y, 'Forest entry anchor should align with the town exit lane.');
+  }
+  assert.deepEqual(forestEntry.spawn, { x: forestEntry.landingX, y: forestEntry.landingY }, 'Forest spawn should be the validated landing tile.');
   const forestRoadAxis = forestEntry.direction === 'north' || forestEntry.direction === 'south' ? 'horizontal' : 'vertical';
   assert.ok(contiguousRoadSpan(forest, { x: forestEntry.x, y: forestEntry.y }, forestRoadAxis) >= MIN_ROAD_WIDTH, 'Forest entry corridor should preserve the minimum road width.');
   let safeZoneWalkable = 0;
@@ -145,6 +152,7 @@ function run() {
     }
   }
   assert.ok(safeZoneWalkable >= 30, 'Forest entry should open into a broad, walkable safety zone.');
+  assert.ok(forest.metadata?.reachability?.reachableTiles >= forest.metadata?.reachability?.minimumReachableArea, 'Forest entry connectivity validation should guarantee a sufficiently large reachable area.');
 
   const forestRoomExit = forest.exits.find((exit) => exit.targetRoomId);
   assert.ok(forestRoomExit, 'Forest start room should expose an internal room transition.');
