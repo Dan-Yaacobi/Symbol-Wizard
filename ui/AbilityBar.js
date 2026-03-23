@@ -1,3 +1,5 @@
+const SLOT_BINDING_LABELS = ['LMB', 'RMB', 'MMB', '—'];
+
 export class AbilityBar {
   constructor({ root, abilitySystem }) {
     this.root = root;
@@ -29,7 +31,7 @@ export class AbilityBar {
       slot.type = 'button';
       slot.className = 'ability-slot';
       slot.dataset.slotIndex = String(i);
-      slot.innerHTML = `<span class="slot-hotkey">${i + 1}</span><span class="slot-label">${ability?.name ?? 'Empty'}</span>`;
+      slot.innerHTML = `<span class="slot-hotkey">${SLOT_BINDING_LABELS[i] ?? '—'}</span><span class="slot-label">${ability?.name ?? 'Empty'}</span>`;
 
       slot.draggable = Boolean(ability);
       slot.addEventListener('dragstart', (event) => {

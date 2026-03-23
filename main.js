@@ -593,7 +593,6 @@ const dialogueManager = new DialogueManager({
   input,
   baseDialogueTree: dialogueTree,
 });
-let slotPressLatch = [false, false, false, false];
 
 const forcedBlockingTiles = new Set(['denseTree', 'rockCliff', 'deepWater', 'stoneWall']);
 let interactLatch = false;
@@ -898,17 +897,15 @@ function handlePlayer(dt) {
     interactLatch = interactDown;
 
     const target = input.getMouseWorldPosition();
-    for (let i = 0; i < 4; i += 1) {
-      const hotkey = String(i + 1);
-      const down = input.isDown(hotkey);
-      if (down && !slotPressLatch[i]) {
+    const abilityMouseButtons = ['left', 'right', 'middle'];
+    for (let i = 0; i < abilityMouseButtons.length; i += 1) {
+      if (input.consumeMouseButtonPress(abilityMouseButtons[i])) {
         abilitySystem.castSlot(i, { player, target });
       }
-      slotPressLatch[i] = down;
     }
   } else {
     interactLatch = false;
-    for (let i = 0; i < 4; i += 1) slotPressLatch[i] = false;
+    input.clearMouseButtonPresses();
   }
 }
 
@@ -1121,7 +1118,7 @@ function tick(now) {
   } else {
     player.vx = 0;
     player.vy = 0;
-    slotPressLatch.fill(false);
+    input.clearMouseButtonPresses();
   }
 
   if (!diagMinimalMode) {
