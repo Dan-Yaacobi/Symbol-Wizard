@@ -272,12 +272,26 @@ defaultSpellSlots.forEach((spellId, slotIndex) => {
 const uiRoot = document.getElementById('uiPanels') ?? (() => {
   const fallback = document.createElement('section');
   fallback.id = 'uiPanels';
-  fallback.className = 'ui-panels';
+  fallback.className = 'bottom-ui-container';
+  fallback.innerHTML = `
+    <div class="bottom-ui-container__inner">
+      <section class="bottom-ui-panel bottom-ui-panel--left">
+        <section id="chatBox" class="chat-box" aria-live="polite">
+          <div id="chatSpeaker" class="chat-speaker">System</div>
+          <div id="chatLine" class="chat-line">Speak with nearby townsfolk (press E nearby). Use 1-9 or click responses.</div>
+          <ul id="chatOptions" class="chat-options"></ul>
+        </section>
+      </section>
+      <section id="combatHudPanel" class="bottom-ui-panel bottom-ui-panel--center" aria-label="Combat interface"></section>
+      <section id="bottomRightPanel" class="bottom-ui-panel bottom-ui-panel--right" aria-label="Status interface"></section>
+    </div>
+  `;
   document.body.appendChild(fallback);
   console.warn('BOOT: #uiPanels missing in startup scene. Created fallback root to prevent startup crash.');
   return fallback;
 })();
-const combatHud = new AbilityBar({ root: document.body, abilitySystem, player });
+const combatHudRoot = document.getElementById('combatHudPanel') ?? uiRoot;
+const combatHud = new AbilityBar({ root: combatHudRoot, abilitySystem, player });
 const spellbook = new SpellbookWindow({ root: uiRoot, abilitySystem, input });
 const spellCraftingWindow = new SpellCraftingWindow({
   root: uiRoot,
@@ -547,7 +561,7 @@ if (diagMode) {
 
 function resizeLayout() {
   const shell = document.querySelector('.game-shell');
-  const stage = document.querySelector('.game-stage');
+  const stage = document.querySelector('.game-container');
   const panels = document.getElementById('uiPanels');
   if (!shell || !stage || !panels) return;
 
