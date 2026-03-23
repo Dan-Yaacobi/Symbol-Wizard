@@ -1,6 +1,8 @@
 import { getAnimationFrameCount, getSpriteAnimation } from '../data/SpriteAssetLoader.js';
 import { getEntityAnimationState } from './EntityStateSystem.js';
 
+export const DEBUG_DISABLE_PLAYER_ANIMATION = true;
+
 function resolveEntityAnimationState(entity) {
   if (entity?.type === 'player' && entity.activeAction) {
     if (entity.activeAction.type === 'cast') return 'attack';
@@ -10,10 +12,31 @@ function resolveEntityAnimationState(entity) {
   return getEntityAnimationState(entity);
 }
 
+function resolveStaticPlayerAnimation(entity) {
+  const idleFrames = getSpriteAnimation(entity.spriteId, 'idle');
+  if (idleFrames?.length) return { animationState: 'idle', frameIndex: 0, frames: idleFrames };
+
+  const walkFrames = getSpriteAnimation(entity.spriteId, 'walk');
+  if (walkFrames?.length) return { animationState: 'walk', frameIndex: 0, frames: walkFrames };
+
+  throw new Error(`Missing idle/walk sprite animations for player sprite "${entity.spriteId}".`);
+}
+
 export function updateEntityAnimation(entity, dt, _moving = false, config = null) {
   void _moving;
+  void dt;
   const animationTimings = entity.animationTimings ?? entity.frameDurations;
   if (!animationTimings || !entity.spriteId) return;
+
+  if (DEBUG_DISABLE_PLAYER_ANIMATION && entity.type === 'player') {
+    const staticAnimation = resolveStaticPlayerAnimation(entity);
+    entity.animationState = staticAnimation.animationState;
+    entity.animationFrames = staticAnimation.frames;
+    entity.frameIndex = staticAnimation.frameIndex;
+    entity.currentFrame = staticAnimation.frameIndex;
+    entity.frameTimer = 0;
+    return;
+  }
 
   const nextState = resolveEntityAnimationState(entity);
   if (entity.animationState !== nextState) {
