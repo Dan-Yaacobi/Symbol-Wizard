@@ -1,4 +1,5 @@
 import { tiles, tileFrom } from './TilePalette.js';
+import { ENTRANCE_CLEAR_ZONE_RADIUS, MIN_ROAD_WIDTH } from './GenerationConstants.js';
 
 function keyOf(x, y) {
   return `${x},${y}`;
@@ -103,9 +104,71 @@ function chooseAxisStep(current, end, jitterBias, rng) {
   return { x: Math.sign(dx), y: 0 };
 }
 
+function clearWalkableArea(grid, center, radius, carvedMask = null) {
+  for (let oy = -radius; oy <= radius; oy += 1) {
+    for (let ox = -radius; ox <= radius; ox += 1) {
+      const tx = center.x + ox;
+      const ty = center.y + oy;
+      if (!isWithinBounds(grid, tx, ty)) continue;
+      if ((ox * ox) + (oy * oy) > radius * radius) continue;
+      const edge = Math.abs(ox) === radius || Math.abs(oy) === radius;
+      grid[ty][tx] = tileFrom(edge ? tiles.dirtEdge : tiles.dirt, { type: 'road', walkable: true });
+      carvedMask?.add(keyOf(tx, ty));
+    }
+  }
+}
+
+function removeBlockedObjectsInMask(objects = [], carvedMask = new Set(), preserveObject = () => false) {
+  if (!Array.isArray(objects) || objects.length === 0) return objects;
+  const kept = [];
+  for (const object of objects) {
+    if (preserveObject(object)) {
+      kept.push(object);
+      continue;
+    }
+    const collides = getCollidableFootprintCells(object).some((cell) => carvedMask.has(keyOf(cell.x, cell.y)));
+    if (!collides) kept.push(object);
+  }
+  objects.length = 0;
+  objects.push(...kept);
+  return objects;
+}
+
+export function carveBoundaryCrossing(grid, center, direction, options = {}) {
+  const width = Math.max(MIN_ROAD_WIDTH, options.width ?? MIN_ROAD_WIDTH);
+  const carvedMask = options.carvedMask ?? new Set();
+  const removableObjects = options.removableObjects ?? null;
+  const preserveObject = options.preserveObject ?? (() => false);
+  const axisHalfSpan = Math.ceil((width + 2) / 2);
+  const laneHalfSpan = Math.ceil(width / 2);
+  const horizontal = direction === 'north' || direction === 'south';
+
+  for (let forward = -1; forward <= 2; forward += 1) {
+    for (let lateral = -axisHalfSpan; lateral <= axisHalfSpan; lateral += 1) {
+      const tx = center.x + (horizontal ? lateral : forward);
+      const ty = center.y + (horizontal ? forward : lateral);
+      if (!isWithinBounds(grid, tx, ty)) continue;
+      const onEdge = Math.abs(lateral) >= laneHalfSpan || Math.abs(forward) >= 2;
+      grid[ty][tx] = tileFrom(onEdge ? tiles.dirtEdge : tiles.dirt, { type: 'road', walkable: true });
+      carvedMask.add(keyOf(tx, ty));
+    }
+  }
+
+  if (Array.isArray(removableObjects)) removeBlockedObjectsInMask(removableObjects, carvedMask, preserveObject);
+  return carvedMask;
+}
+
+export function carveEntranceSafetyZone(grid, landing, options = {}) {
+  const radius = Math.max(ENTRANCE_CLEAR_ZONE_RADIUS, options.radius ?? ENTRANCE_CLEAR_ZONE_RADIUS);
+  const carvedMask = options.carvedMask ?? new Set();
+  clearWalkableArea(grid, landing, radius, carvedMask);
+  if (Array.isArray(options.removableObjects)) removeBlockedObjectsInMask(options.removableObjects, carvedMask, options.preserveObject ?? (() => false));
+  return carvedMask;
+}
+
 export function carvePath(grid, start, end, options = {}) {
   const rng = options.rng ?? Math.random;
-  const width = Math.max(2, options.width ?? 3);
+  const width = Math.max(MIN_ROAD_WIDTH, options.width ?? MIN_ROAD_WIDTH);
   const jitterBias = options.jitterBias ?? 0.28;
   const carvedMask = options.carvedMask ?? new Set();
   const removableObjects = options.removableObjects ?? null;
@@ -135,17 +198,7 @@ export function carvePath(grid, start, end, options = {}) {
   }
 
   if (Array.isArray(removableObjects) && removableObjects.length > 0) {
-    const kept = [];
-    for (const object of removableObjects) {
-      if (preserveObject(object)) {
-        kept.push(object);
-        continue;
-      }
-      const collides = getCollidableFootprintCells(object).some((cell) => carvedMask.has(keyOf(cell.x, cell.y)));
-      if (!collides) kept.push(object);
-    }
-    removableObjects.length = 0;
-    removableObjects.push(...kept);
+    removeBlockedObjectsInMask(removableObjects, carvedMask, preserveObject);
   }
 
   return carvedMask;
