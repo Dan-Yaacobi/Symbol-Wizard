@@ -1,12 +1,7 @@
 import { TownGenerator } from './TownGenerator.js';
-import { tiles } from './TilePalette.js';
 import { buildCollidableMask, carveBoundaryCrossing, carveEntranceSafetyZone, carvePath, floodFillWalkable, nearestReachablePoint } from './PathConnectivity.js';
 import { connectRegions, deriveForestSeedFromTown, normalizeExit } from './RegionGenerationSystem.js';
 import { ENTRANCE_CLEAR_ZONE_RADIUS, MIN_ROAD_WIDTH } from './GenerationConstants.js';
-
-function cloneTile(tile) {
-  return { ...tile };
-}
 
 function buildCollisionMap(grid, objects = []) {
   const map = Array.from({ length: grid.length }, (_, y) => Array.from({ length: grid[0].length }, (_, x) => !grid[y][x].walkable));
@@ -32,13 +27,70 @@ function oppositeDirection(direction) {
   return 'west';
 }
 
+function normalizeSideToDirection(sideOrDirection) {
+  if (sideOrDirection === 'top') return 'north';
+  if (sideOrDirection === 'bottom') return 'south';
+  if (sideOrDirection === 'left') return 'west';
+  if (sideOrDirection === 'right') return 'east';
+  if (sideOrDirection === 'north' || sideOrDirection === 'south' || sideOrDirection === 'west' || sideOrDirection === 'east') return sideOrDirection;
+  return 'north';
+}
+
+function clampToInterior(value, max) {
+  return Math.max(1, Math.min(max - 2, Math.round(value)));
+}
+
+function buildForestEntryAnchor(room, returnLink = null) {
+  if (!room?.tiles?.length || !room.tiles[0]?.length) return null;
+
+  const width = room.tiles[0].length;
+  const height = room.tiles.length;
+  const existingEntrance = room.entrances?.forest_entry_from_town ?? null;
+  const entryDirection = normalizeSideToDirection(returnLink?.townExitSide ?? existingEntrance?.direction ?? 'north');
+  const requestedAnchor = returnLink?.townExitPosition ?? returnLink?.position ?? null;
+  const defaultAnchor = existingEntrance
+    ? { x: existingEntrance.x, y: existingEntrance.y }
+    : requestedAnchor
+      ? { x: requestedAnchor.x, y: requestedAnchor.y }
+    : entryDirection === 'north'
+      ? { x: Math.floor(width / 2), y: 2 }
+      : entryDirection === 'south'
+        ? { x: Math.floor(width / 2), y: height - 3 }
+        : entryDirection === 'west'
+          ? { x: 2, y: Math.floor(height / 2) }
+          : { x: width - 3, y: Math.floor(height / 2) };
+
+  const anchor = {
+    x: clampToInterior(existingEntrance?.x ?? requestedAnchor?.x ?? defaultAnchor.x, width),
+    y: clampToInterior(existingEntrance?.y ?? requestedAnchor?.y ?? defaultAnchor.y, height),
+    direction: entryDirection,
+  };
+
+  const landing = {
+    x: clampToInterior(existingEntrance?.landingX ?? existingEntrance?.spawn?.x ?? (entryDirection === 'west' ? 4 : entryDirection === 'east' ? width - 5 : anchor.x), width),
+    y: clampToInterior(existingEntrance?.landingY ?? existingEntrance?.spawn?.y ?? (entryDirection === 'north' ? 4 : entryDirection === 'south' ? height - 5 : anchor.y), height),
+  };
+
+  return {
+    id: 'forest_entry_from_town',
+    x: anchor.x,
+    y: anchor.y,
+    direction: anchor.direction,
+    corridorWidth: Math.max(MIN_ROAD_WIDTH, returnLink?.roadWidth ?? existingEntrance?.corridorWidth ?? MIN_ROAD_WIDTH),
+    spawn: { ...landing },
+    landingX: landing.x,
+    landingY: landing.y,
+    landing,
+  };
+}
+
 function carveForestEntry(room, entryId, direction, roadWidth = MIN_ROAD_WIDTH) {
   if (!room?.tiles?.length || !room.tiles[0]?.length) return null;
 
   const width = room.tiles[0].length;
   const height = room.tiles.length;
   const existingEntrance = room.entrances?.[entryId];
-  const fallbackDirection = oppositeDirection(direction);
+  const fallbackDirection = oppositeDirection(normalizeSideToDirection(direction));
   const targetDirection = existingEntrance?.direction ?? fallbackDirection;
 
   let anchor = existingEntrance
@@ -61,17 +113,11 @@ function carveForestEntry(room, entryId, direction, roadWidth = MIN_ROAD_WIDTH) 
   const triggerTiles = [];
 
   carveBoundaryCrossing(room.tiles, anchor, targetDirection, { width: effectiveRoadWidth, removableObjects: room.objects ?? [] });
-
-  for (let step = 0; step <= 5; step += 1) {
-    const cx = Math.round(anchor.x + ((landing.x - anchor.x) * (step / 5)));
-    const cy = Math.round(anchor.y + ((landing.y - anchor.y) * (step / 5)));
-    for (let offset = -halfWidth; offset <= halfWidth; offset += 1) {
-      const tx = cx + (perpendicular.x * offset);
-      const ty = cy + (perpendicular.y * offset);
-      if (!room.tiles[ty]?.[tx]) continue;
-      room.tiles[ty][tx] = cloneTile(offset === -halfWidth || offset === halfWidth ? tiles.dirtEdge : tiles.dirt);
-      triggerTiles.push({ x: tx, y: ty });
-    }
+  for (let offset = -halfWidth; offset <= halfWidth; offset += 1) {
+    const tx = anchor.x + (perpendicular.x * offset);
+    const ty = anchor.y + (perpendicular.y * offset);
+    if (!room.tiles[ty]?.[tx]) continue;
+    triggerTiles.push({ x: tx, y: ty });
   }
 
   carveEntranceSafetyZone(room.tiles, landing, { radius: ENTRANCE_CLEAR_ZONE_RADIUS, removableObjects: room.objects ?? [] });
@@ -109,6 +155,7 @@ function ensureForestEntranceReachable(room, exits, entryId, roadWidth = MIN_ROA
   const entranceKey = `${entrance.landingX},${entrance.landingY}`;
   const exitPoint = exit?.position ?? { x: entrance.landingX, y: entrance.landingY };
   const exitKey = `${exitPoint.x},${exitPoint.y}`;
+  const minimumReachableArea = Math.max(48, Math.round((room.tiles.length * room.tiles[0].length) * 0.02));
 
   const connectPoint = !reachable.has(entranceKey)
     ? nearestReachablePoint(reachable, { x: entrance.landingX, y: entrance.landingY }) ?? spawn
@@ -137,12 +184,40 @@ function ensureForestEntranceReachable(room, exits, entryId, roadWidth = MIN_ROA
     if (exit) exit.position = { ...exitPoint };
   }
 
+  if (reachable.size < minimumReachableArea) {
+    const pathTargets = [];
+    for (const candidate of exits ?? []) {
+      if (candidate?.position) pathTargets.push(candidate.position);
+      else if (Number.isFinite(candidate?.x) && Number.isFinite(candidate?.y)) pathTargets.push({ x: candidate.x, y: candidate.y });
+    }
+    const connectPoint = pathTargets
+      .map((point) => nearestReachablePoint(reachable, point))
+      .find((point) => point && (point.x !== entrance.landingX || point.y !== entrance.landingY));
+
+    const repairTarget = connectPoint ?? exitPoint;
+    console.warn('[WorldMapManager] Forest open-area connectivity repair', { entryId, reachableTiles: reachable.size, repairTarget });
+    carvePath(room.tiles, spawn, repairTarget, {
+      width: Math.max(MIN_ROAD_WIDTH, roadWidth),
+      jitterBias: 0.2,
+      carvedMask: roadMask,
+      removableObjects: room.objects ?? [],
+    });
+    carveEntranceSafetyZone(room.tiles, spawn, {
+      radius: ENTRANCE_CLEAR_ZONE_RADIUS + 2,
+      carvedMask: roadMask,
+      removableObjects: room.objects ?? [],
+    });
+    reachable = floodFillWalkable(room.tiles, spawn, buildCollidableMask(room.objects ?? []));
+  }
+
   room.collisionMap = buildCollisionMap(room.tiles, room.objects ?? []);
   room.metadata = {
     ...(room.metadata ?? {}),
     reachability: {
       entranceReachable: reachable.has(entranceKey),
       exitReachable: reachable.has(exitKey),
+      reachableTiles: reachable.size,
+      minimumReachableArea,
     },
   };
 
@@ -188,10 +263,20 @@ function normalizeForestRoom(room, { biomeId, biomeSeed, mapId, returnLink = nul
   const exitCorridors = Array.isArray(room.exitCorridors) ? [...room.exitCorridors] : [];
 
   if (returnLink) {
+    const entryAnchor = buildForestEntryAnchor(room, returnLink);
+    if (entryAnchor) {
+      room.entrances = room.entrances ?? {};
+      room.entrances.forest_entry_from_town = {
+        ...entryAnchor,
+        spawn: { ...entryAnchor.landing },
+      };
+    }
     const entry = carveForestEntry(room, 'forest_entry_from_town', returnLink.townExitSide ?? 'top', Math.max(MIN_ROAD_WIDTH, returnLink.roadWidth ?? MIN_ROAD_WIDTH));
     const returnExitId = 'forest_exit_to_town';
     const existing = exits.find((exit) => exit.id === returnExitId);
-    const landing = entry?.landing ?? room?.entrances?.['forest_entry_from_town']?.spawn ?? { x: Math.floor(room.tiles[0].length / 2), y: Math.floor(room.tiles.length / 2) };
+    const landing = room?.entrances?.forest_entry_from_town?.spawn
+      ?? entry?.landing
+      ?? { x: Math.floor(room.tiles[0].length / 2), y: Math.floor(room.tiles.length / 2) };
     if (!existing) {
       exits.push({
         id: returnExitId,
@@ -336,6 +421,28 @@ export class WorldMapManager {
 
     const rememberedReturnLink = this.forestReturnLinks.get(biomeId) ?? null;
     const returnLink = roomId === biome?.startRoomId ? (options.returnLink ?? rememberedReturnLink) : null;
+    const roomNode = roomId ? this.biomeGenerator.getRoomNode(roomId) : null;
+    if (roomNode && returnLink) {
+      const plannedEntryAnchor = buildForestEntryAnchor({
+        tiles: Array.from({ length: this.biomeGenerator.roomHeight }, () => Array.from({ length: this.biomeGenerator.roomWidth }, () => ({}))),
+        entrances: roomNode.entrances,
+      }, returnLink);
+      roomNode.entrances = {
+        ...(roomNode.entrances ?? {}),
+        forest_entry_from_town: {
+          ...(roomNode.entrances?.forest_entry_from_town ?? {}),
+          id: 'forest_entry_from_town',
+          x: plannedEntryAnchor?.x,
+          y: plannedEntryAnchor?.y,
+          direction: plannedEntryAnchor?.direction,
+          corridorWidth: plannedEntryAnchor?.corridorWidth ?? Math.max(MIN_ROAD_WIDTH, returnLink.roadWidth ?? MIN_ROAD_WIDTH),
+          landingX: plannedEntryAnchor?.landingX,
+          landingY: plannedEntryAnchor?.landingY,
+          spawn: plannedEntryAnchor?.spawn ? { ...plannedEntryAnchor.spawn } : undefined,
+        },
+      };
+      this.biomeGenerator.roomCache?.delete?.(roomId);
+    }
     const room = roomId ? this.biomeGenerator.loadRoom(roomId) : null;
     const normalized = normalizeForestRoom(room, {
       biomeId,
@@ -422,6 +529,7 @@ export class WorldMapManager {
           targetSeed: currentMap.seed,
           targetEntryId: exit.id,
           townExitSide: exit.meta?.exitSide ?? currentMap.metadata?.townExitSide ?? 'top',
+          townExitPosition: exit.position ?? exit.meta?.townExitPosition ?? currentMap.metadata?.townExitPosition ?? null,
           roadWidth: exit.width ?? exit.meta?.roadWidth ?? 3,
         }
         : null;
@@ -518,4 +626,3 @@ export class WorldMapManager {
     }
   }
 }
-
