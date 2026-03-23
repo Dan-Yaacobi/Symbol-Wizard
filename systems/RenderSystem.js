@@ -17,6 +17,10 @@ const STATUS_STYLE = {
   shock: { icon: '⚡', tint: '#ffe76a', effectColor: '#fff09a' },
 };
 
+export function worldToScreenCell(worldCoordinate, cameraCoordinate) {
+  return worldCoordinate - cameraCoordinate;
+}
+
 function blendHexColors(base, tint, amount = 0.28) {
   const parse = (hex) => {
     const normalized = typeof hex === 'string' ? hex.trim() : '';
@@ -59,8 +63,8 @@ function drawStatusIcon(renderer, camera, entity) {
   if (!statusType) return;
 
   const style = STATUS_STYLE[statusType] ?? { icon: '*', tint: '#ffffff' };
-  const sx = Math.round(entity.x) - camera.x;
-  const sy = Math.round(entity.y) - 5 - camera.y;
+  const sx = worldToScreenCell(entity.x, camera.x);
+  const sy = worldToScreenCell(entity.y - 5, camera.y);
   drawCell(renderer, { glyph: style.icon, fg: style.tint, layer: renderLayers.effects }, sx, sy);
 }
 
@@ -124,16 +128,16 @@ function drawSprite(renderer, camera, entity, color, forceSprite = null) {
   const sprite = forceSprite ?? getEntitySprite(entity);
   if (!sprite?.cells?.length) return;
 
-  const baseX = Math.round(entity.x) - Math.floor(sprite.width / 2);
-  const baseY = Math.round(entity.y) - 3 + (sprite.offsetY ?? 0);
+  const baseX = entity.x - Math.floor(sprite.width / 2);
+  const baseY = entity.y - 3 + (sprite.offsetY ?? 0);
 
   for (let sy = 0; sy < sprite.height; sy += 1) {
     for (let sx = 0; sx < sprite.width; sx += 1) {
       const cell = sprite.cells[sy]?.[getSpriteCellX(sprite, entity.facing, sx)];
       const ch = cell?.ch ?? ' ';
       if ((ch === ' ' || ch === '\0') && !cell?.bg) continue;
-      const screenX = baseX + sx - camera.x;
-      const screenY = baseY + sy - camera.y;
+      const screenX = worldToScreenCell(baseX + sx, camera.x);
+      const screenY = worldToScreenCell(baseY + sy, camera.y);
       const finalGlyph = resolveSpriteRenderGlyph(entity, sprite, ch);
       drawCell(renderer, { glyph: finalGlyph, fg: cell?.fg ?? color, bg: cell?.bg ?? c.worldBackground }, screenX, screenY);
     }
@@ -168,8 +172,8 @@ function drawProjectile(renderer, camera, projectile) {
 
   const sprite = frames[projectile.frameIndex % frames.length];
   const spriteWidth = sprite[0]?.length ?? 5;
-  const baseX = Math.round(projectile.x) - Math.floor(spriteWidth / 2);
-  const baseY = Math.round(projectile.y) - 1;
+  const baseX = projectile.x - Math.floor(spriteWidth / 2);
+  const baseY = projectile.y - 1;
 
   const occupied = new Set();
   for (let sy = 0; sy < sprite.length; sy += 1) {
@@ -195,8 +199,8 @@ function drawProjectile(renderer, camera, projectile) {
 
       for (const [ox, oy] of glowOffsets) {
         if (occupied.has(`${sx + ox},${sy + oy}`)) continue;
-        const glowX = baseX + sx + ox - camera.x;
-        const glowY = baseY + sy + oy - camera.y;
+        const glowX = worldToScreenCell(baseX + sx + ox, camera.x);
+        const glowY = worldToScreenCell(baseY + sy + oy, camera.y);
         drawCell(renderer, { glyph: '·', fg: glowColor }, glowX, glowY);
       }
     }
@@ -206,7 +210,12 @@ function drawProjectile(renderer, camera, projectile) {
     const alpha = (particle.ttl ?? 0) / (particle.maxTtl ?? 1);
     if (alpha <= 0) continue;
     const glyph = alpha > 0.66 ? '•' : (alpha > 0.33 ? '·' : '.');
-    drawCell(renderer, { glyph, fg: particle.color ?? projectile.trailColor ?? c.projectileArcane }, Math.round(particle.x) - camera.x, Math.round(particle.y) - camera.y);
+    drawCell(
+      renderer,
+      { glyph, fg: particle.color ?? projectile.trailColor ?? c.projectileArcane },
+      worldToScreenCell(particle.x, camera.x),
+      worldToScreenCell(particle.y, camera.y),
+    );
   }
 
   for (let sy = 0; sy < sprite.length; sy += 1) {
@@ -214,8 +223,8 @@ function drawProjectile(renderer, camera, projectile) {
     for (let sx = 0; sx < row.length; sx += 1) {
       const ch = row[sx];
       if (ch === ' ') continue;
-      const screenX = baseX + sx - camera.x;
-      const screenY = baseY + sy - camera.y;
+      const screenX = worldToScreenCell(baseX + sx, camera.x);
+      const screenY = worldToScreenCell(baseY + sy, camera.y);
       drawCell(renderer, { glyph: toSafeGlyph(ch), fg: projectile.color }, screenX, screenY);
     }
   }
@@ -240,8 +249,8 @@ function drawAbilityEffect(renderer, camera, effect) {
       const jitter = (Math.random() - 0.5) * jitterAmplitude * pulse;
       const x = effect.fromX + dx * t + nx * jitter;
       const y = effect.fromY + dy * t + ny * jitter;
-      const sx = Math.round(x) - camera.x;
-      const sy = Math.round(y) - camera.y;
+      const sx = worldToScreenCell(x, camera.x);
+      const sy = worldToScreenCell(y, camera.y);
 
       drawCell(renderer, { glyph: '*', fg: effect.glowColor ?? '#9ad5ff', layer: renderLayers.effects }, sx, sy);
       drawCell(renderer, { glyph: '≈', fg: effect.color ?? '#f3fbff', layer: renderLayers.effects }, sx, sy);
@@ -271,13 +280,13 @@ function drawAbilityEffect(renderer, camera, effect) {
         const pulse = 0.45 + Math.sin((t + normalizedLife) * Math.PI) * 0.2;
         const x = branch.fromX + dx * t;
         const y = branch.fromY + dy * t;
-        const coreX = Math.round(x) - camera.x;
-        const coreY = Math.round(y) - camera.y;
+        const coreX = worldToScreenCell(x, camera.x);
+        const coreY = worldToScreenCell(y, camera.y);
 
         for (let lane = -Math.floor(width / 2); lane <= Math.floor(width / 2); lane += 1) {
           const offsetScale = lane * 0.45;
-          const sx = Math.round(x + nx * offsetScale) - camera.x;
-          const sy = Math.round(y + ny * offsetScale) - camera.y;
+          const sx = worldToScreenCell(x + nx * offsetScale, camera.x);
+          const sy = worldToScreenCell(y + ny * offsetScale, camera.y);
           const glyph = lane === 0 ? glyphs[0] : glyphs[1];
           const color = lane === 0 ? (effect.glowColor ?? '#f4fbff') : (effect.color ?? '#cfe7ff');
           drawCell(renderer, { glyph, fg: color, layer: renderLayers.effects }, sx, sy);
@@ -297,7 +306,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const t = i / steps;
       const x = effect.fromX + (effect.toX - effect.fromX) * t;
       const y = effect.fromY + (effect.toY - effect.fromY) * t;
-      drawCell(renderer, { glyph: '~', fg: effect.color ?? '#cfe7ff', layer: renderLayers.effects }, Math.round(x) - camera.x, Math.round(y) - camera.y);
+      drawCell(renderer, { glyph: '~', fg: effect.color ?? '#cfe7ff', layer: renderLayers.effects }, worldToScreenCell(x, camera.x), worldToScreenCell(y, camera.y));
     }
     return;
   }
@@ -309,7 +318,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const angle = (Math.PI * 2 * i) / points;
       const x = effect.x + Math.cos(angle) * effect.radius;
       const y = effect.y + Math.sin(angle) * effect.radius;
-      drawCell(renderer, { glyph: '·', fg: effect.color ?? '#d8f1ff', layer: renderLayers.effects }, Math.round(x) - camera.x, Math.round(y) - camera.y);
+      drawCell(renderer, { glyph: '·', fg: effect.color ?? '#d8f1ff', layer: renderLayers.effects }, worldToScreenCell(x, camera.x), worldToScreenCell(y, camera.y));
     }
     return;
   }
@@ -320,7 +329,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const angle = (Math.PI * 2 * i) / 10;
       const x = effect.x + Math.cos(angle) * (effect.radius ?? 2);
       const y = effect.y + Math.sin(angle) * (effect.radius ?? 2);
-      drawCell(renderer, { glyph: glyphs[i % glyphs.length], fg: effect.color ?? '#def5ff', layer: renderLayers.effects }, Math.round(x) - camera.x, Math.round(y) - camera.y);
+      drawCell(renderer, { glyph: glyphs[i % glyphs.length], fg: effect.color ?? '#def5ff', layer: renderLayers.effects }, worldToScreenCell(x, camera.x), worldToScreenCell(y, camera.y));
     }
     return;
   }
@@ -334,16 +343,16 @@ function drawAbilityEffect(renderer, camera, effect) {
       const angle = (Math.PI * 2 * i) / points;
       const x = effect.x + Math.cos(angle) * ringRadius;
       const y = effect.y + Math.sin(angle) * ringRadius;
-      drawCell(renderer, { glyph: '·', fg: style.effectColor ?? style.tint, layer: renderLayers.effects }, Math.round(x) - camera.x, Math.round(y) - camera.y);
+      drawCell(renderer, { glyph: '·', fg: style.effectColor ?? style.tint, layer: renderLayers.effects }, worldToScreenCell(x, camera.x), worldToScreenCell(y, camera.y));
     }
-    drawCell(renderer, { glyph: style.icon, fg: style.tint ?? '#ffffff', layer: renderLayers.effects }, Math.round(effect.x) - camera.x, Math.round(effect.y) - 1 - camera.y);
+    drawCell(renderer, { glyph: style.icon, fg: style.tint ?? '#ffffff', layer: renderLayers.effects }, worldToScreenCell(effect.x, camera.x), worldToScreenCell(effect.y - 1, camera.y));
     return;
   }
 
   if (effect.type === 'status-tick') {
     const style = STATUS_STYLE[effect.statusType] ?? { icon: '*', effectColor: '#ffffff' };
     const glyph = lifeRatio > 0.5 ? '·' : '.';
-    drawCell(renderer, { glyph, fg: style.effectColor ?? style.tint, layer: renderLayers.effects }, Math.round(effect.x) - camera.x, Math.round(effect.y) - camera.y);
+    drawCell(renderer, { glyph, fg: style.effectColor ?? style.tint, layer: renderLayers.effects }, worldToScreenCell(effect.x, camera.x), worldToScreenCell(effect.y, camera.y));
     return;
   }
 
@@ -355,9 +364,9 @@ function drawAbilityEffect(renderer, camera, effect) {
       const angle = (Math.PI * 2 * i) / points;
       const x = effect.x + Math.cos(angle) * ringRadius;
       const y = effect.y + Math.sin(angle) * ringRadius;
-      drawCell(renderer, { glyph: '·', fg: effect.color ?? '#ff6a6a', layer: renderLayers.effects }, Math.round(x) - camera.x, Math.round(y) - camera.y);
+      drawCell(renderer, { glyph: '·', fg: effect.color ?? '#ff6a6a', layer: renderLayers.effects }, worldToScreenCell(x, camera.x), worldToScreenCell(y, camera.y));
     }
-    drawCell(renderer, { glyph, fg: effect.color ?? '#ff8d8d', layer: renderLayers.effects }, Math.round(effect.x) - camera.x, Math.round(effect.y) - camera.y);
+    drawCell(renderer, { glyph, fg: effect.color ?? '#ff8d8d', layer: renderLayers.effects }, worldToScreenCell(effect.x, camera.x), worldToScreenCell(effect.y, camera.y));
     return;
   }
 
@@ -365,7 +374,7 @@ function drawAbilityEffect(renderer, camera, effect) {
     for (const particle of effect.particles ?? []) {
       const lifeRatio = particle.life / Math.max(0.0001, particle.maxLife ?? particle.life ?? 1);
       const glyph = lifeRatio > 0.5 ? '*' : '·';
-      drawCell(renderer, { glyph, fg: effect.color ?? '#d9dce3', layer: renderLayers.effects }, Math.round(particle.x) - camera.x, Math.round(particle.y) - camera.y);
+      drawCell(renderer, { glyph, fg: effect.color ?? '#d9dce3', layer: renderLayers.effects }, worldToScreenCell(particle.x, camera.x), worldToScreenCell(particle.y, camera.y));
     }
     return;
   }
@@ -377,7 +386,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const x = effect.x + Math.cos(angle) * effect.radius;
       const y = effect.y + Math.sin(angle) * effect.radius;
       const glyph = lifeRatio > 0.45 ? '*' : '·';
-      drawCell(renderer, { glyph, fg: effect.color ?? '#ffb36e', layer: renderLayers.effects }, Math.round(x) - camera.x, Math.round(y) - camera.y);
+      drawCell(renderer, { glyph, fg: effect.color ?? '#ffb36e', layer: renderLayers.effects }, worldToScreenCell(x, camera.x), worldToScreenCell(y, camera.y));
     }
     return;
   }
@@ -389,7 +398,7 @@ function drawAbilityEffect(renderer, camera, effect) {
       const travel = (1 - lifeRatio) * (piece.speed ?? 2.2);
       const x = effect.x + Math.cos(piece.angle) * travel;
       const y = effect.y + Math.sin(piece.angle) * travel;
-      drawCell(renderer, { glyph, fg: effect.color ?? '#d5b79a', layer: renderLayers.effects }, Math.round(x) - camera.x, Math.round(y) - camera.y);
+      drawCell(renderer, { glyph, fg: effect.color ?? '#d5b79a', layer: renderLayers.effects }, worldToScreenCell(x, camera.x), worldToScreenCell(y, camera.y));
     }
   }
 }
@@ -409,8 +418,8 @@ function drawWorldObject(renderer, camera, object, spriteId = object.spriteId) {
 
   const tiles = object.tileVariants ?? object.tiles ?? [];
   for (const tile of tiles) {
-    const sx = Math.round(object.x + (tile.x ?? 0)) - camera.x;
-    const sy = Math.round(object.y + (tile.y ?? 0)) - camera.y;
+    const sx = worldToScreenCell(object.x + (tile.x ?? 0), camera.x);
+    const sy = worldToScreenCell(object.y + (tile.y ?? 0), camera.y);
     drawCell(renderer, { glyph: toSafeGlyph(tile.char ?? ' '), fg: tile.fg ?? '#d8d2c4', bg: tile.bg ?? c.worldBackground }, sx, sy);
   }
 }
@@ -421,8 +430,8 @@ function drawWorldDrop(renderer, camera, drop) {
   const item = getItemDefinition(drop?.itemId);
   const glyph = item?.icon ?? '*';
   const fg = item?.type === 'rare' ? '#ffe07d' : '#f5f1de';
-  const screenX = Math.round(drop.x) - camera.x;
-  const screenY = Math.round(drop.y ?? 0) - camera.y;
+  const screenX = worldToScreenCell(drop.x, camera.x);
+  const screenY = worldToScreenCell(drop.y ?? 0, camera.y);
   drawCell(renderer, { glyph, fg, layer: renderLayers.entities }, screenX, screenY);
 }
 
@@ -583,8 +592,8 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
 
     if (npc.dialogueEngaged) {
       const pulse = npc.dialoguePulse > 0 ? '○' : '·';
-      const sx = Math.round(npc.x) - camera.x;
-      const sy = Math.round(npc.y) - 5 - camera.y;
+      const sx = worldToScreenCell(npc.x, camera.x);
+      const sy = worldToScreenCell(npc.y - 5, camera.y);
       drawCell(renderer, { glyph: '*', fg: '#ffe6a8' }, sx, sy);
       drawCell(renderer, { glyph: pulse, fg: '#f7c66e' }, sx, sy + 1);
     }
@@ -607,16 +616,16 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     drawSprite(renderer, camera, enemy, renderColor);
 
     if (isEntityAttacking(enemy) && enemy.behavior !== 'ranged' && (enemy.state?.time ?? 0) < (enemy.attackWindup ?? 0.4)) {
-      const sx = Math.round(enemy.x) - camera.x;
-      const sy = Math.round(enemy.y) - camera.y;
+      const sx = worldToScreenCell(enemy.x, camera.x);
+      const sy = worldToScreenCell(enemy.y, camera.y);
       drawCell(renderer, { glyph: '!', fg: '#ffd166' }, sx, sy);
     }
 
     drawStatusIcon(renderer, camera, enemy);
 
     if (enemy.frozen) {
-      const sx = Math.round(enemy.x) - camera.x;
-      const sy = Math.round(enemy.y) - 3 - camera.y;
+      const sx = worldToScreenCell(enemy.x, camera.x);
+      const sy = worldToScreenCell(enemy.y - 3, camera.y);
       drawCell(renderer, { glyph: '*', fg: enemy.freezeGlow ?? '#d8f4ff' }, sx, sy);
     }
   }
@@ -625,8 +634,8 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   for (const effect of safeAbilityEffects) drawAbilityEffect(renderer, camera, effect);
 
   for (const g of goldPiles) {
-    const gx = Math.round(g.x) - camera.x;
-    const gy = Math.round(g.y) - camera.y;
+    const gx = worldToScreenCell(g.x, camera.x);
+    const gy = worldToScreenCell(g.y, camera.y);
     if (g.type === 'minor-item') {
       drawCell(renderer, { glyph: '*', fg: visualPalette.gold.lootSpark }, gx, gy);
       continue;
@@ -639,8 +648,8 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   const playerColor = getEntityTintColor(player, palette.player);
   drawSprite(renderer, camera, player, playerColor);
   drawStatusIcon(renderer, camera, player);
-  const px = Math.round(player.x) - camera.x;
-  const py = Math.round(player.y) - camera.y;
+  const px = worldToScreenCell(player.x, camera.x);
+  const py = worldToScreenCell(player.y, camera.y);
   drawCell(renderer, { glyph: '!', fg: palette.playerAccent }, px, py - 2);
 
   drawDebugOverlays(renderer, camera, player, enemies, projectiles, activeRoom, debugOptions);
