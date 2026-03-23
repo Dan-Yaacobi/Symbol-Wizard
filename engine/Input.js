@@ -1,5 +1,11 @@
 import { clamp } from '../input/CoordinateSystem.js';
 
+const MOUSE_BUTTON_MAP = {
+  0: 'left',
+  1: 'middle',
+  2: 'right',
+};
+
 export class Input {
   constructor(canvas, viewport, camera, cellW = 8, cellH = 8) {
     this.canvas = canvas;
@@ -20,7 +26,15 @@ export class Input {
       worldX: 0,
       worldY: 0,
       left: false,
+      middle: false,
+      right: false,
       clicked: false,
+    };
+
+    this.mouseButtonsPressed = {
+      left: false,
+      middle: false,
+      right: false,
     };
 
     window.addEventListener('keydown', e => {
@@ -31,21 +45,46 @@ export class Input {
       this.keys[e.key.toLowerCase()] = false;
     });
 
+    canvas.addEventListener('contextmenu', e => {
+      this.#updatePointer(e);
+      e.preventDefault();
+    });
+
     canvas.addEventListener('mousemove', e => {
       this.#updatePointer(e);
     });
 
     canvas.addEventListener('mousedown', e => {
       this.#updatePointer(e);
-      if (e.button === 0) {
-        this.mouse.left = true;
-        this.mouse.clicked = true;
-      }
+      this.#setMouseButtonState(e.button, true);
+      e.preventDefault();
+    });
+
+    canvas.addEventListener('mouseup', e => {
+      this.#updatePointer(e);
+      this.#setMouseButtonState(e.button, false);
+      e.preventDefault();
+    });
+
+    canvas.addEventListener('auxclick', e => {
+      this.#updatePointer(e);
+      if (e.button === 1) e.preventDefault();
     });
 
     window.addEventListener('mouseup', e => {
-      if (e.button === 0) this.mouse.left = false;
+      this.#setMouseButtonState(e.button, false);
     });
+  }
+
+  #setMouseButtonState(button, isDown) {
+    const mouseButton = MOUSE_BUTTON_MAP[button];
+    if (!mouseButton) return;
+
+    this.mouse[mouseButton] = isDown;
+    if (isDown) {
+      this.mouseButtonsPressed[mouseButton] = true;
+      if (mouseButton === 'left') this.mouse.clicked = true;
+    }
   }
 
   #updatePointer(e) {
@@ -77,6 +116,19 @@ export class Input {
 
   getMouseWorldPosition() {
     return { x: this.mouse.worldX, y: this.mouse.worldY };
+  }
+
+  consumeMouseButtonPress(button) {
+    const mouseButton = button.toLowerCase();
+    const pressed = Boolean(this.mouseButtonsPressed[mouseButton]);
+    this.mouseButtonsPressed[mouseButton] = false;
+    return pressed;
+  }
+
+  clearMouseButtonPresses() {
+    this.mouseButtonsPressed.left = false;
+    this.mouseButtonsPressed.middle = false;
+    this.mouseButtonsPressed.right = false;
   }
 
   isDown(key) {
