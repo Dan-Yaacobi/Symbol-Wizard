@@ -569,6 +569,81 @@ function drawDebugCursorOverlay(renderer, mouse) {
     renderer.drawCell(toRenderCell({ glyph: '+', fg: '#53f7ff', layer: renderLayers.ui }), mouse.logicalCellX, mouse.logicalCellY);
   }
 }
+
+function traceCoordinateRoundTrip(renderer, camera, mouse, player) {
+  if (!renderer?.coordinateTraceEnabled || !mouse || !player) return;
+
+  const rect = renderer.canvas.getBoundingClientRect();
+  const scale = renderer.compositeScale > 0 ? renderer.compositeScale : 1;
+  const compositeOffsetX = renderer.offsetX ?? 0;
+  const compositeOffsetY = renderer.offsetY ?? 0;
+
+  const playerLogicalX = (player.x - camera.x) * renderer.cellW;
+  const playerLogicalY = (player.y - camera.y) * renderer.cellH;
+  const playerCanvasX = compositeOffsetX + playerLogicalX * scale;
+  const playerCanvasY = compositeOffsetY + playerLogicalY * scale;
+  const playerScreenX = rect.left + playerCanvasX;
+  const playerScreenY = rect.top + playerCanvasY;
+
+  const cursorLogicalX = (mouse.worldX - camera.x) * renderer.cellW;
+  const cursorLogicalY = (mouse.worldY - camera.y) * renderer.cellH;
+  const expectedCanvasX = compositeOffsetX + cursorLogicalX * scale;
+  const expectedCanvasY = compositeOffsetY + cursorLogicalY * scale;
+  const expectedScreenX = rect.left + expectedCanvasX;
+  const expectedScreenY = rect.top + expectedCanvasY;
+
+  console.debug('[CoordinateTrace][RoundTrip]', {
+    frameId: renderer.compositeFrameId ?? 0,
+    camera: { x: camera.x, y: camera.y },
+    player: {
+      worldX: player.x,
+      worldY: player.y,
+      logicalX: playerLogicalX,
+      logicalY: playerLogicalY,
+      renderedCanvasX: playerCanvasX,
+      renderedCanvasY: playerCanvasY,
+      renderedScreenX: playerScreenX,
+      renderedScreenY: playerScreenY,
+    },
+    cursor: {
+      actualScreenX: mouse.screenX,
+      actualScreenY: mouse.screenY,
+      canvasX: mouse.canvasX,
+      canvasY: mouse.canvasY,
+      logicalX: mouse.logicalX,
+      logicalY: mouse.logicalY,
+      worldX: mouse.worldX,
+      worldY: mouse.worldY,
+      expectedCanvasX,
+      expectedCanvasY,
+      expectedScreenX,
+      expectedScreenY,
+      deltaScreenX: mouse.screenX - expectedScreenX,
+      deltaScreenY: mouse.screenY - expectedScreenY,
+      deltaCanvasX: mouse.canvasX - expectedCanvasX,
+      deltaCanvasY: mouse.canvasY - expectedCanvasY,
+    },
+    transform: {
+      compositeScale: scale,
+      compositeOffsetX,
+      compositeOffsetY,
+      rectLeft: rect.left,
+      rectTop: rect.top,
+      rectWidth: rect.width,
+      rectHeight: rect.height,
+      canvasWidth: renderer.canvas.width,
+      canvasHeight: renderer.canvas.height,
+    },
+    timing: {
+      frameTimestampMs: renderer.lastCompositeTimestamp ?? 0,
+      pointerTimestampMs: mouse.eventTimestampMs ?? null,
+      pointerMinusCompositeMs: mouse.eventTimestampMs == null ? null : mouse.eventTimestampMs - (renderer.lastCompositeTimestamp ?? 0),
+      pointerFrameId: mouse.renderTransformFrameId ?? null,
+      currentFrameId: renderer.compositeFrameId ?? 0,
+    },
+  });
+}
+
 export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, worldDrops = [], combatTextSystem = null, abilityEffects = [], mouse = null, debugOptions = {}, activeRoom = null) {
   const safeAbilityEffects = Array.isArray(abilityEffects) ? abilityEffects : [];
   const safeWorldDrops = Array.isArray(worldDrops) ? worldDrops : [];
@@ -657,5 +732,6 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
 
   drawDebugOverlays(renderer, camera, player, enemies, projectiles, activeRoom, debugOptions);
   drawDebugCursorOverlay(renderer, mouse);
+  traceCoordinateRoundTrip(renderer, camera, mouse, player);
   if (typeof combatTextSystem?.render === 'function') combatTextSystem.render(renderer, camera);
 }

@@ -21,6 +21,9 @@ export class Renderer {
     this.compositeScale = 1;
     this.offsetX = 0;
     this.offsetY = 0;
+    this.compositeFrameId = 0;
+    this.lastCompositeTimestamp = 0;
+    this.coordinateTraceEnabled = Boolean(globalThis?.location?.search?.includes('coordinateTrace=1'));
 
     this.fontAtlas = new Image();
     this.fontLoadFailed = false;
@@ -395,6 +398,24 @@ export class Renderer {
     this.compositeScale = scale;
     this.offsetX = offsetX;
     this.offsetY = offsetY;
+    this.compositeFrameId += 1;
+    this.lastCompositeTimestamp = globalThis?.performance?.now?.() ?? Date.now();
+
+    if (this.coordinateTraceEnabled) {
+      console.debug('[CoordinateTrace][RenderTransform]', {
+        frameId: this.compositeFrameId,
+        timestampMs: this.lastCompositeTimestamp,
+        compositeScale: this.compositeScale,
+        compositeOffsetX: this.offsetX,
+        compositeOffsetY: this.offsetY,
+        canvasWidth: this.canvas.width,
+        canvasHeight: this.canvas.height,
+        layerWidth,
+        layerHeight,
+        destW,
+        destH,
+      });
+    }
 
     this.ctx.drawImage(this.background.canvas, offsetX, offsetY, destW, destH);
     this.ctx.drawImage(this.entities.canvas, offsetX, offsetY, destW, destH);

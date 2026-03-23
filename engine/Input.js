@@ -30,6 +30,9 @@ export class Input {
       worldX: 0,
       worldY: 0,
       insideViewport: false,
+      eventTimestampMs: 0,
+      renderTransformFrameId: 0,
+      renderTransformTimestampMs: 0,
       left: false,
       middle: false,
       right: false,
@@ -41,6 +44,8 @@ export class Input {
       middle: false,
       right: false,
     };
+
+    this.coordinateTraceEnabled = Boolean(globalThis?.location?.search?.includes('coordinateTrace=1'));
 
     window.addEventListener('keydown', e => {
       this.keys[e.key.toLowerCase()] = true;
@@ -126,6 +131,53 @@ export class Input {
     this.mouse.worldX = worldPos.x;
     this.mouse.worldY = worldPos.y;
     this.mouse.insideViewport = worldPos.inside;
+    this.mouse.eventTimestampMs = e.timeStamp;
+    this.mouse.renderTransformFrameId = this.viewport?.renderer?.compositeFrameId ?? 0;
+    this.mouse.renderTransformTimestampMs = this.viewport?.renderer?.lastCompositeTimestamp ?? 0;
+
+    if (this.coordinateTraceEnabled && e.type === 'mousemove') {
+      const rect = this.canvas.getBoundingClientRect();
+      const renderer = this.viewport?.renderer;
+      console.debug('[CoordinateTrace][InputPipeline]', {
+        eventType: e.type,
+        timestampMs: e.timeStamp,
+        screen: { clientX: e.clientX, clientY: e.clientY },
+        canvas: {
+          canvasX: canvasPos.x,
+          canvasY: canvasPos.y,
+          rectLeft: rect.left,
+          rectTop: rect.top,
+          rectWidth: rect.width,
+          rectHeight: rect.height,
+          canvasWidth: this.canvas.width,
+          canvasHeight: this.canvas.height,
+          scaleX: rect.width > 0 ? this.canvas.width / rect.width : null,
+          scaleY: rect.height > 0 ? this.canvas.height / rect.height : null,
+        },
+        logical: {
+          logicalX: worldPos.logicalX,
+          logicalY: worldPos.logicalY,
+          rawLogicalX: worldPos.rawLogicalX,
+          rawLogicalY: worldPos.rawLogicalY,
+          logicalCellX,
+          logicalCellY,
+          logicalWidth: worldPos.logicalWidth,
+          logicalHeight: worldPos.logicalHeight,
+        },
+        world: { worldX: worldPos.x, worldY: worldPos.y },
+        renderTransformSnapshot: renderer ? {
+          frameId: renderer.compositeFrameId ?? 0,
+          compositeScale: renderer.compositeScale ?? 1,
+          compositeOffsetX: renderer.offsetX ?? 0,
+          compositeOffsetY: renderer.offsetY ?? 0,
+          lastCompositeTimestamp: renderer.lastCompositeTimestamp ?? 0,
+        } : null,
+        cameraSnapshot: { x: this.camera?.x ?? 0, y: this.camera?.y ?? 0 },
+        timing: renderer ? {
+          pointerMinusCompositeMs: e.timeStamp - (renderer.lastCompositeTimestamp ?? 0),
+        } : null,
+      });
+    }
   }
 
   getMouseWorldPosition() {
