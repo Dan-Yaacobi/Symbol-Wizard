@@ -378,9 +378,20 @@ export class Renderer {
 
   composite() {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    this.ctx.drawImage(this.background.canvas, 0, 0);
-    this.ctx.drawImage(this.entities.canvas, 0, 0);
-    this.ctx.drawImage(this.effects.canvas, 0, 0);
-    this.ctx.drawImage(this.ui.canvas, 0, 0);
+    const layerWidth = this.background.canvas.width;
+    const layerHeight = this.background.canvas.height;
+    const scale = Math.min(
+      this.canvas.width / layerWidth,
+      this.canvas.height / layerHeight,
+    );
+    const destW = layerWidth * scale;
+    const destH = layerHeight * scale;
+    const offsetX = (this.canvas.width - destW) / 2;
+    const offsetY = (this.canvas.height - destH) / 2;
+
+    this.ctx.drawImage(this.background.canvas, offsetX, offsetY, destW, destH);
+    this.ctx.drawImage(this.entities.canvas, offsetX, offsetY, destW, destH);
+    this.ctx.drawImage(this.effects.canvas, offsetX, offsetY, destW, destH);
+    this.ctx.drawImage(this.ui.canvas, offsetX, offsetY, destW, destH);
   }
 }

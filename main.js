@@ -233,6 +233,7 @@ function collectWorldDrops() {
     if (added > 0) {
       triggerItemPickupFeedback(drop.itemId, added);
       combatTextSystem.spawnPickupText(player, drop.itemId, added);
+      inventoryWindow.markDirty();
     }
 
     if (remaining > 0) {
@@ -299,6 +300,7 @@ const spellCraftingWindow = new SpellCraftingWindow({
     if (!spell?.id || abilitySystem.definitions.has(spell.id)) return false;
     abilitySystem.definitions.set(spell.id, spell);
     abilitySystem.cooldowns.set(spell.id, 0);
+    inventoryWindow.markDirty();
     return true;
   },
 });
@@ -972,7 +974,6 @@ function tick(now) {
     inventoryWindow.toggle();
   }
   inventoryToggleLatch = inventoryDown;
-  if (inventoryWindow.isOpen()) inventoryWindow.render();
   spriteEditor.tick(dt);
   player.frameDurations.walk = runtimeConfig.get('sprites.playerWalkFrameDuration');
   player.frameDurations.idle = runtimeConfig.get('sprites.playerIdleFrameDuration');

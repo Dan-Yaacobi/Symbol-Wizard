@@ -515,6 +515,7 @@ body {
   box-shadow: 0 24px 40px rgba(0, 0, 0, 0.55);
   padding: 10px;
   overflow: auto;
+  pointer-events: auto;
 }
 
 .spellbook-header h3 {

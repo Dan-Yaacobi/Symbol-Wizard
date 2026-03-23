@@ -118,6 +118,8 @@ export class DevToolsPanel {
   constructor(config) {
     this.config = config;
     this.open = false;
+    this.lastStatsText = '';
+    this.lastStatsUpdateAt = 0;
     this.filter = '';
     this.hoveredPath = null;
     this.selectedEntity = null;
@@ -215,7 +217,14 @@ export class DevToolsPanel {
   updateStats(text) {
     const enabled = this.config.get('debug.showStatsHud');
     this.statsHud.classList.toggle('hidden', !enabled);
-    if (enabled) this.statsHud.textContent = text;
+    if (!enabled) return;
+
+    const now = Date.now();
+    if (text !== this.lastStatsText && now - this.lastStatsUpdateAt >= 200) {
+      this.statsHud.textContent = text;
+      this.lastStatsText = text;
+      this.lastStatsUpdateAt = now;
+    }
   }
 
   getRenderDebugOptions() {
