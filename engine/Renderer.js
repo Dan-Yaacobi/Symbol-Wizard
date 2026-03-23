@@ -18,6 +18,9 @@ export class Renderer {
     this.glyphWarnings = new Set();
     this.lastCameraX = Number.NaN;
     this.lastCameraY = Number.NaN;
+    this.compositeScale = 1;
+    this.offsetX = 0;
+    this.offsetY = 0;
 
     this.fontAtlas = new Image();
     this.fontLoadFailed = false;
@@ -388,6 +391,10 @@ export class Renderer {
     const destH = layerHeight * scale;
     const offsetX = (this.canvas.width - destW) / 2;
     const offsetY = (this.canvas.height - destH) / 2;
+
+    this.compositeScale = scale;
+    this.offsetX = offsetX;
+    this.offsetY = offsetY;
 
     this.ctx.drawImage(this.background.canvas, offsetX, offsetY, destW, destH);
     this.ctx.drawImage(this.entities.canvas, offsetX, offsetY, destW, destH);

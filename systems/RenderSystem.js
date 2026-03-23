@@ -558,13 +558,16 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, activ
 }
 
 
-function drawDebugCursorOverlay(renderer, camera, mouse) {
+function drawDebugCursorOverlay(renderer, mouse) {
   if (!mouse) return;
 
-  const worldScreen = camera.worldToScreen(mouse.worldX, mouse.worldY);
-  drawCell(renderer, { glyph: '+', fg: '#ff3f7f' }, worldScreen.x, worldScreen.y);
+  const worldScreenX = mouse.logicalX / renderer.cellW;
+  const worldScreenY = mouse.logicalY / renderer.cellH;
+  drawCell(renderer, { glyph: '+', fg: '#ff3f7f' }, worldScreenX, worldScreenY);
 
-  renderer.drawCell(toRenderCell({ glyph: '+', fg: '#53f7ff', layer: renderLayers.ui }), mouse.canvasCellX, mouse.canvasCellY);
+  if (mouse.insideViewport) {
+    renderer.drawCell(toRenderCell({ glyph: '+', fg: '#53f7ff', layer: renderLayers.ui }), mouse.logicalCellX, mouse.logicalCellY);
+  }
 }
 export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, worldDrops = [], combatTextSystem = null, abilityEffects = [], mouse = null, debugOptions = {}, activeRoom = null) {
   const safeAbilityEffects = Array.isArray(abilityEffects) ? abilityEffects : [];
@@ -653,6 +656,6 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   drawCell(renderer, { glyph: '!', fg: palette.playerAccent }, px, py - 2);
 
   drawDebugOverlays(renderer, camera, player, enemies, projectiles, activeRoom, debugOptions);
-  drawDebugCursorOverlay(renderer, camera, mouse);
+  drawDebugCursorOverlay(renderer, mouse);
   if (typeof combatTextSystem?.render === 'function') combatTextSystem.render(renderer, camera);
 }

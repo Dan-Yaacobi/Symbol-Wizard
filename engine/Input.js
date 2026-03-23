@@ -21,10 +21,15 @@ export class Input {
       screenY: 0,
       canvasX: 0,
       canvasY: 0,
+      logicalX: 0,
+      logicalY: 0,
+      logicalCellX: 0,
+      logicalCellY: 0,
       canvasCellX: 0,
       canvasCellY: 0,
       worldX: 0,
       worldY: 0,
+      insideViewport: false,
       left: false,
       middle: false,
       right: false,
@@ -103,15 +108,24 @@ export class Input {
       this.cellW,
       this.cellH
     );
+    const maxLogicalCellX = Math.max(0, Math.ceil(worldPos.logicalWidth / this.cellW) - 1);
+    const maxLogicalCellY = Math.max(0, Math.ceil(worldPos.logicalHeight / this.cellH) - 1);
+    const logicalCellX = clamp(Math.floor(worldPos.logicalX / this.cellW), 0, maxLogicalCellX);
+    const logicalCellY = clamp(Math.floor(worldPos.logicalY / this.cellH), 0, maxLogicalCellY);
 
     this.mouse.screenX = e.clientX;
     this.mouse.screenY = e.clientY;
     this.mouse.canvasX = canvasPos.x;
     this.mouse.canvasY = canvasPos.y;
+    this.mouse.logicalX = worldPos.logicalX;
+    this.mouse.logicalY = worldPos.logicalY;
+    this.mouse.logicalCellX = logicalCellX;
+    this.mouse.logicalCellY = logicalCellY;
     this.mouse.canvasCellX = canvasCellX;
     this.mouse.canvasCellY = canvasCellY;
     this.mouse.worldX = worldPos.x;
     this.mouse.worldY = worldPos.y;
+    this.mouse.insideViewport = worldPos.inside;
   }
 
   getMouseWorldPosition() {
