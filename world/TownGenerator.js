@@ -2,8 +2,9 @@ import { tiles, tileFrom } from './TilePalette.js';
 import { House, StaticObject, TownNPC } from '../entities/WorldObjects.js';
 import { ObjectPlacementSystem } from './ObjectPlacementSystem.js';
 import { createSeededRng, hashSeed, pickOne, randomInt } from './SeededRandom.js';
-import { buildCollidableMask, carvePath, floodFillWalkable } from './PathConnectivity.js';
+import { buildCollidableMask, carveBoundaryCrossing, carvePath, floodFillWalkable } from './PathConnectivity.js';
 import { createRegionResult, ensureRegionConnectivity, normalizeExit, placeRegionExits, townDefinitions } from './RegionGenerationSystem.js';
+import { MIN_ROAD_WIDTH } from './GenerationConstants.js';
 
 function cloneTile(tile) {
   return { ...tile };
@@ -42,7 +43,7 @@ function markRect(set, left, top, width, height, padding = 0) {
   }
 }
 
-function carveWidePath(grid, mask, start, end, rng, halfWidth = 1) {
+function carveWidePath(grid, mask, start, end, rng, halfWidth = Math.ceil(MIN_ROAD_WIDTH / 2)) {
   const midA = {
     x: Math.round((start.x + end.x) / 2 + (rng() - 0.5) * 10),
     y: Math.round(start.y + (end.y - start.y) * 0.35 + (rng() - 0.5) * 8),
@@ -144,7 +145,7 @@ function computeEnvelopeMetrics(width, height, x, y, rngValue) {
 
 function chooseExitLayout(width, height, rng) {
   const side = pickOne(rng, ['top', 'bottom', 'left', 'right']) ?? 'top';
-  const roadWidth = randomInt(rng, 2, 3);
+  const roadWidth = Math.max(MIN_ROAD_WIDTH, randomInt(rng, MIN_ROAD_WIDTH, MIN_ROAD_WIDTH + 1));
   const halfSpan = Math.floor((roadWidth - 1) / 2);
 
   if (side === 'top' || side === 'bottom') {
@@ -295,8 +296,9 @@ function carveTownExitRoad(grid, roadMask, exitLayout, center, rng) {
     x: clamp(exitLayout.interiorAnchor.x + randomInt(rng, -driftRange, driftRange), 2, width - 3),
     y: clamp(exitLayout.interiorAnchor.y + randomInt(rng, -driftRange, driftRange), 2, height - 3),
   };
-  carveWidePath(grid, roadMask, { x: center.x, y: center.y }, curvedTarget, rng, Math.max(1, exitLayout.roadWidth - 1));
-  carveWidePath(grid, roadMask, curvedTarget, pathEnd, rng, Math.max(1, exitLayout.roadWidth - 1));
+  carveWidePath(grid, roadMask, { x: center.x, y: center.y }, curvedTarget, rng, Math.ceil(Math.max(MIN_ROAD_WIDTH, exitLayout.roadWidth) / 2));
+  carveWidePath(grid, roadMask, curvedTarget, pathEnd, rng, Math.ceil(Math.max(MIN_ROAD_WIDTH, exitLayout.roadWidth) / 2));
+  carveBoundaryCrossing(grid, pathEnd, exitLayout.direction, { width: Math.max(MIN_ROAD_WIDTH, exitLayout.roadWidth), carvedMask: roadMask });
   for (const tile of exitLayout.edgeTiles) {
     if (!grid[tile.y]?.[tile.x]) continue;
     grid[tile.y][tile.x] = tileFrom(tiles.dirt, { type: 'road', walkable: true });
@@ -375,7 +377,7 @@ function ensureTownExitReachable({ grid, objects, spawn, exit, entrance, roadMas
     });
     carvePath(grid, spawn, exit.position, {
       rng,
-      width: Math.max(3, exit.width ?? 3),
+      width: Math.max(MIN_ROAD_WIDTH, exit.width ?? MIN_ROAD_WIDTH),
       jitterBias: 0.32,
       carvedMask: roadMask,
       removableObjects: objects,
@@ -545,7 +547,7 @@ export class TownGenerator {
       });
       houses.push(house);
       markRect(blocked, left, top, houseWidth, houseHeight, 3);
-      carveWidePath(grid, roadMask, { x: door.x, y: door.y + 2 }, { x: center.x + randomInt(rng, -8, 8), y: center.y + randomInt(rng, -4, 4) }, rng, 1);
+      carveWidePath(grid, roadMask, { x: door.x, y: door.y + 2 }, { x: center.x + randomInt(rng, -8, 8), y: center.y + randomInt(rng, -4, 4) }, rng, Math.ceil(MIN_ROAD_WIDTH / 2));
     }
 
     carveTownExitRoad(grid, roadMask, exitLayout, center, rng);
@@ -664,7 +666,7 @@ export class TownGenerator {
     });
 
     placeRegionExits({ region: map, exits, metadataType: 'townType', metadataValue: townType, seed, debug });
-    ensureRegionConnectivity(map, { spawn: { x: entryX, y: entryY }, debug, pathWidth: Math.max(3, exitLayout.roadWidth) });
+    ensureRegionConnectivity(map, { spawn: { x: entryX, y: entryY }, debug, pathWidth: Math.max(MIN_ROAD_WIDTH, exitLayout.roadWidth) });
     logDebug('exit placement', { exits: map.exits.map((exit) => ({ id: exit.id, x: exit.x, y: exit.y, interactionData: exit.interactionData })) });
     console.log('Town exit side:', exitLayout.side, 'position:', exitLayout.exitPosition.x, exitLayout.exitPosition.y);
     console.log('Town → Forest', seed, '→', forestSeed);

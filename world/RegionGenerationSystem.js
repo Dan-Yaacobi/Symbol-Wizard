@@ -1,6 +1,7 @@
 import { tiles, tileFrom } from './TilePalette.js';
 import { createSeededRng, hashSeed, pickOne } from './SeededRandom.js';
 import { buildCollidableMask, carvePath, floodFillWalkable, nearestReachablePoint } from './PathConnectivity.js';
+import { MIN_ROAD_WIDTH } from './GenerationConstants.js';
 
 function cloneTile(tile) {
   return { ...tile };
@@ -133,7 +134,29 @@ export function placeRegionExits({ region, exits, metadataType, metadataValue, s
   return region;
 }
 
-export function ensureRegionConnectivity(region, { spawn = null, exitIds = null, debug = false, pathWidth = 3 } = {}) {
+function findNearestLargeOpenRegion(grid, origin) {
+  let bestTarget = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let y = 1; y < (grid?.length ?? 0) - 1; y += 1) {
+    for (let x = 1; x < (grid?.[0]?.length ?? 0) - 1; x += 1) {
+      let openTiles = 0;
+      for (let oy = -2; oy <= 2; oy += 1) {
+        for (let ox = -2; ox <= 2; ox += 1) {
+          if (grid[y + oy]?.[x + ox]?.walkable) openTiles += 1;
+        }
+      }
+      if (openTiles < 16) continue;
+      const distance = Math.abs(origin.x - x) + Math.abs(origin.y - y);
+      if (distance < bestScore) {
+        bestScore = distance;
+        bestTarget = { x, y };
+      }
+    }
+  }
+  return bestTarget;
+}
+
+export function ensureRegionConnectivity(region, { spawn = null, exitIds = null, debug = false, pathWidth = MIN_ROAD_WIDTH, openAreaRadius = 12 } = {}) {
   const log = makeLogger(debug, '[RegionGeneration:Connectivity]');
   const objectMask = buildCollidableMask(region.objects ?? []);
   const defaultSpawn = spawn
@@ -150,7 +173,7 @@ export function ensureRegionConnectivity(region, { spawn = null, exitIds = null,
     if (reachable.has(exitKey)) continue;
     const fallback = nearestReachablePoint(reachable, { x: exit.x, y: exit.y }) ?? defaultSpawn;
     carvePath(region.tiles, fallback, { x: exit.x, y: exit.y }, {
-      width: pathWidth,
+      width: Math.max(MIN_ROAD_WIDTH, pathWidth),
       jitterBias: 0.25,
       removableObjects: region.objects ?? [],
     });
@@ -164,10 +187,20 @@ export function ensureRegionConnectivity(region, { spawn = null, exitIds = null,
       ...(region.metadata?.connectivity ?? {}),
       spawn: defaultSpawn,
       allExitsReachable: targets.every((exit) => reachable.has(`${exit.x},${exit.y}`)),
+      reachableTiles: reachable.size,
       fixes,
     },
   };
   if (fixes.length) log('connectivity fixes applied', { regionId: region.id, fixes });
+  if (reachable.size <= openAreaRadius) {
+    const bestTarget = findNearestLargeOpenRegion(region.tiles, defaultSpawn);
+    if (bestTarget) {
+      carvePath(region.tiles, defaultSpawn, bestTarget, { width: Math.max(MIN_ROAD_WIDTH, pathWidth), jitterBias: 0.18, removableObjects: region.objects ?? [] });
+      reachable = floodFillWalkable(region.tiles, defaultSpawn, buildCollidableMask(region.objects ?? []));
+      region.metadata.connectivity.fixes.push({ exitId: 'open-area-repair', from: defaultSpawn, to: bestTarget });
+      region.metadata.connectivity.reachableTiles = reachable.size;
+    }
+  }
   return region;
 }
 
@@ -216,8 +249,8 @@ export function connectRegions({ fromRegion, toRegion, connectionType = 'path', 
   toRegion.exits = (toRegion.exits ?? []).map((exit) => exit.id === toExit.id ? toExit : normalizeExit(exit));
   if (!toRegion.exits.some((exit) => exit.id === toExit.id)) toRegion.exits.push(toExit);
 
-  ensureRegionConnectivity(fromRegion, { spawn: fromRegion.entrances?.['initial-spawn']?.spawn ?? fromLanding, exitIds: [fromExit.id], debug: options.debug, pathWidth: Math.max(3, options.pathWidth ?? 3) });
-  ensureRegionConnectivity(toRegion, { spawn: toLanding, exitIds: [toExit.id], debug: options.debug, pathWidth: Math.max(3, options.pathWidth ?? 3) });
+  ensureRegionConnectivity(fromRegion, { spawn: fromRegion.entrances?.['initial-spawn']?.spawn ?? fromLanding, exitIds: [fromExit.id], debug: options.debug, pathWidth: Math.max(MIN_ROAD_WIDTH, options.pathWidth ?? MIN_ROAD_WIDTH) });
+  ensureRegionConnectivity(toRegion, { spawn: toLanding, exitIds: [toExit.id], debug: options.debug, pathWidth: Math.max(MIN_ROAD_WIDTH, options.pathWidth ?? MIN_ROAD_WIDTH) });
 
   const result = {
     connectionType,
@@ -256,7 +289,7 @@ export function generateBiome({ biomeType = 'forest', seed, options = {} }) {
     targetType: 'town',
   });
   const spawn = { x: center.x, y: center.y };
-  carvePath(grid, spawn, { x: exit.x, y: exit.y }, { rng, width: 3 });
+  carvePath(grid, spawn, { x: exit.x, y: exit.y }, { rng, width: MIN_ROAD_WIDTH });
 
   const region = createRegionResult({
     id: `${biomeType}-${seed}`,
@@ -266,7 +299,7 @@ export function generateBiome({ biomeType = 'forest', seed, options = {} }) {
     entrances: { 'initial-spawn': { id: 'initial-spawn', x: spawn.x, y: spawn.y, spawn: { ...spawn }, landingX: spawn.x, landingY: spawn.y } },
     metadata: { biomeType, seed, definition },
   });
-  ensureRegionConnectivity(region, { spawn, debug, pathWidth: 3 });
+  ensureRegionConnectivity(region, { spawn, debug, pathWidth: MIN_ROAD_WIDTH });
   log('generated biome', { biomeType, seed });
   return region;
 }
