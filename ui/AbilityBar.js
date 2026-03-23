@@ -16,7 +16,6 @@ export class AbilityBar {
     this.player = player;
     this.slotElements = [];
     this.orbs = new Map();
-
     this.el = document.createElement('section');
     this.el.className = 'combat-hud';
     this.el.setAttribute('aria-label', 'Combat interface');
@@ -85,6 +84,12 @@ export class AbilityBar {
         cooldown: slot.querySelector('.combat-slot__cooldown'),
         cooldownText: slot.querySelector('.combat-slot__cooldown-text'),
         label: slot.querySelector('.combat-slot__label'),
+        state: {
+          abilityId: null,
+          isCoolingDown: null,
+          cooldownPercent: Number.NaN,
+          cooldownText: null,
+        },
       });
     }
   }
@@ -110,6 +115,12 @@ export class AbilityBar {
       fill: orb.querySelector('.combat-orb__fill'),
       value: orb.querySelector('.combat-orb__value'),
       getValue,
+      state: {
+        ratio: Number.NaN,
+        valueText: null,
+        max: null,
+        current: null,
+      },
     });
   }
 
@@ -127,37 +138,69 @@ export class AbilityBar {
       const cooldownRatio = maxCooldown > 0 ? clamp01(cooldown / maxCooldown) : 0;
       const readyRatio = 1 - cooldownRatio;
       const isCoolingDown = cooldown > 0.001;
+      const cooldownText = isCoolingDown
+        ? `${cooldown.toFixed(cooldown >= 10 ? 0 : 1)} / ${maxCooldown.toFixed(maxCooldown >= 10 ? 0 : 1)}`
+        : 'Ready';
+      const cooldownPercent = Math.round(cooldownRatio * 100);
+      const shouldUpdateCooldownVisual = force
+        || slotEl.state.isCoolingDown !== isCoolingDown
+        || Math.abs(cooldownPercent - slotEl.state.cooldownPercent) >= 1;
 
-      if (force || slotEl.root.dataset.abilityId !== (ability?.id ?? '')) {
-        slotEl.root.dataset.abilityId = ability?.id ?? '';
+      if (force || slotEl.state.abilityId !== (ability?.id ?? '')) {
+        slotEl.state.abilityId = ability?.id ?? '';
+        slotEl.root.dataset.abilityId = slotEl.state.abilityId;
         slotEl.root.classList.toggle('combat-slot--empty', !ability);
         slotEl.icon.textContent = ability?.icon ?? '—';
         slotEl.label.textContent = ability?.name ?? 'Empty';
         slotEl.root.setAttribute('aria-label', ability ? `${ability.name} on ${SLOT_BINDING_LABELS[i]}` : `Empty ${SLOT_BINDING_LABELS[i]} slot`);
       }
 
-      slotEl.root.classList.toggle('combat-slot--cooling-down', isCoolingDown);
-      slotEl.cooldown.style.background = isCoolingDown
-        ? `conic-gradient(from -90deg, transparent 0turn ${readyRatio}turn, rgba(0, 0, 0, 0.7) ${readyRatio}turn 1turn)`
-        : 'transparent';
-      slotEl.cooldown.style.opacity = isCoolingDown ? '1' : '0';
-      slotEl.cooldownText.textContent = isCoolingDown
-        ? `${cooldown.toFixed(cooldown >= 10 ? 0 : 1)} / ${maxCooldown.toFixed(maxCooldown >= 10 ? 0 : 1)}`
-        : 'Ready';
-      slotEl.cooldownText.classList.toggle('combat-slot__cooldown-text--ready', !isCoolingDown);
+      if (force || slotEl.state.isCoolingDown !== isCoolingDown) {
+        slotEl.state.isCoolingDown = isCoolingDown;
+        slotEl.root.classList.toggle('combat-slot--cooling-down', isCoolingDown);
+        slotEl.cooldown.style.opacity = isCoolingDown ? '1' : '0';
+        slotEl.cooldownText.classList.toggle('combat-slot__cooldown-text--ready', !isCoolingDown);
+      }
+
+      if (shouldUpdateCooldownVisual) {
+        slotEl.state.cooldownPercent = cooldownPercent;
+        slotEl.cooldown.style.background = isCoolingDown
+          ? `conic-gradient(from -90deg, transparent 0turn ${readyRatio}turn, rgba(0, 0, 0, 0.7) ${readyRatio}turn 1turn)`
+          : 'transparent';
+      }
+
+      if (force || slotEl.state.cooldownText !== cooldownText) {
+        slotEl.state.cooldownText = cooldownText;
+        slotEl.cooldownText.textContent = cooldownText;
+      }
     }
   }
 
-  updateOrbs() {
+  updateOrbs(force = false) {
     for (const orb of this.orbs.values()) {
       const { current, max } = orb.getValue();
       const safeMax = Math.max(0, max ?? 0);
       const ratio = safeMax > 0 ? clamp01((current ?? 0) / safeMax) : 0;
-      orb.fill.style.background = `conic-gradient(from 180deg, var(--orb-fill) 0turn ${ratio}turn, rgba(10, 16, 28, 0.92) ${ratio}turn 1turn)`;
-      orb.value.textContent = `${formatValue(current ?? 0)}/${formatValue(safeMax)}`;
-      orb.root.setAttribute('aria-valuemin', '0');
-      orb.root.setAttribute('aria-valuemax', String(formatValue(safeMax)));
-      orb.root.setAttribute('aria-valuenow', String(formatValue(current ?? 0)));
+      const valueText = `${formatValue(current ?? 0)}/${formatValue(safeMax)}`;
+      const roundedPercent = Math.round(ratio * 100);
+
+      if (force || orb.state.ratio !== roundedPercent) {
+        orb.state.ratio = roundedPercent;
+        orb.fill.style.background = `conic-gradient(from 180deg, var(--orb-fill) 0turn ${ratio}turn, rgba(10, 16, 28, 0.92) ${ratio}turn 1turn)`;
+      }
+      if (force || orb.state.valueText !== valueText) {
+        orb.state.valueText = valueText;
+        orb.value.textContent = valueText;
+      }
+      if (force || orb.state.max !== safeMax) {
+        orb.state.max = safeMax;
+        orb.root.setAttribute('aria-valuemin', '0');
+        orb.root.setAttribute('aria-valuemax', String(formatValue(safeMax)));
+      }
+      if (force || orb.state.current !== current) {
+        orb.state.current = current;
+        orb.root.setAttribute('aria-valuenow', String(formatValue(current ?? 0)));
+      }
     }
   }
 }
