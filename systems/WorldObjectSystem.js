@@ -97,6 +97,15 @@ export function resolveObjectCollision(entity, worldObjects) {
   }
 }
 
+export function collidesWithBlockingObjectAt(entity, x, y, worldObjects) {
+  for (const object of worldObjects) {
+    if (object.destroyed || !object.collision) continue;
+    if (objectIntersectsCircle(object, x, y, entity.radius)) return true;
+  }
+
+  return false;
+}
+
 export function updateDestructibleAnimations(worldObjects, dt) {
   for (const object of worldObjects) {
     if (!object.destroyed || object.breakTimer <= 0) continue;

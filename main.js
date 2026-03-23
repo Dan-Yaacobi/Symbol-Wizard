@@ -42,12 +42,13 @@ import { tryInteract } from './systems/InteractionSystem.js';
 import { loadObjectsFromFolder } from './world/ObjectLibrary.js';
 import { loadAllSpriteAssets } from './data/SpriteAssetLoader.js';
 import {
+  collidesWithBlockingObjectAt,
   cleanupDestroyedObjects,
-  resolveObjectCollision,
   updateDestructibleAnimations,
   updateTownNpcs,
 } from './systems/WorldObjectSystem.js';
 import { resolveWallOverlap } from './systems/EnemyCollisionSystem.js';
+import { attemptSlideMove } from './systems/CollisionSystem.js';
 
 const VIEW_W = 104;
 const VIEW_H = 58;
@@ -726,25 +727,25 @@ function isWalkable(x, y) {
   return true;
 }
 
-function movePlayerAxis(dx, dy) {
+function canOccupyPlayerPosition(x, y) {
+  return isWalkable(x, y) && !collidesWithBlockingObjectAt(player, x, y, worldObjects);
+}
+
+function movePlayer(dx, dy) {
   const prevX = player.x;
   const prevY = player.y;
-  const nextX = prevX + dx;
-  const nextY = prevY + dy;
+  const { movedX, movedY, blocked } = attemptSlideMove(player, dx, dy, canOccupyPlayerPosition);
 
-  if (!isWalkable(nextX, nextY)) {
-    player.vx = 0;
-    player.vy = 0;
+  if (blocked) {
     logPlayerBoundsState('collision check failed; movement blocked', {
       from: { x: prevX, y: prevY },
-      attempted: { x: nextX, y: nextY },
+      attempted: { x: prevX + dx, y: prevY + dy },
       delta: { dx, dy },
     });
-    return;
   }
 
-  player.x = nextX;
-  player.y = nextY;
+  if (dx !== 0 && !movedX) player.vx = 0;
+  if (dy !== 0 && !movedY) player.vy = 0;
 }
 
 function handlePlayer(dt) {
@@ -775,11 +776,7 @@ function handlePlayer(dt) {
     player.facingVector = { x: Math.round(moveX), y: Math.round(moveY) };
   }
 
-  movePlayerAxis(player.vx * dt, 0);
-  resolveObjectCollision(player, worldObjects);
-
-  movePlayerAxis(0, player.vy * dt);
-  resolveObjectCollision(player, worldObjects);
+  movePlayer(player.vx * dt, player.vy * dt);
 
   const { width, height } = getMapDimensions();
   if (player.x < 0 || player.y < 0 || player.x >= width || player.y >= height) {
