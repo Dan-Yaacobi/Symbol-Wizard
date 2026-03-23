@@ -120,6 +120,7 @@ export class DevToolsPanel {
     this.open = false;
     this.lastStatsText = '';
     this.lastStatsUpdateAt = 0;
+    this.statsUpdateIntervalMs = 200;
     this.filter = '';
     this.hoveredPath = null;
     this.selectedEntity = null;
@@ -174,6 +175,12 @@ export class DevToolsPanel {
   }
 
   toggleOpen() { this.setOpen(!this.open); }
+
+  shouldUpdateStats(now = Date.now()) {
+    if (!this.config.get('debug.showStatsHud')) return false;
+    return (now - this.lastStatsUpdateAt) >= this.statsUpdateIntervalMs;
+  }
+
   isCapturingInput() {
     if (!this.open) return false;
     const active = document.activeElement;
@@ -214,17 +221,19 @@ export class DevToolsPanel {
     this.render();
   }
 
-  updateStats(text) {
+  updateStats(text, now = Date.now()) {
     const enabled = this.config.get('debug.showStatsHud');
     this.statsHud.classList.toggle('hidden', !enabled);
-    if (!enabled) return;
-
-    const now = Date.now();
-    if (text !== this.lastStatsText && now - this.lastStatsUpdateAt >= 200) {
-      this.statsHud.textContent = text;
-      this.lastStatsText = text;
+    if (!enabled || (now - this.lastStatsUpdateAt) < this.statsUpdateIntervalMs) return false;
+    if (text === this.lastStatsText) {
       this.lastStatsUpdateAt = now;
+      return false;
     }
+
+    this.statsHud.textContent = text;
+    this.lastStatsText = text;
+    this.lastStatsUpdateAt = now;
+    return true;
   }
 
   getRenderDebugOptions() {

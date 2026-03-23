@@ -377,6 +377,16 @@ function logDiag(message, details = undefined) {
   console.info(`${DIAG_PREFIX} ${message}`, details);
 }
 
+function buildDevStatsText(dt) {
+  return `FPS ${Math.round(1 / Math.max(0.001, dt))} | Frame ${(dt * 1000).toFixed(1)}ms | E:${enemies.length + npcs.length + 1} P:${projectiles.length} FX:${abilitySystem.getActiveEffects().length} | Cam ${camera.x.toFixed(1)},${camera.y.toFixed(1)} | Player ${player.x.toFixed(1)},${player.y.toFixed(1)} | Preset ${runtimeConfig.lastPresetName ?? 'default'}`;
+}
+
+function updateDevStatsHud(dt) {
+  const now = Date.now();
+  if (!devToolsPanel.shouldUpdateStats(now)) return;
+  devToolsPanel.updateStats(buildDevStatsText(dt), now);
+}
+
 
 function logDev(message, details = undefined) {
   if (details === undefined) {
@@ -1055,16 +1065,16 @@ function tick(now) {
     drawHUD(renderer, player, abilitySystem);
     renderer.composite();
     if (devToolsPanel.open && input.mouse.clicked) {
-    const wx = Math.round(input.mouse.worldX);
-    const wy = Math.round(input.mouse.worldY);
-    const selectedEntity = [player, ...enemies, ...npcs, ...worldObjects].find((entity) => Math.round(entity.x) === wx && Math.round(entity.y) === wy) ?? null;
-    const tile = map?.[wy]?.[wx] ? { x: wx, y: wy, ...map[wy][wx] } : null;
-    devToolsPanel.setInspectorData({ selectedEntity, selectedTile: tile });
-  }
+      const wx = Math.round(input.mouse.worldX);
+      const wy = Math.round(input.mouse.worldY);
+      const selectedEntity = [player, ...enemies, ...npcs, ...worldObjects].find((entity) => Math.round(entity.x) === wx && Math.round(entity.y) === wy) ?? null;
+      const tile = map?.[wy]?.[wx] ? { x: wx, y: wy, ...map[wy][wx] } : null;
+      devToolsPanel.setInspectorData({ selectedEntity, selectedTile: tile });
+    }
 
-  devToolsPanel.updateStats(`FPS ${Math.round(1 / Math.max(0.001, dt))} | Frame ${(dt * 1000).toFixed(1)}ms | E:${enemies.length + npcs.length + 1} P:${projectiles.length} FX:${abilitySystem.getActiveEffects().length} | Cam ${camera.x.toFixed(1)},${camera.y.toFixed(1)} | Player ${player.x.toFixed(1)},${player.y.toFixed(1)} | Preset ${runtimeConfig.lastPresetName ?? 'default'}`);
+    updateDevStatsHud(dt);
 
-  input.endFrame();
+    input.endFrame();
     requestAnimationFrame(tick);
     return;
   }
@@ -1219,7 +1229,7 @@ function tick(now) {
     devToolsPanel.setInspectorData({ selectedEntity, selectedTile: tile });
   }
 
-  devToolsPanel.updateStats(`FPS ${Math.round(1 / Math.max(0.001, dt))} | Frame ${(dt * 1000).toFixed(1)}ms | E:${enemies.length + npcs.length + 1} P:${projectiles.length} FX:${abilitySystem.getActiveEffects().length} | Cam ${camera.x.toFixed(1)},${camera.y.toFixed(1)} | Player ${player.x.toFixed(1)},${player.y.toFixed(1)} | Preset ${runtimeConfig.lastPresetName ?? 'default'}`);
+  updateDevStatsHud(dt);
 
   input.endFrame();
 

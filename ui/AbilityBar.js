@@ -9,6 +9,10 @@ function formatValue(value) {
   return Math.max(0, Math.ceil(value));
 }
 
+function formatCooldownValue(value) {
+  return value.toFixed(value >= 10 ? 0 : 1);
+}
+
 export class AbilityBar {
   constructor({ root = document.body, abilitySystem, player }) {
     this.root = root;
@@ -89,6 +93,9 @@ export class AbilityBar {
           isCoolingDown: null,
           cooldownPercent: Number.NaN,
           cooldownText: null,
+          cooldownValueText: null,
+          maxCooldownValueText: null,
+          cooldownBackground: null,
         },
       });
     }
@@ -120,6 +127,7 @@ export class AbilityBar {
         valueText: null,
         max: null,
         current: null,
+        fillBackground: null,
       },
     });
   }
@@ -138,8 +146,10 @@ export class AbilityBar {
       const cooldownRatio = maxCooldown > 0 ? clamp01(cooldown / maxCooldown) : 0;
       const readyRatio = 1 - cooldownRatio;
       const isCoolingDown = cooldown > 0.001;
+      const cooldownValueText = isCoolingDown ? formatCooldownValue(cooldown) : null;
+      const maxCooldownValueText = maxCooldown > 0 ? formatCooldownValue(maxCooldown) : null;
       const cooldownText = isCoolingDown
-        ? `${cooldown.toFixed(cooldown >= 10 ? 0 : 1)} / ${maxCooldown.toFixed(maxCooldown >= 10 ? 0 : 1)}`
+        ? `${cooldownValueText} / ${maxCooldownValueText}`
         : 'Ready';
       const cooldownPercent = Math.round(cooldownRatio * 100);
       const shouldUpdateCooldownVisual = force
@@ -163,14 +173,24 @@ export class AbilityBar {
       }
 
       if (shouldUpdateCooldownVisual) {
-        slotEl.state.cooldownPercent = cooldownPercent;
-        slotEl.cooldown.style.background = isCoolingDown
+        const cooldownBackground = isCoolingDown
           ? `conic-gradient(from -90deg, transparent 0turn ${readyRatio}turn, rgba(0, 0, 0, 0.7) ${readyRatio}turn 1turn)`
           : 'transparent';
+        slotEl.state.cooldownPercent = cooldownPercent;
+        if (force || slotEl.state.cooldownBackground !== cooldownBackground) {
+          slotEl.state.cooldownBackground = cooldownBackground;
+          slotEl.cooldown.style.background = cooldownBackground;
+        }
       }
 
-      if (force || slotEl.state.cooldownText !== cooldownText) {
+      const shouldUpdateCooldownText = force
+        || slotEl.state.cooldownText !== cooldownText
+        || slotEl.state.cooldownValueText !== cooldownValueText
+        || slotEl.state.maxCooldownValueText !== maxCooldownValueText;
+      if (shouldUpdateCooldownText) {
         slotEl.state.cooldownText = cooldownText;
+        slotEl.state.cooldownValueText = cooldownValueText;
+        slotEl.state.maxCooldownValueText = maxCooldownValueText;
         slotEl.cooldownText.textContent = cooldownText;
       }
     }
@@ -185,8 +205,12 @@ export class AbilityBar {
       const roundedPercent = Math.round(ratio * 100);
 
       if (force || orb.state.ratio !== roundedPercent) {
+        const fillBackground = `conic-gradient(from 180deg, var(--orb-fill) 0turn ${ratio}turn, rgba(10, 16, 28, 0.92) ${ratio}turn 1turn)`;
         orb.state.ratio = roundedPercent;
-        orb.fill.style.background = `conic-gradient(from 180deg, var(--orb-fill) 0turn ${ratio}turn, rgba(10, 16, 28, 0.92) ${ratio}turn 1turn)`;
+        if (force || orb.state.fillBackground !== fillBackground) {
+          orb.state.fillBackground = fillBackground;
+          orb.fill.style.background = fillBackground;
+        }
       }
       if (force || orb.state.valueText !== valueText) {
         orb.state.valueText = valueText;
