@@ -929,6 +929,223 @@ function handlePlayer(dt) {
   }
 }
 
+
+const PERF_LOG_INTERVAL_MS = 500;
+
+function createFrameTimingTotals() {
+  return {
+    input: 0,
+    player: 0,
+    enemy: 0,
+    collision: 0,
+    projectile: 0,
+    world: 0,
+    combatText: 0,
+    transition: 0,
+    animation: 0,
+    dialogueCamera: 0,
+    render: 0,
+    renderBackground: 0,
+    renderComposite: 0,
+    renderCompositeScale: 0,
+    renderCompositeDraw: 0,
+    renderCompositeBackground: 0,
+    renderCompositeEntities: 0,
+    renderCompositeEffects: 0,
+    renderCompositeUi: 0,
+    hud: 0,
+    hudOrbs: 0,
+    ui: 0,
+    uiInventory: 0,
+    uiSpellbook: 0,
+    uiDevTools: 0,
+    uiCrafting: 0,
+    other: 0,
+    total: 0,
+    frames: 0,
+    drawCalls: 0,
+    drawCallsBackground: 0,
+    drawCallsEntities: 0,
+    drawCallsEffects: 0,
+    drawCallsUi: 0,
+    layoutReads: 0,
+    styleWrites: 0,
+    layoutThrashSignals: 0,
+    rafRequests: 0,
+    rafCallbacks: 0,
+    duplicateRafSignals: 0,
+  };
+}
+
+const perfTotals = createFrameTimingTotals();
+let perfWindowStartedAt = performance.now();
+let scheduledTickCount = 0;
+
+const layoutProbe = {
+  layoutReads: 0,
+  styleWrites: 0,
+  layoutThrashSignals: 0,
+  lastWriteAt: -Infinity,
+  writeThenReadThresholdMs: 8,
+};
+
+const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+Element.prototype.getBoundingClientRect = function instrumentedGetBoundingClientRect(...args) {
+  layoutProbe.layoutReads += 1;
+  if ((performance.now() - layoutProbe.lastWriteAt) <= layoutProbe.writeThenReadThresholdMs) {
+    layoutProbe.layoutThrashSignals += 1;
+  }
+  return originalGetBoundingClientRect.apply(this, args);
+};
+
+const originalSetProperty = CSSStyleDeclaration.prototype.setProperty;
+CSSStyleDeclaration.prototype.setProperty = function instrumentedSetProperty(...args) {
+  layoutProbe.styleWrites += 1;
+  layoutProbe.lastWriteAt = performance.now();
+  return originalSetProperty.apply(this, args);
+};
+
+const trackedStyleProperties = ['background', 'opacity', 'transform', 'width', 'height', 'left', 'top'];
+for (const property of trackedStyleProperties) {
+  const descriptor = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, property);
+  if (!descriptor?.set || !descriptor?.get) continue;
+  Object.defineProperty(CSSStyleDeclaration.prototype, property, {
+    configurable: true,
+    enumerable: descriptor.enumerable ?? false,
+    get: descriptor.get,
+    set(value) {
+      layoutProbe.styleWrites += 1;
+      layoutProbe.lastWriteAt = performance.now();
+      descriptor.set.call(this, value);
+    },
+  });
+}
+
+const originalRequestAnimationFrame = window.requestAnimationFrame.bind(window);
+window.requestAnimationFrame = function instrumentedRequestAnimationFrame(callback) {
+  perfTotals.rafRequests += 1;
+  if (callback === tick) {
+    scheduledTickCount += 1;
+    if (scheduledTickCount > 1) perfTotals.duplicateRafSignals += 1;
+  }
+  return originalRequestAnimationFrame((timestamp) => {
+    if (callback === tick) {
+      perfTotals.rafCallbacks += 1;
+      scheduledTickCount = Math.max(0, scheduledTickCount - 1);
+    }
+    callback(timestamp);
+  });
+};
+
+function formatTiming(value) {
+  return Number(value.toFixed(3));
+}
+
+function timed(label, framePerf, fn) {
+  const start = performance.now();
+  const result = fn();
+  framePerf[label] += performance.now() - start;
+  return result;
+}
+
+function logPerformanceWindow(now) {
+  const elapsed = now - perfWindowStartedAt;
+  if (elapsed < PERF_LOG_INTERVAL_MS || perfTotals.frames === 0) return;
+
+  const average = {};
+  for (const [key, value] of Object.entries(perfTotals)) {
+    if (key === 'frames') continue;
+    if (typeof value !== 'number') continue;
+    average[key] = value / perfTotals.frames;
+  }
+
+  const total = average.total || 0.0001;
+  const ranked = [
+    ['input', average.input],
+    ['player', average.player],
+    ['enemy', average.enemy],
+    ['collision', average.collision + average.projectile],
+    ['render', average.render],
+    ['hud', average.hud],
+    ['ui', average.ui],
+    ['other', average.other],
+  ].sort((a, b) => b[1] - a[1]);
+
+  const bottlenecks = ranked.slice(0, 2).map(([label, value]) => ({
+    system: label,
+    ms: formatTiming(value),
+    percent: formatTiming((value / total) * 100),
+  }));
+
+  const classification = average.ui > total * 0.35
+    ? 'DOM-bound'
+    : average.layoutThrashSignals > 0.5
+      ? 'layout-bound'
+      : 'CPU-bound';
+
+  console.info('[PerfProbe] frame-breakdown', {
+    windowMs: formatTiming(elapsed),
+    frames: perfTotals.frames,
+    averageMs: {
+      input: formatTiming(average.input),
+      player: formatTiming(average.player),
+      enemy: formatTiming(average.enemy),
+      collision: formatTiming(average.collision),
+      projectile: formatTiming(average.projectile),
+      world: formatTiming(average.world),
+      combatText: formatTiming(average.combatText),
+      transition: formatTiming(average.transition),
+      animation: formatTiming(average.animation),
+      dialogueCamera: formatTiming(average.dialogueCamera),
+      render: formatTiming(average.render),
+      hud: formatTiming(average.hud),
+      ui: formatTiming(average.ui),
+      other: formatTiming(average.other),
+      total: formatTiming(average.total),
+    },
+    render: {
+      background: formatTiming(average.renderBackground),
+      composite: formatTiming(average.renderComposite),
+      compositeScale: formatTiming(average.renderCompositeScale),
+      compositeDraw: formatTiming(average.renderCompositeDraw),
+      layers: {
+        background: formatTiming(average.renderCompositeBackground),
+        entities: formatTiming(average.renderCompositeEntities),
+        effects: formatTiming(average.renderCompositeEffects),
+        ui: formatTiming(average.renderCompositeUi),
+      },
+      drawCalls: {
+        total: Math.round(average.drawCalls),
+        background: Math.round(average.drawCallsBackground),
+        entities: Math.round(average.drawCallsEntities),
+        effects: Math.round(average.drawCallsEffects),
+        ui: Math.round(average.drawCallsUi),
+      },
+    },
+    dom: {
+      combatHudUpdate: formatTiming(average.hud),
+      combatHudOrbs: formatTiming(average.hudOrbs),
+      devToolsUpdateStats: formatTiming(average.uiDevTools),
+      inventoryRender: formatTiming(average.uiInventory),
+      spellbookRender: formatTiming(average.uiSpellbook),
+      craftingRender: formatTiming(average.uiCrafting),
+      layoutReads: formatTiming(average.layoutReads),
+      styleWrites: formatTiming(average.styleWrites),
+      layoutThrashSignals: formatTiming(average.layoutThrashSignals),
+    },
+    loops: {
+      rafRequestsPerFrame: formatTiming(average.rafRequests),
+      rafCallbacksPerFrame: formatTiming(average.rafCallbacks),
+      duplicateRafSignalsPerFrame: formatTiming(average.duplicateRafSignals),
+    },
+    bottlenecks,
+    classification,
+  });
+
+  Object.assign(perfTotals, createFrameTimingTotals());
+  perfWindowStartedAt = now;
+}
+
 let last = performance.now();
 
 if (diagMinimalMode) {
@@ -953,6 +1170,8 @@ if (diagMinimalMode) {
 }
 
 function tick(now) {
+  const frameStart = performance.now();
+  const framePerf = createFrameTimingTotals();
   const dt = Math.min(0.033, (now - last) / 1000);
   last = now;
 
@@ -970,82 +1189,87 @@ function tick(now) {
     logDiag('game root _ready');
   }
 
-  player.speed = runtimeConfig.get('player.speed');
+  timed('input', framePerf, () => {
+    player.speed = runtimeConfig.get('player.speed');
 
-  const craftingToggleDown = input.isDown('c');
-  if (craftingToggleDown && !craftingToggleLatch) {
-    isCraftingUIOpen = !isCraftingUIOpen;
-    spellCraftingWindow.toggle();
-  }
-  craftingToggleLatch = craftingToggleDown;
+    const craftingToggleDown = input.isDown('c');
+    if (craftingToggleDown && !craftingToggleLatch) {
+      isCraftingUIOpen = !isCraftingUIOpen;
+      spellCraftingWindow.toggle();
+    }
+    craftingToggleLatch = craftingToggleDown;
 
-  const inventoryDown = input.isDown('i');
-  if (inventoryDown && !inventoryToggleLatch) {
-    inventoryWindow.toggle();
-  }
-  inventoryToggleLatch = inventoryDown;
-  spriteEditor.tick(dt);
-  player.frameDurations.walk = runtimeConfig.get('sprites.playerWalkFrameDuration');
-  player.frameDurations.idle = runtimeConfig.get('sprites.playerIdleFrameDuration');
-  palette.player = runtimeConfig.get('palette.playerPrimary');
-  palette.playerAccent = runtimeConfig.get('palette.playerAccent');
-  palette.slime = runtimeConfig.get('palette.enemySlime');
-  palette.skeleton = runtimeConfig.get('palette.enemySkeleton');
-  palette.floorFg = runtimeConfig.get('palette.worldFloorFg');
-  palette.wallFg = runtimeConfig.get('palette.worldWallFg');
-  visualTheme.colors.text = runtimeConfig.get('palette.uiText');
-  visualTheme.colors.worldBackground = runtimeConfig.get('palette.worldBackground');
+    const inventoryDown = input.isDown('i');
+    if (inventoryDown && !inventoryToggleLatch) {
+      inventoryWindow.toggle();
+    }
+    inventoryToggleLatch = inventoryDown;
+    spriteEditor.tick(dt);
+    player.frameDurations.walk = runtimeConfig.get('sprites.playerWalkFrameDuration');
+    player.frameDurations.idle = runtimeConfig.get('sprites.playerIdleFrameDuration');
+    palette.player = runtimeConfig.get('palette.playerPrimary');
+    palette.playerAccent = runtimeConfig.get('palette.playerAccent');
+    palette.slime = runtimeConfig.get('palette.enemySlime');
+    palette.skeleton = runtimeConfig.get('palette.enemySkeleton');
+    palette.floorFg = runtimeConfig.get('palette.worldFloorFg');
+    palette.wallFg = runtimeConfig.get('palette.worldWallFg');
+    visualTheme.colors.text = runtimeConfig.get('palette.uiText');
+    visualTheme.colors.worldBackground = runtimeConfig.get('palette.worldBackground');
 
-  const prefabToggleDown = input.isDown('f7') && (input.isDown('control') || input.isDown('meta'));
-  if (prefabToggleDown && !prefabEditorToggleLatch) prefabEditor.toggle();
-  prefabEditorToggleLatch = prefabToggleDown;
+    const prefabToggleDown = input.isDown('f7') && (input.isDown('control') || input.isDown('meta'));
+    if (prefabToggleDown && !prefabEditorToggleLatch) prefabEditor.toggle();
+    prefabEditorToggleLatch = prefabToggleDown;
 
-  const f1Down = input.isDown('f1');
-  if (f1Down && !f1Latch) devToolsPanel.toggleOpen();
-  f1Latch = f1Down;
+    const f1Down = input.isDown('f1');
+    if (f1Down && !f1Latch) devToolsPanel.toggleOpen();
+    f1Latch = f1Down;
 
-  const f2Down = input.isDown('f2');
-  if (f2Down && !f2Latch) runtimeConfig.set('debug.overlaysEnabled', !runtimeConfig.get('debug.overlaysEnabled'));
-  f2Latch = f2Down;
+    const f2Down = input.isDown('f2');
+    if (f2Down && !f2Latch) runtimeConfig.set('debug.overlaysEnabled', !runtimeConfig.get('debug.overlaysEnabled'));
+    f2Latch = f2Down;
 
-  const f3Down = input.isDown('f3');
-  if (f3Down && !f3Latch) runtimeConfig.set('debug.showStatsHud', !runtimeConfig.get('debug.showStatsHud'));
-  f3Latch = f3Down;
+    const f3Down = input.isDown('f3');
+    if (f3Down && !f3Latch) runtimeConfig.set('debug.showStatsHud', !runtimeConfig.get('debug.showStatsHud'));
+    f3Latch = f3Down;
 
-  const f4Down = input.isDown('f4');
-  if (f4Down && !f4Latch) toggleOverlayFlag('debug.collisionBounds');
-  f4Latch = f4Down;
+    const f4Down = input.isDown('f4');
+    if (f4Down && !f4Latch) toggleOverlayFlag('debug.collisionBounds');
+    f4Latch = f4Down;
 
-  const f5Down = input.isDown('f5');
-  if (f5Down && !f5Latch) runtimeConfig.saveCurrentConfig();
-  f5Latch = f5Down;
+    const f5Down = input.isDown('f5');
+    if (f5Down && !f5Latch) runtimeConfig.saveCurrentConfig();
+    f5Latch = f5Down;
 
-  const f6Down = input.isDown('f6');
-  if (f6Down && !f6Latch) runtimeConfig.savePreset(`quick-${new Date().toISOString().slice(11, 19)}`);
-  f6Latch = f6Down;
+    const f6Down = input.isDown('f6');
+    if (f6Down && !f6Latch) runtimeConfig.savePreset(`quick-${new Date().toISOString().slice(11, 19)}`);
+    f6Latch = f6Down;
 
-  const spriteEditorToggleDown = input.isDown('f7') && !input.isDown('control') && !input.isDown('meta') && !input.isDown('shift');
-  if (spriteEditorToggleDown && !f7Latch) spriteEditor.toggle();
-  f7Latch = spriteEditorToggleDown;
+    const spriteEditorToggleDown = input.isDown('f7') && !input.isDown('control') && !input.isDown('meta') && !input.isDown('shift');
+    if (spriteEditorToggleDown && !f7Latch) spriteEditor.toggle();
+    f7Latch = spriteEditorToggleDown;
 
-  const gridToggleDown = input.isDown('f7') && input.isDown('shift') && !input.isDown('control') && !input.isDown('meta');
-  if (gridToggleDown && !gridToggleLatch) toggleOverlayFlag('debug.grid');
-  gridToggleLatch = gridToggleDown;
+    const gridToggleDown = input.isDown('f7') && input.isDown('shift') && !input.isDown('control') && !input.isDown('meta');
+    if (gridToggleDown && !gridToggleLatch) toggleOverlayFlag('debug.grid');
+    gridToggleLatch = gridToggleDown;
 
-  const f8Down = input.isDown('f8');
-  if (f8Down && !f8Latch && !devToolsPanel.isCapturingInput()) resetEncounterState();
-  f8Latch = f8Down;
+    const f8Down = input.isDown('f8');
+    if (f8Down && !f8Latch && !devToolsPanel.isCapturingInput()) resetEncounterState();
+    f8Latch = f8Down;
 
-  const f9Down = input.isDown('f9');
-  if (f9Down && !f9Latch) {
-    if (input.isDown('shift')) runtimeConfig.resetAll();
-    else runtimeConfig.loadSavedConfig();
-  }
-  f9Latch = f9Down;
+    const f9Down = input.isDown('f9');
+    if (f9Down && !f9Latch) {
+      if (input.isDown('shift')) runtimeConfig.resetAll();
+      else runtimeConfig.loadSavedConfig();
+    }
+    f9Latch = f9Down;
+  });
+
+
 
   if (prefabEditor.isOpen) {
-    renderer.beginFrame();
-    renderWorld(
+    timed('render', framePerf, () => {
+      renderer.beginFrame();
+      renderWorld(
       renderer,
       camera,
       map,
@@ -1062,8 +1286,9 @@ function tick(now) {
       devToolsPanel.getRenderDebugOptions(),
       activeRoom,
     );
-    drawHUD(renderer, player, abilitySystem);
-    renderer.composite();
+      drawHUD(renderer, player, abilitySystem);
+      renderer.composite();
+    });
     if (devToolsPanel.open && input.mouse.clicked) {
       const wx = Math.round(input.mouse.worldX);
       const wy = Math.round(input.mouse.worldY);
@@ -1072,9 +1297,35 @@ function tick(now) {
       devToolsPanel.setInspectorData({ selectedEntity, selectedTile: tile });
     }
 
-    updateDevStatsHud(dt);
+    timed('uiDevTools', framePerf, () => updateDevStatsHud(dt));
+    framePerf.ui += framePerf.uiDevTools;
 
     input.endFrame();
+    const rendererMetrics = renderer.getFrameMetrics();
+    framePerf.renderBackground += rendererMetrics.renderBackgroundMs;
+    framePerf.renderComposite += rendererMetrics.compositeMs;
+    framePerf.renderCompositeScale += rendererMetrics.compositeScaleMs;
+    framePerf.renderCompositeDraw += rendererMetrics.compositeDrawMs;
+    framePerf.renderCompositeBackground += rendererMetrics.layerCompositeMs.background;
+    framePerf.renderCompositeEntities += rendererMetrics.layerCompositeMs.entities;
+    framePerf.renderCompositeEffects += rendererMetrics.layerCompositeMs.effects;
+    framePerf.renderCompositeUi += rendererMetrics.layerCompositeMs.ui;
+    framePerf.drawCalls += rendererMetrics.drawCalls;
+    framePerf.drawCallsBackground += rendererMetrics.background;
+    framePerf.drawCallsEntities += rendererMetrics.entities;
+    framePerf.drawCallsEffects += rendererMetrics.effects;
+    framePerf.drawCallsUi += rendererMetrics.ui;
+    framePerf.layoutReads += layoutProbe.layoutReads;
+    framePerf.styleWrites += layoutProbe.styleWrites;
+    framePerf.layoutThrashSignals += layoutProbe.layoutThrashSignals;
+    framePerf.total = performance.now() - frameStart;
+    framePerf.other = Math.max(0, framePerf.total - (framePerf.input + framePerf.render + framePerf.ui));
+    for (const [key, value] of Object.entries(framePerf)) { if (typeof value === 'number' && key in perfTotals) perfTotals[key] += value; }
+    perfTotals.frames += 1;
+    layoutProbe.layoutReads = 0;
+    layoutProbe.styleWrites = 0;
+    layoutProbe.layoutThrashSignals = 0;
+    logPerformanceWindow(now);
     requestAnimationFrame(tick);
     return;
   }
@@ -1085,22 +1336,26 @@ function tick(now) {
     enemy.hitFlashDuration = runtimeConfig.get('enemies.hitFlashDuration');
   }
 
-  if (!diagMinimalMode) {
-    updateTownNpcs(npcs, map, dt);
+  timed('world', framePerf, () => {
+    if (!diagMinimalMode) {
+      updateTownNpcs(npcs, map, dt);
     for (const npc of npcs) {
       updateEntityAnimation(npc, dt, Math.hypot(npc.vx, npc.vy) > 0.1, runtimeConfig);
       updateEntityFacingFromVelocity(npc);
     }
-  }
+    }
+  });
 
   const devCapturing = devToolsPanel.isCapturingInput();
   const spellbookOpen = spellbook.isOpen();
 
   if (!dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
-    handlePlayer(dt);
+    timed('player', framePerf, () => handlePlayer(dt));
     if (enemyAiEnabled) {
-      updateEnemies(enemies, player, dt, projectiles, runtimeConfig, { map, tileSize: 1, system: abilitySystem });
-      updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem, runtimeConfig, applyPlayerDamageImpact);
+      timed('enemy', framePerf, () => {
+        updateEnemies(enemies, player, dt, projectiles, runtimeConfig, { map, tileSize: 1, system: abilitySystem });
+        updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem, runtimeConfig, applyPlayerDamageImpact);
+      });
     } else {
       for (const enemy of enemies) {
         enemy.vx = 0;
@@ -1108,8 +1363,8 @@ function tick(now) {
       }
     }
 
-    updateProjectileAnimation(projectiles, dt, runtimeConfig);
-    const combat = updateProjectiles(
+    timed('projectile', framePerf, () => updateProjectileAnimation(projectiles, dt, runtimeConfig));
+    const combat = timed('collision', framePerf, () => updateProjectiles(
       projectiles,
       map,
       enemies,
@@ -1128,7 +1383,7 @@ function tick(now) {
       },
       runtimeConfig,
       applyPlayerDamageImpact,
-    );
+    ));
     projectiles = combat.projectiles;
     for (const dead of combat.slain) handleEnemyDefeat(dead);
     goldPiles = LootSystem.collectGold(player, goldPiles, combatTextSystem);
@@ -1140,13 +1395,15 @@ function tick(now) {
     input.clearMouseButtonPresses();
   }
 
-  if (!diagMinimalMode) {
-    updateDestructibleAnimations(worldObjects, dt);
-    cleanupDestroyedObjects(worldObjects);
-  }
-  combatTextSystem.update(dt);
+  timed('world', framePerf, () => {
+    if (!diagMinimalMode) {
+      updateDestructibleAnimations(worldObjects, dt);
+      cleanupDestroyedObjects(worldObjects);
+    }
+  });
+  timed('combatText', framePerf, () => combatTextSystem.update(dt));
 
-  const transitionResult = roomTransitionSystem.update(dt, { activeRoom, player });
+  const transitionResult = timed('transition', framePerf, () => roomTransitionSystem.update(dt, { activeRoom, player }));
   if (transitionResult?.room) {
     activeRoom = transitionResult.room;
     map = activeRoom.tiles;
@@ -1161,20 +1418,24 @@ function tick(now) {
     if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
   }
 
-  updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1, runtimeConfig);
-  for (const enemy of enemies) {
-    updateEntityAnimation(enemy, dt, Math.hypot(enemy.vx, enemy.vy) > 0.1, runtimeConfig);
-    updateEntityFacingFromVelocity(enemy);
-  }
+  timed('animation', framePerf, () => {
+    updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1, runtimeConfig);
+    for (const enemy of enemies) {
+      updateEntityAnimation(enemy, dt, Math.hypot(enemy.vx, enemy.vy) > 0.1, runtimeConfig);
+      updateEntityFacingFromVelocity(enemy);
+    }
+  });
 
-  if (!diagMinimalMode) {
-    dialogueManager.update(dt);
+  timed('dialogueCamera', framePerf, () => {
+    if (!diagMinimalMode) {
+      dialogueManager.update(dt);
     camera.smoothingFactor = runtimeConfig.get('camera.smoothing');
     camera.pixelSnapping = runtimeConfig.get('camera.pixelSnapping');
     camera.zoom = runtimeConfig.get('camera.zoom');
     camera.update(dt);
-    camera.follow(player);
-  }
+      camera.follow(player);
+    }
+  });
 
   if (!Number.isFinite(camera.x) || !Number.isFinite(camera.y)) {
     console.warn(`${BOOT_DEBUG_PREFIX} camera produced invalid coordinates, resetting to origin`, { x: camera.x, y: camera.y });
@@ -1192,8 +1453,9 @@ function tick(now) {
     });
   }
 
-  renderer.beginFrame();
-  renderWorld(
+  timed('render', framePerf, () => {
+    renderer.beginFrame();
+    renderWorld(
     renderer,
     camera,
     map,
@@ -1211,7 +1473,7 @@ function tick(now) {
     activeRoom,
   );
   drawHUD(renderer, player, abilitySystem);
-  renderPlayerDamageFlash(renderer, player.hitFlashTimer, player.hitFlashDuration);
+    renderPlayerDamageFlash(renderer, player.hitFlashTimer, player.hitFlashDuration);
   if (roomTransitionSystem.fadeAlpha > 0) {
     renderer.ui.ctx.save();
     renderer.ui.ctx.globalAlpha = roomTransitionSystem.fadeAlpha;
@@ -1219,7 +1481,8 @@ function tick(now) {
     renderer.ui.ctx.fillRect(0, 0, renderer.ui.canvas.width, renderer.ui.canvas.height);
     renderer.ui.ctx.restore();
   }
-  renderer.composite();
+    renderer.composite();
+  });
 
   if (devToolsPanel.open && input.mouse.clicked) {
     const wx = Math.round(input.mouse.worldX);
@@ -1229,9 +1492,50 @@ function tick(now) {
     devToolsPanel.setInspectorData({ selectedEntity, selectedTile: tile });
   }
 
-  updateDevStatsHud(dt);
+  timed('hud', framePerf, () => combatHud.updateOrbs());
+  framePerf.hudOrbs = framePerf.hud;
+  timed('uiDevTools', framePerf, () => updateDevStatsHud(dt));
+  framePerf.ui += framePerf.uiDevTools;
+  if (inventoryWindow.isOpen()) {
+    timed('uiInventory', framePerf, () => inventoryWindow.render());
+    framePerf.ui += framePerf.uiInventory;
+  }
+  if (spellbook.isOpen()) {
+    timed('uiSpellbook', framePerf, () => spellbook.render());
+    framePerf.ui += framePerf.uiSpellbook;
+  }
+  if (isCraftingUIOpen) {
+    timed('uiCrafting', framePerf, () => spellCraftingWindow.render());
+    framePerf.ui += framePerf.uiCrafting;
+  }
 
   input.endFrame();
+
+  const rendererMetrics = renderer.getFrameMetrics();
+  framePerf.renderBackground += rendererMetrics.renderBackgroundMs;
+  framePerf.renderComposite += rendererMetrics.compositeMs;
+  framePerf.renderCompositeScale += rendererMetrics.compositeScaleMs;
+  framePerf.renderCompositeDraw += rendererMetrics.compositeDrawMs;
+  framePerf.renderCompositeBackground += rendererMetrics.layerCompositeMs.background;
+  framePerf.renderCompositeEntities += rendererMetrics.layerCompositeMs.entities;
+  framePerf.renderCompositeEffects += rendererMetrics.layerCompositeMs.effects;
+  framePerf.renderCompositeUi += rendererMetrics.layerCompositeMs.ui;
+  framePerf.drawCalls += rendererMetrics.drawCalls;
+  framePerf.drawCallsBackground += rendererMetrics.background;
+  framePerf.drawCallsEntities += rendererMetrics.entities;
+  framePerf.drawCallsEffects += rendererMetrics.effects;
+  framePerf.drawCallsUi += rendererMetrics.ui;
+  framePerf.layoutReads += layoutProbe.layoutReads;
+  framePerf.styleWrites += layoutProbe.styleWrites;
+  framePerf.layoutThrashSignals += layoutProbe.layoutThrashSignals;
+  framePerf.total = performance.now() - frameStart;
+  framePerf.other = Math.max(0, framePerf.total - (framePerf.input + framePerf.player + framePerf.enemy + framePerf.collision + framePerf.projectile + framePerf.world + framePerf.combatText + framePerf.transition + framePerf.animation + framePerf.dialogueCamera + framePerf.render + framePerf.hud + framePerf.ui));
+  for (const [key, value] of Object.entries(framePerf)) { if (typeof value === 'number' && key in perfTotals) perfTotals[key] += value; }
+  perfTotals.frames += 1;
+  layoutProbe.layoutReads = 0;
+  layoutProbe.styleWrites = 0;
+  layoutProbe.layoutThrashSignals = 0;
+  logPerformanceWindow(now);
 
   if (!startupCompleteLogged) {
     startupCompleteLogged = true;
