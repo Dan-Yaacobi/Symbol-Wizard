@@ -27,6 +27,7 @@ export class AbilitySystem {
     this.activeSpellInstances = [];
     this.activeFreeze = null;
     this.elementInteractionSystem = elementInteractionSystem;
+    this.listeners = new Set();
 
     for (const spell of definitions) {
       this.cooldowns.set(spell.id, 0);
@@ -257,6 +258,7 @@ export class AbilitySystem {
     if (slotIndex < 0 || slotIndex > 3) return false;
     if (spellId !== null && !this.definitions.has(spellId)) return false;
     this.slots[slotIndex] = spellId;
+    this.emitChange('slot-assignment', { slotIndex, spellId });
     return true;
   }
 
@@ -282,6 +284,7 @@ export class AbilitySystem {
 
     this.player.mana -= spell.manaCost;
     this.cooldowns.set(spell.id, spell.cooldown);
+    this.emitChange('cast-started', { abilityId: spell.id, slotIndex });
     this.player.activeAction = {
       type: 'cast',
       duration: this.player.castCooldown ?? 0.24,
@@ -333,6 +336,18 @@ export class AbilitySystem {
 
   getAbilities() {
     return [...this.definitions.values()];
+  }
+
+  subscribe(listener) {
+    if (typeof listener !== 'function') return () => {};
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  emitChange(type, detail = {}) {
+    for (const listener of this.listeners) {
+      listener({ type, ...detail });
+    }
   }
 
   createProjectile(x, y, dx, dy, overrides = {}) {

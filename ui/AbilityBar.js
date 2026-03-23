@@ -1,5 +1,6 @@
 const SLOT_BINDING_LABELS = ['LMB', 'RMB', 'MMB'];
 const SLOT_COUNT = 3;
+const COOLDOWN_DOM_INTERVAL_MS = 100;
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -13,6 +14,18 @@ function formatCooldownValue(value) {
   return value.toFixed(value >= 10 ? 0 : 1);
 }
 
+function buildCooldownBackground(remaining, duration) {
+  const cooldownRatio = duration > 0 ? clamp01(remaining / duration) : 0;
+  const readyRatio = 1 - cooldownRatio;
+  return cooldownRatio > 0.001
+    ? `conic-gradient(from -90deg, transparent 0turn ${readyRatio}turn, rgba(0, 0, 0, 0.7) ${readyRatio}turn 1turn)`
+    : 'transparent';
+}
+
+function buildOrbBackground(ratio) {
+  return `conic-gradient(from 180deg, var(--orb-fill) 0turn ${ratio}turn, rgba(10, 16, 28, 0.92) ${ratio}turn 1turn)`;
+}
+
 export class AbilityBar {
   constructor({ root = document.body, abilitySystem, player }) {
     this.root = root;
@@ -20,6 +33,8 @@ export class AbilityBar {
     this.player = player;
     this.slotElements = [];
     this.orbs = new Map();
+    this.cooldownTimer = null;
+    this.unsubscribe = null;
     this.el = document.createElement('section');
     this.el.className = 'combat-hud';
     this.el.setAttribute('aria-label', 'Combat interface');
@@ -61,7 +76,11 @@ export class AbilityBar {
       }),
     });
 
-    this.update(true);
+    this.refresh(true);
+    this.unsubscribe = typeof this.abilitySystem?.subscribe === 'function'
+      ? this.abilitySystem.subscribe(() => this.refresh())
+      : null;
+    this.startCooldownUpdates();
   }
 
   createSlots() {
@@ -91,7 +110,6 @@ export class AbilityBar {
         state: {
           abilityId: null,
           isCoolingDown: null,
-          cooldownPercent: Number.NaN,
           cooldownText: null,
           cooldownValueText: null,
           maxCooldownValueText: null,
@@ -132,38 +150,62 @@ export class AbilityBar {
     });
   }
 
-  update(force = false) {
-    this.updateSlots(force);
+  startCooldownUpdates() {
+    if (this.cooldownTimer !== null) return;
+    this.cooldownTimer = window.setInterval(() => {
+      if (!this.el.isConnected) {
+        this.stopCooldownUpdates();
+        this.unsubscribe?.();
+        this.unsubscribe = null;
+        return;
+      }
+      this.updateCooldowns();
+    }, COOLDOWN_DOM_INTERVAL_MS);
+  }
+
+  stopCooldownUpdates() {
+    if (this.cooldownTimer === null) return;
+    window.clearInterval(this.cooldownTimer);
+    this.cooldownTimer = null;
+    this.unsubscribe = null;
+  }
+
+  refresh(force = false) {
+    this.updateStaticSlotState(force);
+    this.updateCooldowns(force);
     this.updateOrbs(force);
   }
 
-  updateSlots(force = false) {
+  updateStaticSlotState(force = false) {
+    for (let i = 0; i < this.slotElements.length; i += 1) {
+      const slotEl = this.slotElements[i];
+      const ability = this.abilitySystem.getAbilityBySlot(i);
+      const abilityId = ability?.id ?? '';
+
+      if (force || slotEl.state.abilityId !== abilityId) {
+        slotEl.state.abilityId = abilityId;
+        slotEl.root.dataset.abilityId = abilityId;
+        slotEl.root.classList.toggle('combat-slot--empty', !ability);
+        slotEl.icon.textContent = ability?.icon ?? '—';
+        slotEl.label.textContent = ability?.name ?? 'Empty';
+        slotEl.root.setAttribute('aria-label', ability ? `${ability.name} on ${SLOT_BINDING_LABELS[i]}` : `Empty ${SLOT_BINDING_LABELS[i]} slot`);
+      }
+    }
+  }
+
+  updateCooldowns(force = false) {
     for (let i = 0; i < this.slotElements.length; i += 1) {
       const slotEl = this.slotElements[i];
       const ability = this.abilitySystem.getAbilityBySlot(i);
       const cooldown = ability ? this.abilitySystem.getCooldownRemaining(ability.id) : 0;
       const maxCooldown = ability ? this.abilitySystem.getCooldownDuration(ability.id) : 0;
-      const cooldownRatio = maxCooldown > 0 ? clamp01(cooldown / maxCooldown) : 0;
-      const readyRatio = 1 - cooldownRatio;
       const isCoolingDown = cooldown > 0.001;
       const cooldownValueText = isCoolingDown ? formatCooldownValue(cooldown) : null;
       const maxCooldownValueText = maxCooldown > 0 ? formatCooldownValue(maxCooldown) : null;
       const cooldownText = isCoolingDown
         ? `${cooldownValueText} / ${maxCooldownValueText}`
         : 'Ready';
-      const cooldownPercent = Math.round(cooldownRatio * 100);
-      const shouldUpdateCooldownVisual = force
-        || slotEl.state.isCoolingDown !== isCoolingDown
-        || Math.abs(cooldownPercent - slotEl.state.cooldownPercent) >= 1;
-
-      if (force || slotEl.state.abilityId !== (ability?.id ?? '')) {
-        slotEl.state.abilityId = ability?.id ?? '';
-        slotEl.root.dataset.abilityId = slotEl.state.abilityId;
-        slotEl.root.classList.toggle('combat-slot--empty', !ability);
-        slotEl.icon.textContent = ability?.icon ?? '—';
-        slotEl.label.textContent = ability?.name ?? 'Empty';
-        slotEl.root.setAttribute('aria-label', ability ? `${ability.name} on ${SLOT_BINDING_LABELS[i]}` : `Empty ${SLOT_BINDING_LABELS[i]} slot`);
-      }
+      const cooldownBackground = buildCooldownBackground(cooldown, maxCooldown);
 
       if (force || slotEl.state.isCoolingDown !== isCoolingDown) {
         slotEl.state.isCoolingDown = isCoolingDown;
@@ -172,22 +214,17 @@ export class AbilityBar {
         slotEl.cooldownText.classList.toggle('combat-slot__cooldown-text--ready', !isCoolingDown);
       }
 
-      if (shouldUpdateCooldownVisual) {
-        const cooldownBackground = isCoolingDown
-          ? `conic-gradient(from -90deg, transparent 0turn ${readyRatio}turn, rgba(0, 0, 0, 0.7) ${readyRatio}turn 1turn)`
-          : 'transparent';
-        slotEl.state.cooldownPercent = cooldownPercent;
-        if (force || slotEl.state.cooldownBackground !== cooldownBackground) {
-          slotEl.state.cooldownBackground = cooldownBackground;
-          slotEl.cooldown.style.background = cooldownBackground;
-        }
+      if (force || slotEl.state.cooldownBackground !== cooldownBackground) {
+        slotEl.state.cooldownBackground = cooldownBackground;
+        slotEl.cooldown.style.background = cooldownBackground;
       }
 
-      const shouldUpdateCooldownText = force
+      if (
+        force
         || slotEl.state.cooldownText !== cooldownText
         || slotEl.state.cooldownValueText !== cooldownValueText
-        || slotEl.state.maxCooldownValueText !== maxCooldownValueText;
-      if (shouldUpdateCooldownText) {
+        || slotEl.state.maxCooldownValueText !== maxCooldownValueText
+      ) {
         slotEl.state.cooldownText = cooldownText;
         slotEl.state.cooldownValueText = cooldownValueText;
         slotEl.state.maxCooldownValueText = maxCooldownValueText;
@@ -205,7 +242,7 @@ export class AbilityBar {
       const roundedPercent = Math.round(ratio * 100);
 
       if (force || orb.state.ratio !== roundedPercent) {
-        const fillBackground = `conic-gradient(from 180deg, var(--orb-fill) 0turn ${ratio}turn, rgba(10, 16, 28, 0.92) ${ratio}turn 1turn)`;
+        const fillBackground = buildOrbBackground(ratio);
         orb.state.ratio = roundedPercent;
         if (force || orb.state.fillBackground !== fillBackground) {
           orb.state.fillBackground = fillBackground;
