@@ -269,23 +269,22 @@ defaultSpellSlots.forEach((spellId, slotIndex) => {
 });
 
 const uiRoot = document.getElementById('uiPanels') ?? (() => {
+  const stage = document.querySelector('.game-canvas-frame') ?? document.body;
   const fallback = document.createElement('section');
   fallback.id = 'uiPanels';
-  fallback.className = 'bottom-ui-container';
+  fallback.className = 'ui-overlay';
   fallback.innerHTML = `
-    <div class="bottom-ui-container__inner">
-      <section class="bottom-ui-panel bottom-ui-panel--left">
-        <section id="chatBox" class="chat-box" aria-live="polite">
-          <div id="chatSpeaker" class="chat-speaker">System</div>
-          <div id="chatLine" class="chat-line">Speak with nearby townsfolk (press E nearby). Use 1-9 or click responses.</div>
-          <ul id="chatOptions" class="chat-options"></ul>
-        </section>
-      </section>
-      <section id="combatHudPanel" class="bottom-ui-panel bottom-ui-panel--center" aria-label="Combat interface"></section>
-      <section id="bottomRightPanel" class="bottom-ui-panel bottom-ui-panel--right" aria-label="Status interface"></section>
-    </div>
+    <section id="chatBox" class="chat-box hidden" aria-live="polite">
+      <div class="chat-box__header">
+        <div id="chatSpeaker" class="chat-speaker">System</div>
+        <button id="chatCloseButton" class="chat-close-button" type="button" aria-label="Close chat">×</button>
+      </div>
+      <div id="chatLine" class="chat-line">Speak with nearby townsfolk (press E nearby). Use 1-9 or click responses.</div>
+      <ul id="chatOptions" class="chat-options"></ul>
+    </section>
+    <section id="combatHudPanel" class="bottom-ui-container" aria-label="Combat interface"></section>
   `;
-  document.body.appendChild(fallback);
+  stage.appendChild(fallback);
   console.warn('BOOT: #uiPanels missing in startup scene. Created fallback root to prevent startup crash.');
   return fallback;
 })();
@@ -561,8 +560,7 @@ if (diagMode) {
 function resizeLayout() {
   const shell = document.getElementById('app-root');
   const stage = document.querySelector('.game-area');
-  const panels = document.getElementById('uiPanels');
-  if (!shell || !stage || !panels || !canvasFrame) return;
+  if (!shell || !stage || !canvasFrame) return;
 
   const stageRect = stage.getBoundingClientRect();
   const maxCanvasWidth = Math.max(1, Math.floor(stageRect.width));
@@ -582,19 +580,10 @@ function resizeLayout() {
     return;
   }
 
-  const rawScale = Math.min(maxCanvasWidth / canvas.width, maxCanvasHeight / canvas.height);
-  const safeRawScale = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 1;
-  const scale = safeRawScale >= 1 ? Math.floor(safeRawScale) : Math.max(safeRawScale, 0.1);
-  const scaledWidth = Math.max(1, Math.floor(canvas.width * scale));
-  const scaledHeight = Math.max(1, Math.floor(canvas.height * scale));
-
-  canvasFrame.style.width = `${scaledWidth}px`;
-  canvasFrame.style.height = `${scaledHeight}px`;
-
   logBoot('viewport ready', {
     viewport: { width: window.innerWidth, height: window.innerHeight },
     stage: { width: maxCanvasWidth, height: maxCanvasHeight },
-    frame: { width: scaledWidth, height: scaledHeight },
+    frame: { width: maxCanvasWidth, height: maxCanvasHeight },
     canvas: { width: canvas.width, height: canvas.height, cssWidth: canvas.style.width, cssHeight: canvas.style.height },
     rootScale: rootTransform,
     mainWorldVisible: worldVisible,

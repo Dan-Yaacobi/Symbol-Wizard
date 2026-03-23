@@ -88,8 +88,19 @@ export class DialogueManager {
     this.interactLatch = false;
     this.responseLatch = false;
     this.transitionLocked = false;
+    this.promptDismissed = false;
+    this.lastPromptNpc = null;
 
     this.chatBox.bindResponseHandler((responseIndex) => this.handleResponse(responseIndex));
+    this.chatBox.bindCloseHandler(() => {
+      if (this.isOpen) {
+        this.closeDialogue();
+        return;
+      }
+
+      this.promptDismissed = true;
+      this.chatBox.hide();
+    });
   }
 
   log(...args) {
@@ -118,6 +129,8 @@ export class DialogueManager {
     this.activeInteractable = interactable;
     this.currentNode = 'start';
     this.isOpen = true;
+    this.promptDismissed = false;
+    this.lastPromptNpc = npc;
     this.transitionLocked = false;
     this.setNpcEngagedState(true);
     this.log('openDialogue', { npc: npc?.name, node: this.currentNode });
@@ -127,6 +140,7 @@ export class DialogueManager {
   closeDialogue() {
     this.log('closeDialogue', { npc: this.activeNpc?.name, node: this.currentNode });
     this.chatBox.clearOptions();
+    this.chatBox.hide();
     this.isOpen = false;
     this.currentDialogue = null;
     this.currentNode = null;
@@ -223,13 +237,23 @@ export class DialogueManager {
   }
 
   handleInteractionPrompt(nearNpc) {
+    if (nearNpc !== this.lastPromptNpc) {
+      this.promptDismissed = false;
+      this.lastPromptNpc = nearNpc;
+    }
+
     const exitText = 'North Exit → Forest | East Exit → Dungeon | West Exit → Outskirts';
     const prompt = nearNpc
       ? `Press E to talk to ${nearNpc.name}. ${exitText}`
       : `Welcome to Sunmeadow Town. ${exitText}`;
 
+    if (!nearNpc || this.promptDismissed) {
+      this.chatBox.hide();
+      return;
+    }
+
     this.chatBox.setDialogueOpen(false);
-    this.chatBox.setMessage('Town Crier', prompt, []);
+    this.chatBox.setMessage('Town Crier', prompt, [], { visible: true });
   }
 
   update(dt) {

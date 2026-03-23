@@ -1,26 +1,65 @@
 export class ChatBox {
   constructor() {
-    this.rootEl = document.getElementById('chatBox');
-    this.speakerEl = document.getElementById('chatSpeaker');
-    this.lineEl = document.getElementById('chatLine');
-    this.optionsEl = document.getElementById('chatOptions');
+    this.rootEl = null;
+    this.speakerEl = null;
+    this.lineEl = null;
+    this.optionsEl = null;
+    this.closeButtonEl = null;
 
     this.lastSpeaker = '';
     this.lastLine = '';
     this.currentOptionCount = 0;
     this.responseHandler = null;
+    this.closeHandler = null;
+
+    this.resolveElements();
+    this.rootEl?.classList.add('hidden');
+    this.rootEl?.setAttribute('aria-hidden', 'true');
+    this.closeButtonEl?.addEventListener('click', () => {
+      this.closeHandler?.();
+      this.hide();
+    });
+  }
+
+  resolveElements() {
+    this.rootEl ??= document.getElementById('chatBox');
+    this.speakerEl ??= document.getElementById('chatSpeaker');
+    this.lineEl ??= document.getElementById('chatLine');
+    this.optionsEl ??= document.getElementById('chatOptions');
+    this.closeButtonEl ??= document.getElementById('chatCloseButton');
   }
 
   bindResponseHandler(handler) {
     this.responseHandler = handler;
   }
 
+  bindCloseHandler(handler) {
+    this.closeHandler = handler;
+  }
+
+  show() {
+    this.resolveElements();
+    this.rootEl?.classList.remove('hidden');
+    this.rootEl?.setAttribute('aria-hidden', 'false');
+  }
+
+  hide() {
+    this.resolveElements();
+    if (this.rootEl) this.rootEl.dataset.dialogueOpen = 'false';
+    this.rootEl?.classList.add('hidden');
+    this.rootEl?.setAttribute('aria-hidden', 'true');
+  }
+
   setDialogueOpen(isOpen) {
+    this.resolveElements();
+    if (!this.rootEl) return;
     this.rootEl.dataset.dialogueOpen = isOpen ? 'true' : 'false';
+    this.show();
   }
 
   setOptionsDisabled(disabled) {
-    const buttons = this.optionsEl.querySelectorAll('button[data-response-index]');
+    this.resolveElements();
+    const buttons = this.optionsEl?.querySelectorAll('button[data-response-index]') ?? [];
     buttons.forEach((button) => {
       button.disabled = disabled;
       button.setAttribute('aria-disabled', disabled ? 'true' : 'false');
@@ -28,13 +67,18 @@ export class ChatBox {
   }
 
   clearOptions() {
+    this.resolveElements();
+    if (!this.optionsEl) return;
     this.optionsEl.innerHTML = '';
     this.currentOptionCount = 0;
     this.lastLine = '';
     this.lastSpeaker = '';
   }
 
-  setMessage(speaker, line, options = [], { disableOptions = false } = {}) {
+  setMessage(speaker, line, options = [], { disableOptions = false, visible = true } = {}) {
+    this.resolveElements();
+    if (!this.rootEl || !this.speakerEl || !this.lineEl || !this.optionsEl) return;
+
     if (speaker !== this.lastSpeaker) {
       this.speakerEl.textContent = speaker;
       this.lastSpeaker = speaker;
@@ -65,5 +109,8 @@ export class ChatBox {
       li.appendChild(button);
       this.optionsEl.appendChild(li);
     });
+
+    if (visible) this.show();
+    else this.hide();
   }
 }

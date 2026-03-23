@@ -28,30 +28,31 @@ body {
   height: 100vh;
   box-sizing: border-box;
   display: flex;
-  flex-direction: column;
   overflow: hidden;
 }
 
 .game-area {
-  min-height: 0;
+  position: relative;
   flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 100%;
   padding: var(--viewport-padding);
-  padding-bottom: 0;
   box-sizing: border-box;
   overflow: hidden;
 }
 
 .game-canvas-frame {
-  width: auto;
-  height: auto;
+  position: relative;
+  width: 100%;
+  height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  flex: 0 0 auto;
+  overflow: hidden;
 }
 
 #gameCanvas {
@@ -64,54 +65,34 @@ body {
   image-rendering: pixelated;
 }
 
+.ui-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
 .bottom-ui-container {
-  flex: 0 0 var(--bottom-ui-height);
-  height: var(--bottom-ui-height);
-  width: 100%;
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(100%, 760px);
   display: flex;
-  align-items: stretch;
-  padding: 0 var(--viewport-padding) var(--viewport-padding);
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.bottom-ui-container__inner {
-  width: min(1600px, 100%);
-  height: 100%;
-  margin: 0 auto;
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: clamp(12px, 1.6vw, 24px);
-}
-
-.bottom-ui-panel {
-  min-width: 0;
-  display: flex;
-  align-items: stretch;
-}
-
-.bottom-ui-panel--left {
-  flex: 1 1 320px;
-  justify-content: flex-start;
-}
-
-.bottom-ui-panel--center {
-  flex: 0 1 auto;
   justify-content: center;
-}
-
-.bottom-ui-panel--right {
-  flex: 1 1 180px;
-  justify-content: flex-end;
+  pointer-events: none;
+  z-index: 12;
 }
 
 .chat-box {
-  width: 100%;
-  max-width: min(420px, 100%);
-  height: 100%;
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--bottom-ui-height) + 16px);
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - (var(--viewport-padding) * 2)));
   min-height: 0;
-  max-height: none;
+  max-height: min(36vh, 260px);
+  pointer-events: auto;
   border: 2px solid var(--panel-border);
   background: linear-gradient(180deg, var(--panel-elevated) 0%, var(--panel) 100%);
   box-shadow: inset 0 0 0 1px rgba(162, 189, 255, 0.08), 0 6px 12px rgba(0, 0, 0, 0.28);
@@ -119,19 +100,41 @@ body {
   box-sizing: border-box;
   overflow-y: auto;
   opacity: 0.96;
-  transform: translateY(0);
   transition: opacity 160ms ease, transform 160ms ease, border-color 160ms ease;
+}
+
+.chat-box.hidden {
+  display: none;
 }
 
 .chat-box[data-dialogue-open='true'] {
   opacity: 1;
-  transform: translateY(-2px);
+  transform: translateX(-50%) translateY(-2px);
   border-color: #6e8ec7;
+}
+
+.chat-box__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
+.chat-close-button {
+  pointer-events: auto;
+  border: 1px solid #3f567e;
+  background: #1a2537;
+  color: #b8cbf3;
+  font: inherit;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
 }
 
 .chat-speaker {
   color: #a9c4ff;
-  margin-bottom: 7px;
+  margin-bottom: 0;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -450,10 +453,6 @@ body {
 }
 
 @media (max-width: 1200px) {
-  .bottom-ui-container__inner {
-    gap: 12px;
-  }
-
   .combat-hud {
     gap: 12px;
     width: min(100%, 520px);
@@ -476,19 +475,9 @@ body {
     --viewport-padding: 10px;
   }
 
-  .bottom-ui-container__inner {
-    gap: 8px;
-  }
-
-  .bottom-ui-panel--left,
-  .bottom-ui-panel--center,
-  .bottom-ui-panel--right {
-    justify-content: center;
-    flex: 1 1 0;
-  }
-
   .chat-box {
-    max-width: 100%;
+    width: min(100%, calc(100% - 20px));
+    bottom: calc(var(--bottom-ui-height) + 12px);
   }
 
   .combat-hud {
@@ -738,11 +727,24 @@ body {
 }
 
 .spell-crafting-window {
-  width: 100%;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1100px, calc(100% - (var(--viewport-padding) * 2)));
+  max-height: min(82vh, calc(100% - (var(--viewport-padding) * 2)));
+  overflow: auto;
+  z-index: 30;
+  pointer-events: auto;
   border: 2px solid var(--panel-border);
   background: linear-gradient(180deg, rgba(16, 21, 34, 0.96), rgba(10, 13, 21, 0.96));
   padding: 12px;
   box-sizing: border-box;
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.55);
+}
+
+.spell-crafting-window.hidden {
+  display: none;
 }
 
 .spell-crafting-header {
