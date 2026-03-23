@@ -426,6 +426,98 @@ function drawWorldObject(renderer, camera, object, spriteId = object.spriteId) {
 
 
 
+function drawWorldObjectToContext(renderer, ctx, object, overrideSpriteId = null) {
+  if (!object || object.destroyed) return;
+
+  const sprite = overrideSpriteId ? getSpriteFrame(overrideSpriteId, 'idle', 0) : getEntitySprite(object);
+  if (sprite?.cells?.length) {
+    const color = colorForEntity(object);
+    const baseX = object.x - Math.floor(sprite.width / 2);
+    const baseY = object.y - 3 + (sprite.offsetY ?? 0);
+
+    for (let sy = 0; sy < sprite.height; sy += 1) {
+      for (let sx = 0; sx < sprite.width; sx += 1) {
+        const cell = sprite.cells[sy]?.[getSpriteCellX(sprite, object.facing, sx)];
+        const ch = cell?.ch ?? ' ';
+        if ((ch === ' ' || ch === ' ') && !cell?.bg) continue;
+        const finalGlyph = resolveSpriteRenderGlyph(object, sprite, ch);
+        renderer.drawCellToContext(ctx, {
+          glyph: finalGlyph,
+          fg: cell?.fg ?? color,
+          bg: cell?.bg ?? c.worldBackground,
+          layer: renderLayers.background,
+        }, baseX + sx, baseY + sy);
+      }
+    }
+    return;
+  }
+
+  const tiles = object.tileVariants ?? object.tiles ?? [];
+  for (const tile of tiles) {
+    renderer.drawCellToContext(ctx, {
+      glyph: toSafeGlyph(tile.char ?? ' '),
+      fg: tile.fg ?? '#d8d2c4',
+      bg: tile.bg ?? c.worldBackground,
+      layer: renderLayers.background,
+    }, object.x + (tile.x ?? 0), object.y + (tile.y ?? 0));
+  }
+}
+
+function isCachedStaticObject(object) {
+  return Boolean(object)
+    && !object.destroyed
+    && object.interaction !== 'destroy'
+    && object.breakTimer == null
+    && object.type !== 'npc';
+}
+
+function backgroundCacheKey(map, worldObjects) {
+  const width = map?.[0]?.length ?? 0;
+  const height = map?.length ?? 0;
+  const staticObjects = (worldObjects ?? [])
+    .filter(isCachedStaticObject)
+    .map((object) => [object.type, object.spriteId, object.variant ?? '', object.x, object.y, object.facing ?? '', object.category ?? ''])
+    .sort((a, b) => String(a).localeCompare(String(b)));
+
+  return JSON.stringify({ width, height, staticObjects });
+}
+
+function ensureBackgroundCache(renderer, map, worldObjects = []) {
+  const width = map?.[0]?.length ?? 0;
+  const height = map?.length ?? 0;
+  if (width <= 0 || height <= 0) {
+    renderer.invalidateBackgroundCache();
+    return;
+  }
+
+  const key = backgroundCacheKey(map, worldObjects);
+  if (renderer.backgroundCache?.key === key) return;
+
+  const cache = renderer.createOffscreenCanvas(width * renderer.cellW, height * renderer.cellH);
+  const fallbackTile = { char: ' ', fg: visualTheme.colors.floorFg, bg: visualTheme.colors.worldBackground };
+
+  for (let y = 0; y < height; y += 1) {
+    const row = map[y] ?? [];
+    for (let x = 0; x < width; x += 1) {
+      const tile = row[x] ?? fallbackTile;
+      renderer.drawCellToContext(cache.ctx, {
+        glyph: tile.char,
+        fg: tile.fg,
+        bg: tile.bg,
+        layer: renderLayers.background,
+      }, x, y);
+    }
+  }
+
+  for (const object of worldObjects) {
+    if (!isCachedStaticObject(object)) continue;
+    drawWorldObjectToContext(renderer, cache.ctx, object);
+  }
+
+  renderer.setBackgroundCache({ ...cache, key });
+}
+
+
 function drawWorldDrop(renderer, camera, drop) {
   const item = getItemDefinition(drop?.itemId);
   const glyph = item?.icon ?? '*';
@@ -647,9 +739,12 @@ function traceCoordinateRoundTrip(renderer, camera, mouse, player) {
 export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, worldDrops = [], combatTextSystem = null, abilityEffects = [], mouse = null, debugOptions = {}, activeRoom = null) {
   const safeAbilityEffects = Array.isArray(abilityEffects) ? abilityEffects : [];
   const safeWorldDrops = Array.isArray(worldDrops) ? worldDrops : [];
+  ensureBackgroundCache(renderer, map, worldObjects);
   renderer.renderBackground(map, camera);
 
   for (const object of worldObjects) {
+    if (isCachedStaticObject(object)) continue;
+
     if (object.destroyed && Array.isArray(object.breakFrames) && object.breakTimer > 0) {
       const duration = Math.max(0.001, object.breakDuration ?? 0.25);
       const progress = 1 - (object.breakTimer / duration);

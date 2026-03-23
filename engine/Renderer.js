@@ -62,6 +62,7 @@ export class Renderer {
     this.ui.ctx.imageSmoothingEnabled = false;
 
     this.frameMetrics = this.#createEmptyFrameMetrics();
+    this.backgroundCache = null;
   }
 
   static CP437_EXTENDED_MAP = {
@@ -326,16 +327,52 @@ export class Renderer {
     layerCtx.drawImage(tile, Math.round(pixelX), Math.round(pixelY));
   }
 
+  createOffscreenCanvas(width, height) {
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d', { alpha: true });
+    ctx.imageSmoothingEnabled = false;
+    return { canvas, ctx };
+  }
+
+  drawCellToContext(ctx, cell, x, y) {
+    if (!ctx || !cell) return;
+    const safeCell = toRenderCell(cell);
+    const tile = this.#getGlyph(safeCell.glyph, safeCell.fg, safeCell.bg);
+    ctx.drawImage(tile, Math.round(x * this.cellW), Math.round(y * this.cellH));
+  }
+
+  setBackgroundCache(cache) {
+    this.backgroundCache = cache ?? null;
+  }
+
+  invalidateBackgroundCache() {
+    this.backgroundCache = null;
+  }
+
   renderBackground(map, camera) {
     const renderBackgroundStart = performance.now();
+    const ctx = this.background.ctx;
+    ctx.clearRect(0, 0, this.background.canvas.width, this.background.canvas.height);
+
+    const cachedCanvas = this.backgroundCache?.canvas;
+    if (cachedCanvas) {
+      const sourceX = Math.round(camera.x * this.cellW);
+      const sourceY = Math.round(camera.y * this.cellH);
+      const sourceWidth = this.background.canvas.width;
+      const sourceHeight = this.background.canvas.height;
+      ctx.drawImage(cachedCanvas, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+      this.frameMetrics.background += 1;
+      this.frameMetrics.drawCalls += 1;
+      this.frameMetrics.renderBackgroundMs += performance.now() - renderBackgroundStart;
+      return;
+    }
+
     const cameraTileX = Math.floor(camera.x);
     const cameraTileY = Math.floor(camera.y);
     const cameraOffsetX = (camera.x - cameraTileX) * this.cellW;
     const cameraOffsetY = (camera.y - cameraTileY) * this.cellH;
-
-    const ctx = this.background.ctx;
-    ctx.clearRect(0, 0, this.background.canvas.width, this.background.canvas.height);
-
     const fallbackTile = { char: ' ', fg: visualTheme.colors.floorFg, bg: visualTheme.colors.worldBackground };
     const mapHeight = map?.length ?? 0;
 
