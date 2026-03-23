@@ -68,7 +68,15 @@ export class SpellCraftingWindow {
     if (!this.recipes.some((recipe) => recipe.id === this.selectedRecipeId)) {
       this.selectedRecipeId = this.recipes[0]?.id ?? '';
     }
-    return this.recipes.find((recipe) => recipe.id === this.selectedRecipeId) ?? null;
+    const recipe = this.recipes.find((recipe) => recipe.id === this.selectedRecipeId) ?? null;
+    if (!recipe) {
+      this.selectedElement = '';
+      return null;
+    }
+    if (!recipe.validElements.includes(this.selectedElement)) {
+      this.selectedElement = recipe.validElements[0] ?? '';
+    }
+    return recipe;
   }
 
   getSelectedElement() {
@@ -86,6 +94,10 @@ export class SpellCraftingWindow {
   open() {
     if (this.visible) return;
     this.visible = true;
+    this.recipes = this.getUnlockedRecipes();
+    if (!this.recipes.some((recipe) => recipe.id === this.selectedRecipeId)) {
+      this.selectedRecipeId = this.recipes[0]?.id ?? '';
+    }
     this.el.classList.remove('hidden');
     this.render();
   }
