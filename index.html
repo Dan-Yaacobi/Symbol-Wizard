@@ -8,18 +8,26 @@
 </head>
 <body>
   <main class="game-shell">
-    <section class="game-stage" aria-label="Gameplay area">
+    <section class="game-container" aria-label="Gameplay area">
       <div class="game-canvas-frame">
         <canvas id="gameCanvas" width="1280" height="720"></canvas>
       </div>
     </section>
 
-    <section id="uiPanels" class="ui-panels" aria-label="Game interface panels">
-      <section id="chatBox" class="chat-box" aria-live="polite">
-        <div id="chatSpeaker" class="chat-speaker">System</div>
-        <div id="chatLine" class="chat-line">Speak with nearby townsfolk (press E nearby). Use 1-9 or click responses.</div>
-        <ul id="chatOptions" class="chat-options"></ul>
-      </section>
+    <section id="uiPanels" class="bottom-ui-container" aria-label="Game interface panels">
+      <div class="bottom-ui-container__inner">
+        <section class="bottom-ui-panel bottom-ui-panel--left" aria-label="Chat panel">
+          <section id="chatBox" class="chat-box" aria-live="polite">
+            <div id="chatSpeaker" class="chat-speaker">System</div>
+            <div id="chatLine" class="chat-line">Speak with nearby townsfolk (press E nearby). Use 1-9 or click responses.</div>
+            <ul id="chatOptions" class="chat-options"></ul>
+          </section>
+        </section>
+
+        <section id="combatHudPanel" class="bottom-ui-panel bottom-ui-panel--center" aria-label="Combat interface"></section>
+
+        <section id="bottomRightPanel" class="bottom-ui-panel bottom-ui-panel--right" aria-label="Status interface"></section>
+      </div>
     </section>
   </main>
 

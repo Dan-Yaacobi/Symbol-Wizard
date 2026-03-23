@@ -21,30 +21,36 @@ body {
 }
 
 .game-shell {
-  height: 100vh;
+  min-height: 100vh;
   box-sizing: border-box;
-  padding: 10px;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 10px;
+  padding: clamp(10px, 1.4vw, 20px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 2vh, 24px);
   overflow: hidden;
 }
 
-.game-stage {
+.game-container {
   min-height: 0;
-  display: grid;
+  flex: 1 1 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
   width: 100%;
-  place-items: center;
 }
 
 .game-canvas-frame {
-  width: 100%;
+  width: min(100%, calc(var(--canvas-base-width) * 1px));
+  max-width: 100%;
   aspect-ratio: 16 / 9;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 #gameCanvas {
-  width: 100% !important;
-  height: auto !important;
+  max-width: 100%;
+  max-height: 100%;
   display: block;
   border: 2px solid var(--panel-border);
   box-shadow: 0 0 0 1px rgba(95, 134, 178, 0.35), 0 16px 28px rgba(0, 0, 0, 0.35);
@@ -52,17 +58,44 @@ body {
   image-rendering: pixelated;
 }
 
-.ui-panels {
+.bottom-ui-container {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.bottom-ui-container__inner {
   width: min(1600px, 100%);
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1.45fr 1fr;
-  gap: 10px;
-  align-items: stretch;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: clamp(12px, 1.6vw, 24px);
+}
+
+.bottom-ui-panel {
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.bottom-ui-panel--left {
+  flex: 1 1 320px;
+  justify-content: flex-start;
+}
+
+.bottom-ui-panel--center {
+  flex: 0 1 auto;
+  justify-content: center;
+}
+
+.bottom-ui-panel--right {
+  flex: 1 1 180px;
+  justify-content: flex-end;
 }
 
 .chat-box {
   width: 100%;
+  max-width: min(420px, 100%);
   min-height: 112px;
   max-height: 24vh;
   border: 2px solid var(--panel-border);
@@ -160,23 +193,27 @@ body {
 }
 
 .combat-hud {
-  position: fixed;
-  left: 50%;
-  bottom: clamp(16px, 4vh, 32px);
-  transform: translateX(-50%);
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   justify-content: center;
   gap: clamp(16px, 2vw, 24px);
   z-index: 25;
   pointer-events: none;
-  width: min(640px, calc(100vw - 32px));
+  width: min(100%, 640px);
 }
 
 .combat-hud__group,
 .combat-hud__center {
   display: flex;
   align-items: center;
+}
+
+.combat-hud__group {
+  flex: 0 0 auto;
+}
+
+.combat-hud__center {
+  flex: 0 1 auto;
   justify-content: center;
 }
 
@@ -399,17 +436,30 @@ body {
 }
 
 @media (max-width: 1200px) {
-  .ui-panels {
-    grid-template-columns: 1fr;
+  .bottom-ui-container__inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "left right"
+      "center center";
+    align-items: end;
   }
 
-  .chat-box {
-    max-height: 18vh;
+  .bottom-ui-panel--left {
+    grid-area: left;
+  }
+
+  .bottom-ui-panel--center {
+    grid-area: center;
+  }
+
+  .bottom-ui-panel--right {
+    grid-area: right;
   }
 
   .combat-hud {
     gap: 12px;
-    width: min(520px, calc(100vw - 20px));
+    width: min(100%, 520px);
   }
 
   .combat-hud__ability-bar {
@@ -420,11 +470,38 @@ body {
   .combat-orb {
     width: clamp(64px, 16vw, 78px);
   }
+
+  .chat-box {
+    max-height: 18vh;
+  }
 }
 
 @media (max-width: 640px) {
+  .game-shell {
+    padding: 10px;
+  }
+
+  .bottom-ui-container__inner {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "center"
+      "left"
+      "right";
+  }
+
+  .bottom-ui-panel--left,
+  .bottom-ui-panel--center,
+  .bottom-ui-panel--right {
+    justify-content: center;
+  }
+
+  .chat-box {
+    max-width: 100%;
+  }
+
   .combat-hud {
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
   }
 
