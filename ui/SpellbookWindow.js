@@ -17,6 +17,20 @@ export class SpellbookWindow {
     this.render();
   }
 
+  selectSpell(spellId, { render = true } = {}) {
+    if (!spellId || this.selectedSpellId === spellId) return;
+    this.selectedSpellId = spellId;
+    if (render) this.render();
+  }
+
+  setPendingEquipSlot(slotIndex, { equip = false } = {}) {
+    if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 3) return;
+    if (this.pendingEquipSlot === slotIndex && !equip) return;
+    this.pendingEquipSlot = slotIndex;
+    if (equip) this.equipSelectedSpell(slotIndex);
+    else this.render();
+  }
+
   onWindowKeyDown(event) {
     const key = event.key.toLowerCase();
     if (key === 'b') {
@@ -80,8 +94,7 @@ export class SpellbookWindow {
 
     const currentIndex = spells.findIndex((spell) => spell.id === this.selectedSpellId);
     const nextIndex = currentIndex < 0 ? 0 : (currentIndex + direction + spells.length) % spells.length;
-    this.selectedSpellId = spells[nextIndex].id;
-    this.render();
+    this.selectSpell(spells[nextIndex].id);
   }
 
   equipSelectedSpell(slotIndex) {
@@ -124,9 +137,16 @@ export class SpellbookWindow {
       item.innerHTML = `<span class="spell-icon">${spell.icon ?? '?'}</span><span>${spell.name}</span>`;
       item.draggable = true;
 
+      item.addEventListener('mouseenter', () => {
+        this.selectSpell(spell.id);
+      });
+
+      item.addEventListener('focus', () => {
+        this.selectSpell(spell.id);
+      });
+
       item.addEventListener('click', () => {
-        this.selectedSpellId = spell.id;
-        this.render();
+        this.selectSpell(spell.id);
       });
 
       item.addEventListener('dragstart', (event) => {
@@ -166,9 +186,16 @@ export class SpellbookWindow {
       if (this.pendingEquipSlot === i) slot.classList.add('active');
       slot.innerHTML = `<span>[Slot ${i + 1}]</span><strong>${equipped?.name ?? 'Empty'}</strong>`;
 
+      slot.addEventListener('mouseenter', () => {
+        this.setPendingEquipSlot(i);
+      });
+
+      slot.addEventListener('focus', () => {
+        this.setPendingEquipSlot(i);
+      });
+
       slot.addEventListener('click', () => {
-        this.pendingEquipSlot = i;
-        this.equipSelectedSpell(i);
+        this.setPendingEquipSlot(i, { equip: true });
       });
 
       slot.addEventListener('dragover', (event) => event.preventDefault());
@@ -176,6 +203,7 @@ export class SpellbookWindow {
         event.preventDefault();
         const spellId = event.dataTransfer?.getData('application/x-spell-id') || this.dragPayload;
         if (!spellId) return;
+        this.selectSpell(spellId, { render: false });
         this.abilitySystem.assignAbilityToSlot(i, spellId);
         this.pendingEquipSlot = i;
         this.render();

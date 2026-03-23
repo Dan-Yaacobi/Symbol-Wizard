@@ -51,6 +51,7 @@ import {
 } from './systems/WorldObjectSystem.js';
 import { resolveWallOverlap } from './systems/EnemyCollisionSystem.js';
 import { attemptSlideMove } from './systems/CollisionSystem.js';
+import { populateInventoryWithMaxStacks } from './systems/InventorySystem.js';
 
 const VIEW_W = 104;
 const VIEW_H = 58;
@@ -80,11 +81,7 @@ let map = activeRoom.tiles;
 const player = new Player(Math.floor(ROOM_W / 2), Math.floor(ROOM_H / 2));
 player.facingVector = { x: 0, y: 1 };
 getCraftableRecipeIds().forEach((recipeId) => player.unlockRecipe(recipeId));
-player.addItem('essence', 20);
-player.addItem('stone', 20);
-player.addItem('frost_core', 2);
-player.addItem('fire_core', 2);
-player.addItem('lightning_core', 1);
+populateInventoryWithMaxStacks(player.inventory);
 const enemies = [];
 let enemyAiEnabled = true;
 let applyEnemyTuningToExistingEnemies = false;
