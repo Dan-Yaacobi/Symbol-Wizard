@@ -748,20 +748,24 @@ function movePlayer(dx, dy) {
   if (dy !== 0 && !movedY) player.vy = 0;
 }
 
+function getPlayerMoveDirection(gameplayInputBlocked) {
+  const dx = Number(!gameplayInputBlocked && input.isDown('d')) - Number(!gameplayInputBlocked && input.isDown('a'));
+  const dy = Number(!gameplayInputBlocked && input.isDown('s')) - Number(!gameplayInputBlocked && input.isDown('w'));
+
+  if (dx === 0 && dy === 0) return { x: 0, y: 0 };
+
+  const length = Math.hypot(dx, dy) || 1;
+  return {
+    x: dx / length,
+    y: dy / length,
+  };
+}
+
 function handlePlayer(dt) {
-  let moveX = 0;
-  let moveY = 0;
-
   const gameplayInputBlocked = dialogueManager.isOpen || isCraftingUIOpen || inventoryWindow.isOpen();
-
-  if (!gameplayInputBlocked && input.isDown('w')) moveY -= 1;
-  if (!gameplayInputBlocked && input.isDown('s')) moveY += 1;
-  if (!gameplayInputBlocked && input.isDown('a')) moveX -= 1;
-  if (!gameplayInputBlocked && input.isDown('d')) moveX += 1;
-
-  const magnitude = Math.hypot(moveX, moveY) || 1;
-  moveX /= magnitude;
-  moveY /= magnitude;
+  const moveDirection = getPlayerMoveDirection(gameplayInputBlocked);
+  const moveX = moveDirection.x;
+  const moveY = moveDirection.y;
 
   const targetSpeed = runtimeConfig.get('player.speed');
   const accel = runtimeConfig.get('player.acceleration');
@@ -774,7 +778,7 @@ function handlePlayer(dt) {
   player.vx += (targetVx - player.vx) * blend;
   player.vy += (targetVy - player.vy) * blend;
   if (Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01) {
-    player.facingVector = { x: Math.round(moveX), y: Math.round(moveY) };
+    player.facingVector = { x: Math.sign(moveX), y: Math.sign(moveY) };
   }
 
   movePlayer(player.vx * dt, player.vy * dt);
