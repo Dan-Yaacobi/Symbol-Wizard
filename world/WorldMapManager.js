@@ -1,6 +1,6 @@
 import { TownGenerator } from './TownGenerator.js';
 import { buildCollidableMask, carveBoundaryCrossing, carveEntranceSafetyZone, carvePath, floodFillWalkable, nearestReachablePoint } from './PathConnectivity.js';
-import { connectRegions, deriveForestSeedFromTown, normalizeExit } from './RegionGenerationSystem.js';
+import { deriveForestSeedFromTown, normalizeExit } from './RegionGenerationSystem.js';
 import { ENTRANCE_CLEAR_ZONE_RADIUS, MIN_ROAD_WIDTH } from './GenerationConstants.js';
 
 function buildCollisionMap(grid, objects = []) {
@@ -380,15 +380,22 @@ export class WorldMapManager {
     this.installTownHouseInteractions(town);
 
     const forestExit = town.exits?.find((candidate) => candidate.targetMapType === 'forest');
-    if (forestExit) {
+    if (forestExit?.targetSeed) {
       const biomeId = this.buildForestBiomeId(forestExit.targetSeed);
       const { biome } = this.biomeGenerator.enterBiome(biomeId, forestExit.targetSeed);
-      forestExit.targetRoomId = forestExit.targetRoomId ?? biome?.startRoomId ?? null;
-      forestExit.targetEntryId = forestExit.targetEntryId ?? 'forest_entry_from_town';
-      forestExit.targetEntranceId = forestExit.targetEntranceId ?? forestExit.targetEntryId;
-      if (forestExit.interactionData) {
-        forestExit.interactionData.targetBiome = forestExit.targetRoomId;
-        forestExit.interactionData.targetEntryId = forestExit.targetEntryId;
+      const targetRoomId = forestExit.targetRoomId ?? biome?.startRoomId ?? null;
+      if (targetRoomId) {
+        forestExit.targetId = targetRoomId;
+        forestExit.targetRoomId = targetRoomId;
+        forestExit.targetEntryId = forestExit.targetEntryId ?? 'forest_entry_from_town';
+        forestExit.targetEntranceId = forestExit.targetEntranceId ?? forestExit.targetEntryId;
+        if (forestExit.interactionData) {
+          forestExit.interactionData.targetId = targetRoomId;
+          forestExit.interactionData.targetBiome = targetRoomId;
+          forestExit.interactionData.targetRoomId = targetRoomId;
+          forestExit.interactionData.targetEntryId = forestExit.targetEntryId;
+          forestExit.interactionData.targetSeed = forestExit.targetSeed;
+        }
       }
     }
 
@@ -453,39 +460,28 @@ export class WorldMapManager {
 
     if (normalized && returnLink?.targetSeed) {
       const town = this.loadTown(returnLink.targetSeed);
-      const townExit = town.exits?.find((candidate) => candidate.id === (returnLink.targetEntryId ?? 'town_exit_main'))
+      const entryId = returnLink.targetEntryId ?? 'town_exit_main';
+      const townExit = town.exits?.find((candidate) => candidate.id === entryId)
         ?? town.exits?.find((candidate) => candidate.targetMapType === 'forest');
-      const forestReturnExit = normalized.exits?.find((candidate) => candidate.targetMapType === 'town')
-        ?? normalized.exits?.[0];
 
-      if (townExit && forestReturnExit) {
-        townExit.targetSeed = seed;
-        townExit.targetRoomId = roomId;
-        townExit.targetEntryId = 'forest_entry_from_town';
-        townExit.targetEntranceId = 'forest_entry_from_town';
-        if (townExit.interactionData) {
-          townExit.interactionData.targetBiome = roomId;
-          townExit.interactionData.targetEntryId = 'forest_entry_from_town';
-          townExit.interactionData.targetSeed = seed;
-        }
-
-        forestReturnExit.targetSeed = returnLink.targetSeed;
-        forestReturnExit.targetEntryId = returnLink.targetEntryId ?? townExit.id;
-        forestReturnExit.targetEntranceId = forestReturnExit.targetEntryId;
-        if (forestReturnExit.interactionData) {
-          forestReturnExit.interactionData.targetSeed = returnLink.targetSeed;
-          forestReturnExit.interactionData.targetEntryId = forestReturnExit.targetEntryId;
-        }
-
-        connectRegions({
-          fromRegion: town,
-          toRegion: normalized,
-          options: {
-            debug: this.runtimeConfig?.get?.('generation.debug') ?? false,
-            fromExit: townExit,
-            toExit: forestReturnExit,
+      if (townExit?.position) {
+        const landing = town.entrances?.[entryId]?.spawn
+          ?? town.entrances?.[entryId]
+          ?? townExit.meta?.returnPosition
+          ?? townExit.position;
+        town.entrances = {
+          ...(town.entrances ?? {}),
+          [entryId]: {
+            ...(town.entrances?.[entryId] ?? {}),
+            id: entryId,
+            x: townExit.position.x,
+            y: townExit.position.y,
+            spawn: landing?.x != null && landing?.y != null ? { x: landing.x, y: landing.y } : undefined,
+            landingX: landing?.x ?? townExit.position.x,
+            landingY: landing?.y ?? townExit.position.y,
+            direction: oppositeDirection(townExit.direction ?? 'north'),
           },
-        });
+        };
         this.mapCache.set(town.id, town);
       }
     }

@@ -215,20 +215,18 @@ export function connectRegions({ fromRegion, toRegion, connectionType = 'path', 
   });
 
   fromExit.targetType = toRegion.type === 'town' ? 'town' : 'biome';
-  fromExit.targetId = toRegion.id;
   fromExit.targetMapType = toRegion.type === 'town' ? 'town' : 'forest';
   fromExit.targetSeed = toRegion.seed ?? toRegion.metadata?.seed ?? null;
   fromExit.targetEntryId = toExit.id;
   fromExit.targetEntranceId = toExit.id;
-  fromExit.interactionData = { targetType: fromExit.targetType, targetId: fromExit.targetId, entryId: toExit.id };
+  fromExit.interactionData = { targetType: fromExit.targetType, targetId: fromExit.targetId ?? null, entryId: toExit.id };
 
   toExit.targetType = fromRegion.type === 'town' ? 'town' : 'biome';
-  toExit.targetId = fromRegion.id;
   toExit.targetMapType = fromRegion.type === 'town' ? 'town' : 'forest';
   toExit.targetSeed = fromRegion.seed ?? fromRegion.metadata?.seed ?? null;
   toExit.targetEntryId = fromExit.id;
   toExit.targetEntranceId = fromExit.id;
-  toExit.interactionData = { targetType: toExit.targetType, targetId: toExit.targetId, entryId: fromExit.id };
+  toExit.interactionData = { targetType: toExit.targetType, targetId: toExit.targetId ?? null, entryId: fromExit.id };
 
   const fromDelta = directionToDelta(fromExit.direction);
   const toLanding = { x: Math.max(1, Math.min((toRegion.tiles?.[0]?.length ?? 2) - 2, toExit.x - fromDelta.x * 3)), y: Math.max(1, Math.min((toRegion.tiles?.length ?? 2) - 2, toExit.y - fromDelta.y * 3)) };
