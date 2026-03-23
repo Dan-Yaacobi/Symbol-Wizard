@@ -129,6 +129,7 @@ export function createEnemyStateDefinitions() {
 
 export function syncEntityMovementState(entity) {
   const state = ensureEntityState(entity);
+  if (state.type !== 'idle' && state.type !== 'walk') return;
   const nextState = getMovementState(entity);
   if (nextState !== state.type) setEntityState(entity, nextState);
 }
