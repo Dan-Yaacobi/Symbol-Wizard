@@ -13,19 +13,28 @@ export function resolveMapCollision(entity, map, isWalkableAt = null) {
   }
 }
 
+function chooseSlideAxis(dx, dy, canMoveX, canMoveY) {
+  if (canMoveX && !canMoveY) return 'x';
+  if (canMoveY && !canMoveX) return 'y';
+  if (!canMoveX && !canMoveY) return null;
+
+  if (Math.abs(dx) > Math.abs(dy)) return 'x';
+  if (Math.abs(dy) > Math.abs(dx)) return 'y';
+
+  return 'x';
+}
+
 export function attemptSlideMove(entity, dx, dy, canOccupy) {
   if (dx === 0 && dy === 0) return { movedX: false, movedY: false, blocked: false };
 
-  const tryMoveTo = (nextX, nextY) => {
-    if (!canOccupy(nextX, nextY)) return false;
-    entity.x = nextX;
-    entity.y = nextY;
-    return true;
-  };
-
   const startX = entity.x;
   const startY = entity.y;
-  if (tryMoveTo(startX + dx, startY + dy)) {
+  const canMoveTo = (nextX, nextY) => canOccupy(nextX, nextY);
+
+  const canMoveFull = canMoveTo(startX + dx, startY + dy);
+  if (canMoveFull) {
+    entity.x = startX + dx;
+    entity.y = startY + dy;
     return {
       movedX: dx !== 0,
       movedY: dy !== 0,
@@ -33,13 +42,26 @@ export function attemptSlideMove(entity, dx, dy, canOccupy) {
     };
   }
 
-  const movedX = dx !== 0 && tryMoveTo(startX + dx, startY);
-  const movedY = dy !== 0 && tryMoveTo(entity.x, startY + dy);
+  const canMoveX = dx !== 0 && canMoveTo(startX + dx, startY);
+  const canMoveY = dy !== 0 && canMoveTo(startX, startY + dy);
+  const slideAxis = chooseSlideAxis(dx, dy, canMoveX, canMoveY);
+
+  if (slideAxis === 'x') {
+    entity.x = startX + dx;
+    entity.y = startY;
+    return { movedX: true, movedY: false, blocked: false };
+  }
+
+  if (slideAxis === 'y') {
+    entity.x = startX;
+    entity.y = startY + dy;
+    return { movedX: false, movedY: true, blocked: false };
+  }
 
   return {
-    movedX,
-    movedY,
-    blocked: !movedX && !movedY,
+    movedX: false,
+    movedY: false,
+    blocked: true,
   };
 }
 
