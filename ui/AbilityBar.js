@@ -1,119 +1,163 @@
-const SLOT_BINDING_LABELS = ['LMB', 'RMB', 'MMB', '—'];
+const SLOT_BINDING_LABELS = ['LMB', 'RMB', 'MMB'];
+const SLOT_COUNT = 3;
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function formatValue(value) {
+  return Math.max(0, Math.ceil(value));
+}
 
 export class AbilityBar {
-  constructor({ root, abilitySystem }) {
+  constructor({ root = document.body, abilitySystem, player }) {
     this.root = root;
     this.abilitySystem = abilitySystem;
-    this.dragPayload = null;
+    this.player = player;
+    this.slotElements = [];
+    this.orbs = new Map();
 
     this.el = document.createElement('section');
-    this.el.className = 'ability-bar';
-    this.el.innerHTML = '<h3>Ability Slots</h3><div class="ability-slots"></div><div class="ability-pool"></div>';
+    this.el.className = 'combat-hud';
+    this.el.setAttribute('aria-label', 'Combat interface');
+    this.el.innerHTML = `
+      <div class="combat-hud__group combat-hud__group--left"></div>
+      <div class="combat-hud__center">
+        <div class="combat-hud__ability-bar" role="group" aria-label="Ability bar"></div>
+      </div>
+      <div class="combat-hud__group combat-hud__group--right"></div>
+    `;
+
     this.root.appendChild(this.el);
 
-    this.slotsWrap = this.el.querySelector('.ability-slots');
-    this.poolWrap = this.el.querySelector('.ability-pool');
+    this.leftGroup = this.el.querySelector('.combat-hud__group--left');
+    this.rightGroup = this.el.querySelector('.combat-hud__group--right');
+    this.barEl = this.el.querySelector('.combat-hud__ability-bar');
 
-    this.render();
+    this.createOrb({
+      key: 'hp',
+      parent: this.leftGroup,
+      label: 'HP',
+      accentClass: 'combat-orb--hp',
+      getValue: () => ({
+        current: this.player?.hp ?? 0,
+        max: this.player?.maxHp ?? 0,
+      }),
+    });
+
+    this.createSlots();
+
+    this.createOrb({
+      key: 'mana',
+      parent: this.rightGroup,
+      label: 'Mana',
+      accentClass: 'combat-orb--mana',
+      getValue: () => ({
+        current: this.player?.mana ?? 0,
+        max: this.player?.maxMana ?? 0,
+      }),
+    });
+
+    this.update(true);
   }
 
-  render() {
-    this.renderSlots();
-    this.renderPool();
-  }
-
-  renderSlots() {
-    this.slotsWrap.innerHTML = '';
-
-    for (let i = 0; i < 4; i += 1) {
-      const ability = this.abilitySystem.getAbilityBySlot(i);
-      const slot = document.createElement('button');
-      slot.type = 'button';
-      slot.className = 'ability-slot';
+  createSlots() {
+    for (let i = 0; i < SLOT_COUNT; i += 1) {
+      const slot = document.createElement('div');
+      slot.className = 'combat-slot';
       slot.dataset.slotIndex = String(i);
-      slot.innerHTML = `<span class="slot-hotkey">${SLOT_BINDING_LABELS[i] ?? '—'}</span><span class="slot-label">${ability?.name ?? 'Empty'}</span>`;
+      slot.innerHTML = `
+        <span class="combat-slot__hotkey">${SLOT_BINDING_LABELS[i] ?? String(i + 1)}</span>
+        <div class="combat-slot__icon-wrap">
+          <div class="combat-slot__icon-bg"></div>
+          <span class="combat-slot__icon" aria-hidden="true">—</span>
+          <div class="combat-slot__cooldown" aria-hidden="true"></div>
+          <span class="combat-slot__cooldown-text"></span>
+        </div>
+        <span class="combat-slot__label">Empty</span>
+      `;
 
-      slot.draggable = Boolean(ability);
-      slot.addEventListener('dragstart', (event) => {
-        if (!ability) {
-          event.preventDefault();
-          return;
-        }
-
-        event.dataTransfer?.setData('application/x-ability-source', 'slot');
-        event.dataTransfer?.setData('text/plain', String(i));
-        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
-
-        this.dragPayload = { type: 'slot', slotIndex: i, abilityId: ability.id };
-        slot.classList.add('dragging');
+      this.barEl.appendChild(slot);
+      this.slotElements.push({
+        root: slot,
+        hotkey: slot.querySelector('.combat-slot__hotkey'),
+        icon: slot.querySelector('.combat-slot__icon'),
+        cooldown: slot.querySelector('.combat-slot__cooldown'),
+        cooldownText: slot.querySelector('.combat-slot__cooldown-text'),
+        label: slot.querySelector('.combat-slot__label'),
       });
-      slot.addEventListener('dragend', () => {
-        slot.classList.remove('dragging');
-        this.dragPayload = null;
-      });
-
-      slot.addEventListener('dragover', (event) => {
-        event.preventDefault();
-      });
-      slot.addEventListener('drop', (event) => {
-        event.preventDefault();
-
-        const sourceType = event.dataTransfer?.getData('application/x-ability-source') || this.dragPayload?.type;
-
-        if (sourceType === 'slot') {
-          const fromIndexRaw = event.dataTransfer?.getData('text/plain');
-          const fromIndex = Number(fromIndexRaw);
-          if (Number.isNaN(fromIndex)) return;
-
-          this.abilitySystem.swapSlots(fromIndex, i);
-        } else if (sourceType === 'pool') {
-          const abilityId =
-            event.dataTransfer?.getData('application/x-ability-id') ||
-            event.dataTransfer?.getData('text/plain') ||
-            this.dragPayload?.abilityId;
-          if (!abilityId) return;
-
-          this.abilitySystem.assignAbilityToSlot(i, abilityId);
-        } else {
-          return;
-        }
-
-        this.render();
-      });
-
-      slot.addEventListener('contextmenu', (event) => {
-        event.preventDefault();
-        this.abilitySystem.assignAbilityToSlot(i, null);
-        this.render();
-      });
-
-      this.slotsWrap.appendChild(slot);
     }
   }
 
-  renderPool() {
-    this.poolWrap.innerHTML = '<h4>Spellbook (drag to slot; right-click slot to clear)</h4>';
-    const list = document.createElement('div');
-    list.className = 'ability-pool-list';
+  createOrb({ key, parent, label, accentClass, getValue }) {
+    const orb = document.createElement('div');
+    orb.className = `combat-orb ${accentClass}`;
+    orb.setAttribute('role', 'meter');
+    orb.setAttribute('aria-label', label);
+    orb.innerHTML = `
+      <div class="combat-orb__shell">
+        <div class="combat-orb__fill"></div>
+        <div class="combat-orb__core">
+          <span class="combat-orb__label">${label}</span>
+          <span class="combat-orb__value">0/0</span>
+        </div>
+      </div>
+    `;
 
-    for (const ability of this.abilitySystem.getAbilities()) {
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'ability-pool-item';
-      item.textContent = ability.name;
-      item.draggable = true;
+    parent.appendChild(orb);
+    this.orbs.set(key, {
+      root: orb,
+      fill: orb.querySelector('.combat-orb__fill'),
+      value: orb.querySelector('.combat-orb__value'),
+      getValue,
+    });
+  }
 
-      item.addEventListener('dragstart', (event) => {
-        event.dataTransfer?.setData('application/x-ability-source', 'pool');
-        event.dataTransfer?.setData('application/x-ability-id', ability.id);
-        event.dataTransfer?.setData('text/plain', ability.id);
-        if (event.dataTransfer) event.dataTransfer.effectAllowed = 'copyMove';
-        this.dragPayload = { type: 'pool', abilityId: ability.id };
-      });
+  update(force = false) {
+    this.updateSlots(force);
+    this.updateOrbs(force);
+  }
 
-      list.appendChild(item);
+  updateSlots(force = false) {
+    for (let i = 0; i < this.slotElements.length; i += 1) {
+      const slotEl = this.slotElements[i];
+      const ability = this.abilitySystem.getAbilityBySlot(i);
+      const cooldown = ability ? this.abilitySystem.getCooldownRemaining(ability.id) : 0;
+      const maxCooldown = ability ? this.abilitySystem.getCooldownDuration(ability.id) : 0;
+      const cooldownRatio = maxCooldown > 0 ? clamp01(cooldown / maxCooldown) : 0;
+      const readyRatio = 1 - cooldownRatio;
+      const isCoolingDown = cooldown > 0.001;
+
+      if (force || slotEl.root.dataset.abilityId !== (ability?.id ?? '')) {
+        slotEl.root.dataset.abilityId = ability?.id ?? '';
+        slotEl.root.classList.toggle('combat-slot--empty', !ability);
+        slotEl.icon.textContent = ability?.icon ?? '—';
+        slotEl.label.textContent = ability?.name ?? 'Empty';
+        slotEl.root.setAttribute('aria-label', ability ? `${ability.name} on ${SLOT_BINDING_LABELS[i]}` : `Empty ${SLOT_BINDING_LABELS[i]} slot`);
+      }
+
+      slotEl.root.classList.toggle('combat-slot--cooling-down', isCoolingDown);
+      slotEl.cooldown.style.background = isCoolingDown
+        ? `conic-gradient(from -90deg, transparent 0turn ${readyRatio}turn, rgba(0, 0, 0, 0.7) ${readyRatio}turn 1turn)`
+        : 'transparent';
+      slotEl.cooldown.style.opacity = isCoolingDown ? '1' : '0';
+      slotEl.cooldownText.textContent = isCoolingDown
+        ? `${cooldown.toFixed(cooldown >= 10 ? 0 : 1)} / ${maxCooldown.toFixed(maxCooldown >= 10 ? 0 : 1)}`
+        : 'Ready';
+      slotEl.cooldownText.classList.toggle('combat-slot__cooldown-text--ready', !isCoolingDown);
     }
+  }
 
-    this.poolWrap.appendChild(list);
+  updateOrbs() {
+    for (const orb of this.orbs.values()) {
+      const { current, max } = orb.getValue();
+      const safeMax = Math.max(0, max ?? 0);
+      const ratio = safeMax > 0 ? clamp01((current ?? 0) / safeMax) : 0;
+      orb.fill.style.background = `conic-gradient(from 180deg, var(--orb-fill) 0turn ${ratio}turn, rgba(10, 16, 28, 0.92) ${ratio}turn 1turn)`;
+      orb.value.textContent = `${formatValue(current ?? 0)}/${formatValue(safeMax)}`;
+      orb.root.setAttribute('aria-valuemin', '0');
+      orb.root.setAttribute('aria-valuemax', String(formatValue(safeMax)));
+      orb.root.setAttribute('aria-valuenow', String(formatValue(current ?? 0)));
+    }
   }
 }

@@ -322,6 +322,15 @@ export class AbilitySystem {
     return spell.cooldown <= 0 ? 0 : remaining / spell.cooldown;
   }
 
+  getCooldownRemaining(spellId) {
+    return Math.max(0, this.cooldowns.get(spellId) ?? 0);
+  }
+
+  getCooldownDuration(spellId) {
+    const spell = this.definitions.get(spellId);
+    return Math.max(0, spell?.cooldown ?? 0);
+  }
+
   getAbilities() {
     return [...this.definitions.values()];
   }

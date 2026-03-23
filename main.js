@@ -33,6 +33,7 @@ import { AbilitySystem } from './systems/AbilitySystem.js';
 import { SpellbookWindow } from './ui/SpellbookWindow.js';
 import { SpellCraftingWindow } from './ui/SpellCraftingWindow.js';
 import { InventoryWindow } from './ui/InventoryWindow.js';
+import { AbilityBar } from './ui/AbilityBar.js';
 import { PrefabEditorScreen } from './ui/PrefabEditorScreen.js';
 import { SpriteEditorScreen } from './ui/SpriteEditorScreen.js';
 import { palette } from './data/SpritePalette.js';
@@ -276,6 +277,7 @@ const uiRoot = document.getElementById('uiPanels') ?? (() => {
   console.warn('BOOT: #uiPanels missing in startup scene. Created fallback root to prevent startup crash.');
   return fallback;
 })();
+const combatHud = new AbilityBar({ root: document.body, abilitySystem, player });
 const spellbook = new SpellbookWindow({ root: uiRoot, abilitySystem, input });
 const spellCraftingWindow = new SpellCraftingWindow({
   root: uiRoot,
@@ -865,6 +867,7 @@ function handlePlayer(dt) {
 
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
+  combatHud.update();
   updateEntityState(player, dt);
   updateEntityFacingFromVelocity(player);
   syncEntityMovementState(player);
