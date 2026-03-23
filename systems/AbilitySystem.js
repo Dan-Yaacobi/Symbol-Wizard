@@ -44,7 +44,19 @@ export class AbilitySystem {
 
     this.updateStatusEffects(dt);
     this.updateFreeze(dt);
+    this.updatePlayerAction(dt);
     updateSpellInstances(this.activeSpellInstances, dt, { system: this, player: this.player });
+  }
+
+
+  updatePlayerAction(dt) {
+    const action = this.player?.activeAction;
+    if (!action) return;
+
+    action.elapsed = (action.elapsed ?? 0) + dt;
+    if (action.elapsed >= (action.duration ?? 0)) {
+      this.player.activeAction = null;
+    }
   }
 
   updateEffect(effect, dt) {
@@ -270,7 +282,12 @@ export class AbilitySystem {
 
     this.player.mana -= spell.manaCost;
     this.cooldowns.set(spell.id, spell.cooldown);
-    setEntityState(this.player, 'attack');
+    this.player.activeAction = {
+      type: 'cast',
+      duration: this.player.castCooldown ?? 0.24,
+      elapsed: 0,
+      movementPolicy: 'free',
+    };
 
     try {
       if (spell.behavior) {

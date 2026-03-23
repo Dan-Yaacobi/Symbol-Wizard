@@ -1,11 +1,21 @@
 import { getAnimationFrameCount, getSpriteAnimation } from '../data/SpriteAssetLoader.js';
 import { getEntityAnimationState } from './EntityStateSystem.js';
 
+function resolveEntityAnimationState(entity) {
+  if (entity?.type === 'player' && entity.activeAction) {
+    if (entity.activeAction.type === 'cast') return 'attack';
+    return entity.activeAction.type;
+  }
+
+  return getEntityAnimationState(entity);
+}
+
 export function updateEntityAnimation(entity, dt, _moving = false, config = null) {
+  void _moving;
   const animationTimings = entity.animationTimings ?? entity.frameDurations;
   if (!animationTimings || !entity.spriteId) return;
 
-  const nextState = getEntityAnimationState(entity);
+  const nextState = resolveEntityAnimationState(entity);
   if (entity.animationState !== nextState) {
     entity.animationState = nextState;
     entity.frameIndex = 0;
