@@ -26,10 +26,18 @@ assert.strictEqual(
 const forestReturnExit = forestStart.exits.find((exit) => exit.targetMapType === 'town');
 assert.ok(forestReturnExit, 'Forest start room should link back to town.');
 assert.equal(forestReturnExit.targetEntryId, townForestExit.id, 'Forest return exit should point at the originating town exit.');
-assert.strictEqual(worldMapManager.resolveMapByExit(forestStart, forestReturnExit), town, 'Returning from the forest should restore the same town instance.');
+
+const originalTownForestExit = structuredClone(townForestExit);
+const returnedTown = worldMapManager.resolveMapByExit(forestStart, forestReturnExit);
+assert.strictEqual(returnedTown, town, 'Returning from the forest should restore the same town instance.');
+assert.deepEqual(townForestExit, originalTownForestExit, 'Town forest exit should remain unchanged after forest traversal.');
+
+const forestStartAgain = worldMapManager.resolveMapByExit(returnedTown, townForestExit);
+assert.strictEqual(forestStartAgain, forestStart, 'Town → Forest → Town → Forest should keep the same forest start room instance.');
 
 const forestRoomExit = forestStart.exits.find((exit) => exit.targetRoomId);
 assert.ok(forestRoomExit, 'Forest start room should link to another forest room.');
+assert.notEqual(forestStartAgain.sourceRoomId, forestRoomExit.targetRoomId, 'Re-entering the forest should preserve a distinct internal room edge.');
 const connectedForestRoom = worldMapManager.resolveMapByExit(forestStart, forestRoomExit);
 assert.equal(connectedForestRoom.id, `forest-${forestStart.seed}-${connectedForestRoom.sourceRoomId}`);
 
@@ -40,5 +48,8 @@ assert.strictEqual(
   forestStart,
   'Forest graph traversal should return to the same cached room instance.',
 );
+
+assert.notEqual(townForestExit.targetRoomId, town.id, 'Town forest exit should never self-loop to the town map.');
+assert.equal(forestReturnExit.targetRoomId ?? null, null, 'Forest return exit should remain a town link, not an internal forest-room edge.');
 
 console.log('World map persistence checks passed.');

@@ -491,6 +491,7 @@ export class TownGenerator {
       interactionData: {
         targetMap: 'forest',
         targetBiome: null,
+        targetRoomId: null,
         targetExitId: null,
         targetEntryId: 'forest_entry_from_town',
         targetSeed: forestSeed,
