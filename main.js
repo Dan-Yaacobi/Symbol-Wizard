@@ -57,9 +57,8 @@ const ROOM_W = 240;
 const ROOM_H = 160;
 
 const canvas = document.getElementById('gameCanvas');
+const canvasFrame = canvas?.parentElement;
 const renderer = new Renderer(canvas, VIEW_W, VIEW_H, 8, 8);
-canvas.style.width = canvas.width + "px";
-canvas.style.height = canvas.height + "px";
 const camera = new Camera(VIEW_W, VIEW_H, ROOM_W, ROOM_H);
 const viewport = new Viewport(canvas);
 const input = new Input(canvas, viewport, camera, renderer.cellW, renderer.cellH);
@@ -560,10 +559,10 @@ if (diagMode) {
 }
 
 function resizeLayout() {
-  const shell = document.querySelector('.game-shell');
-  const stage = document.querySelector('.game-container');
+  const shell = document.getElementById('app-root');
+  const stage = document.querySelector('.game-area');
   const panels = document.getElementById('uiPanels');
-  if (!shell || !stage || !panels) return;
+  if (!shell || !stage || !panels || !canvasFrame) return;
 
   const stageRect = stage.getBoundingClientRect();
   const maxCanvasWidth = Math.max(1, Math.floor(stageRect.width));
@@ -586,13 +585,16 @@ function resizeLayout() {
   const rawScale = Math.min(maxCanvasWidth / canvas.width, maxCanvasHeight / canvas.height);
   const safeRawScale = Number.isFinite(rawScale) && rawScale > 0 ? rawScale : 1;
   const scale = safeRawScale >= 1 ? Math.floor(safeRawScale) : Math.max(safeRawScale, 0.1);
+  const scaledWidth = Math.max(1, Math.floor(canvas.width * scale));
+  const scaledHeight = Math.max(1, Math.floor(canvas.height * scale));
 
-  canvas.style.width = `${canvas.width * scale}px`;
-  canvas.style.height = `${canvas.height * scale}px`;
+  canvasFrame.style.width = `${scaledWidth}px`;
+  canvasFrame.style.height = `${scaledHeight}px`;
 
   logBoot('viewport ready', {
     viewport: { width: window.innerWidth, height: window.innerHeight },
     stage: { width: maxCanvasWidth, height: maxCanvasHeight },
+    frame: { width: scaledWidth, height: scaledHeight },
     canvas: { width: canvas.width, height: canvas.height, cssWidth: canvas.style.width, cssHeight: canvas.style.height },
     rootScale: rootTransform,
     mainWorldVisible: worldVisible,
