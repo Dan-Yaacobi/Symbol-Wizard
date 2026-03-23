@@ -884,7 +884,7 @@ function handlePlayer(dt) {
 
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
   abilitySystem.tick(dt);
-  combatHud.update();
+  combatHud.updateOrbs();
   updateEntityState(player, dt);
   updateEntityFacingFromVelocity(player);
   syncEntityMovementState(player);
