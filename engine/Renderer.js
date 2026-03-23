@@ -57,6 +57,8 @@ export class Renderer {
     this.entities.ctx.imageSmoothingEnabled = false;
     this.effects.ctx.imageSmoothingEnabled = false;
     this.ui.ctx.imageSmoothingEnabled = false;
+
+    this.frameMetrics = this.#createEmptyFrameMetrics();
   }
 
   static CP437_EXTENDED_MAP = {
@@ -81,6 +83,46 @@ export class Renderer {
     '≡': 240, '±': 241, '≥': 242, '≤': 243, '⌠': 244, '⌡': 245, '÷': 246, '≈': 247,
     '°': 248, '∙': 249, '·': 250, '√': 251, 'ⁿ': 252, '²': 253, '■': 254, ' ': 255,
   };
+
+
+  #createEmptyFrameMetrics() {
+    return {
+      drawCalls: 0,
+      background: 0,
+      entities: 0,
+      effects: 0,
+      ui: 0,
+      renderBackgroundMs: 0,
+      compositeMs: 0,
+      compositeScaleMs: 0,
+      compositeDrawMs: 0,
+      layerCompositeMs: {
+        background: 0,
+        entities: 0,
+        effects: 0,
+        ui: 0,
+      },
+    };
+  }
+
+  resetFrameMetrics() {
+    this.frameMetrics = this.#createEmptyFrameMetrics();
+  }
+
+  getFrameMetrics() {
+    return {
+      drawCalls: this.frameMetrics.drawCalls,
+      background: this.frameMetrics.background,
+      entities: this.frameMetrics.entities,
+      effects: this.frameMetrics.effects,
+      ui: this.frameMetrics.ui,
+      renderBackgroundMs: this.frameMetrics.renderBackgroundMs,
+      compositeMs: this.frameMetrics.compositeMs,
+      compositeScaleMs: this.frameMetrics.compositeScaleMs,
+      compositeDrawMs: this.frameMetrics.compositeDrawMs,
+      layerCompositeMs: { ...this.frameMetrics.layerCompositeMs },
+    };
+  }
 
   #logFontAtlasState(stage) {
     if (!this.debugFontAtlas) return;
@@ -282,6 +324,7 @@ export class Renderer {
   }
 
   renderBackground(map, camera) {
+    const renderBackgroundStart = performance.now();
     const cameraTileX = Math.floor(camera.x);
     const cameraTileY = Math.floor(camera.y);
     const cameraOffsetX = (camera.x - cameraTileX) * this.cellW;
@@ -305,9 +348,12 @@ export class Renderer {
         this.#drawGlyphToLayerPx(ctx, tile.char, tile.fg, tile.bg, pixelX, pixelY);
       }
     }
+
+    this.frameMetrics.renderBackgroundMs += performance.now() - renderBackgroundStart;
   }
 
   beginFrame() {
+    this.resetFrameMetrics();
     this.entities.ctx.clearRect(0, 0, this.entities.canvas.width, this.entities.canvas.height);
     this.effects.ctx.clearRect(0, 0, this.effects.canvas.width, this.effects.canvas.height);
     this.ui.ctx.clearRect(0, 0, this.ui.canvas.width, this.ui.canvas.height);
@@ -324,21 +370,26 @@ export class Renderer {
   drawCell(cell, x, y) {
     if (!cell) return;
     const safeCell = toRenderCell(cell);
+    this.frameMetrics.drawCalls += 1;
     if (safeCell.layer === renderLayers.ui) {
+      this.frameMetrics.ui += 1;
       this.#drawGlyphToLayer(this.ui.ctx, safeCell.glyph, safeCell.fg, safeCell.bg, x | 0, y | 0);
       return;
     }
 
     if (safeCell.layer === renderLayers.effects) {
+      this.frameMetrics.effects += 1;
       this.#drawGlyphToLayerPx(this.effects.ctx, safeCell.glyph, safeCell.fg, safeCell.bg, x * this.cellW, y * this.cellH);
       return;
     }
 
     if (safeCell.layer === renderLayers.background) {
+      this.frameMetrics.background += 1;
       this.#drawGlyphToLayerPx(this.background.ctx, safeCell.glyph, safeCell.fg, safeCell.bg, x * this.cellW, y * this.cellH);
       return;
     }
 
+    this.frameMetrics.entities += 1;
     this.#drawGlyphToLayerPx(this.entities.ctx, safeCell.glyph, safeCell.fg, safeCell.bg, x * this.cellW, y * this.cellH);
   }
 
@@ -380,9 +431,11 @@ export class Renderer {
   }
 
   composite() {
+    const compositeStart = performance.now();
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     const layerWidth = this.background.canvas.width;
     const layerHeight = this.background.canvas.height;
+    const scaleCalcStart = performance.now();
     const scale = Math.min(
       this.canvas.width / layerWidth,
       this.canvas.height / layerHeight,
@@ -391,14 +444,31 @@ export class Renderer {
     const destH = layerHeight * scale;
     const offsetX = (this.canvas.width - destW) / 2;
     const offsetY = (this.canvas.height - destH) / 2;
+    this.frameMetrics.compositeScaleMs += performance.now() - scaleCalcStart;
 
     this.compositeScale = scale;
     this.offsetX = offsetX;
     this.offsetY = offsetY;
 
+    const compositeDrawStart = performance.now();
+
+    let layerStart = performance.now();
     this.ctx.drawImage(this.background.canvas, offsetX, offsetY, destW, destH);
+    this.frameMetrics.layerCompositeMs.background += performance.now() - layerStart;
+
+    layerStart = performance.now();
     this.ctx.drawImage(this.entities.canvas, offsetX, offsetY, destW, destH);
+    this.frameMetrics.layerCompositeMs.entities += performance.now() - layerStart;
+
+    layerStart = performance.now();
     this.ctx.drawImage(this.effects.canvas, offsetX, offsetY, destW, destH);
+    this.frameMetrics.layerCompositeMs.effects += performance.now() - layerStart;
+
+    layerStart = performance.now();
     this.ctx.drawImage(this.ui.canvas, offsetX, offsetY, destW, destH);
+    this.frameMetrics.layerCompositeMs.ui += performance.now() - layerStart;
+
+    this.frameMetrics.compositeDrawMs += performance.now() - compositeDrawStart;
+    this.frameMetrics.compositeMs += performance.now() - compositeStart;
   }
 }
