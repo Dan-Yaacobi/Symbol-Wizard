@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { Player } from '../entities/Player.js';
 import { CombatTextSystem } from '../systems/CombatTextSystem.js';
 import { getItemDefinition, ItemRegistry } from '../data/ItemRegistry.js';
-import { addItem, createInventory, ensureInventory, getItemCount, hasItem, isInventory, removeItem } from '../systems/InventorySystem.js';
+import { addItem, createInventory, ensureInventory, getItemCount, hasItem, isInventory, populateInventoryWithMaxStacks, removeItem } from '../systems/InventorySystem.js';
 import { awardEnemyDrops } from '../systems/LootSystem.js';
 
 function withMockedRandom(sequence, fn) {
@@ -70,6 +70,18 @@ function testPlayerKeepsCanonicalInventoryShape() {
 function testEnsureInventoryProvidesSafeFallback() {
   const fallback = ensureInventory(new Map(), { fallbackMaxSlots: 8 });
   assert.deepEqual(fallback, { slots: [], maxSlots: 8 });
+}
+
+function testPopulateInventoryWithMaxStacksUsesDefinedMaximums() {
+  const inventory = createInventory(24);
+
+  const results = populateInventoryWithMaxStacks(inventory);
+
+  assert.equal(results.every((result) => result.success), true);
+  Object.values(ItemRegistry).forEach((item) => {
+    const expectedQuantity = item.stackable ? item.maxStack : 1;
+    assert.equal(getItemCount(inventory, item.id), expectedQuantity);
+  });
 }
 
 function testEnemyDropsSpawnOnGroundInsteadOfDirectInventoryInsertion() {
@@ -195,6 +207,7 @@ function run() {
   testInventoryFailsWhenFull();
   testPlayerKeepsCanonicalInventoryShape();
   testEnsureInventoryProvidesSafeFallback();
+  testPopulateInventoryWithMaxStacksUsesDefinedMaximums();
   testEnemyDropsSpawnOnGroundInsteadOfDirectInventoryInsertion();
   testPickupCombatTextMergesNearbyItemBursts();
   testCombatTextGroupsStackNearbyBursts();

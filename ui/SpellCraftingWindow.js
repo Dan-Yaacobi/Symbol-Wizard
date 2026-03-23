@@ -122,8 +122,16 @@ export class SpellCraftingWindow {
   selectRecipe(recipeId) {
     const recipe = this.recipes.find((entry) => entry.id === recipeId);
     if (!recipe) return;
+    const nextElement = recipe.validElements[0] ?? '';
+    if (this.selectedRecipeId === recipe.id && this.selectedElement === nextElement) return;
     this.selectedRecipeId = recipe.id;
-    this.selectedElement = recipe.validElements[0] ?? '';
+    this.selectedElement = nextElement;
+    this.render();
+  }
+
+  selectElement(element) {
+    if (!element || this.selectedElement === element) return;
+    this.selectedElement = element;
     this.render();
   }
 
@@ -283,14 +291,17 @@ export class SpellCraftingWindow {
     `;
 
     this.el.querySelectorAll('[data-recipe]').forEach((button) => {
-      button.addEventListener('click', () => this.selectRecipe(button.dataset.recipe ?? ''));
+      const recipeId = button.dataset.recipe ?? '';
+      button.addEventListener('mouseenter', () => this.selectRecipe(recipeId));
+      button.addEventListener('focus', () => this.selectRecipe(recipeId));
+      button.addEventListener('click', () => this.selectRecipe(recipeId));
     });
 
     this.el.querySelectorAll('[data-element]').forEach((button) => {
-      button.addEventListener('click', () => {
-        this.selectedElement = button.dataset.element ?? '';
-        this.render();
-      });
+      const element = button.dataset.element ?? '';
+      button.addEventListener('mouseenter', () => this.selectElement(element));
+      button.addEventListener('focus', () => this.selectElement(element));
+      button.addEventListener('click', () => this.selectElement(element));
     });
 
     this.el.querySelector('.craft-button')?.addEventListener('click', () => {

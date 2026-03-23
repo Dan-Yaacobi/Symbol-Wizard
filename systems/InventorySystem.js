@@ -1,6 +1,8 @@
-import { assertItemDefinition } from '../data/ItemRegistry.js';
+import { assertItemDefinition, ItemList } from '../data/ItemRegistry.js';
 
 const DEFAULT_MAX_SLOTS = 24;
+
+const DEFAULT_SAFE_MAX_STACK = 999;
 let inventoryShapeWarningShown = false;
 
 export function createInventory(maxSlots = DEFAULT_MAX_SLOTS) {
@@ -84,6 +86,28 @@ export function addItem(inventory, itemId, amount = 1) {
     remaining,
     slotsChanged,
   };
+}
+
+export function populateInventoryWithMaxStacks(inventory, options = {}) {
+  const { safeMaxStack = DEFAULT_SAFE_MAX_STACK, itemDefinitions = ItemList } = options;
+  const safeInventory = ensureInventory(inventory, { warn: true, context: 'InventorySystem.populateInventoryWithMaxStacks' });
+  const definitions = Array.isArray(itemDefinitions) ? itemDefinitions : [];
+
+  return definitions.map((item) => {
+    if (!item?.id) {
+      return { itemId: null, added: 0, remaining: 0, success: false, slotsChanged: false };
+    }
+
+    const targetAmount = item.stackable
+      ? Math.max(0, Math.floor(Number.isFinite(item.maxStack) ? item.maxStack : safeMaxStack))
+      : 1;
+
+    if (targetAmount <= 0) {
+      return { itemId: item.id, added: 0, remaining: 0, success: false, slotsChanged: false };
+    }
+
+    return { itemId: item.id, ...addItem(safeInventory, item.id, targetAmount) };
+  });
 }
 
 export function removeItem(inventory, itemId, amount = 1) {
