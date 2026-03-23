@@ -76,6 +76,7 @@ export function updateProjectiles(
   worldObjects = [],
   onDestructibleDestroyed = null,
   config = null,
+  onPlayerDamaged = null,
 ) {
   const deadProjectiles = new Set();
   const slain = [];
@@ -150,6 +151,18 @@ export function updateProjectiles(
       const damage = p.damage ?? 1;
       player.hp = Math.max(0, player.hp - damage);
       combatTextSystem?.spawnDamageText(player, damage, false);
+      onPlayerDamaged?.({
+        player,
+        damage,
+        sourceX: p.x,
+        sourceY: p.y,
+        attacker: p,
+        knockbackForce: 5,
+        knockbackDuration: 0.14,
+        flashDuration: 0.1,
+        shakeDuration: 0.1,
+        shakeIntensity: 0.62,
+      });
       const hitContext = triggerProjectileHit(p, { x: p.x, y: p.y, target: player, system: abilitySystem, instance: p.spellInstance, damage });
       if (!hitContext.preventDestroy) deadProjectiles.add(p);
     }
@@ -161,7 +174,7 @@ export function updateProjectiles(
   };
 }
 
-export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem = null, config = null) {
+export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem = null, config = null, onPlayerDamaged = null) {
   for (const enemy of enemies) {
     enemy.attackCooldownTimer = Math.max(0, (enemy.attackCooldownTimer ?? 0) - dt);
     if (!enemy.alive) continue;
@@ -185,6 +198,18 @@ export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSys
     const damage = enemy.attackDamage ?? 1;
     player.hp = Math.max(0, player.hp - damage);
     combatTextSystem?.spawnDamageText(player, damage, false);
+    onPlayerDamaged?.({
+      player,
+      damage,
+      sourceX: enemy.x,
+      sourceY: enemy.y,
+      attacker: enemy,
+      knockbackForce: Math.min(6.5, Math.max(4.5, (enemy.hitKnockback ?? 6) * 0.75)),
+      knockbackDuration: 0.16,
+      flashDuration: 0.1,
+      shakeDuration: 0.1,
+      shakeIntensity: 0.62,
+    });
     enemy.attackImpactApplied = true;
     enemy.attackCooldownTimer = enemy.attackRate ?? 1.2;
 

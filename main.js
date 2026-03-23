@@ -748,6 +748,78 @@ function movePlayer(dx, dy) {
   if (dy !== 0 && !movedY) player.vy = 0;
 }
 
+
+function clampMagnitude(x, y, maxMagnitude) {
+  const magnitude = Math.hypot(x, y);
+  if (magnitude <= maxMagnitude || magnitude === 0) return { x, y };
+  const scale = maxMagnitude / magnitude;
+  return { x: x * scale, y: y * scale };
+}
+
+function applyPlayerDamageImpact({ sourceX, sourceY, knockbackForce = 5.5, knockbackDuration = 0.15, flashDuration = 0.1, shakeDuration = 0.1, shakeIntensity = 0.62 } = {}) {
+  const dx = player.x - (Number.isFinite(sourceX) ? sourceX : player.x);
+  const dy = player.y - (Number.isFinite(sourceY) ? sourceY : player.y);
+  const length = Math.hypot(dx, dy) || 1;
+  const safeDuration = Math.max(0.08, knockbackDuration);
+  const impulseVx = (dx / length) * (knockbackForce / safeDuration);
+  const impulseVy = (dy / length) * (knockbackForce / safeDuration);
+  const nextImpact = clampMagnitude(
+    player.hitImpact.vx + impulseVx,
+    player.hitImpact.vy + impulseVy,
+    18,
+  );
+
+  player.hitImpact.vx = nextImpact.x;
+  player.hitImpact.vy = nextImpact.y;
+  player.hitImpact.timer = Math.max(player.hitImpact.timer, safeDuration);
+  player.hitImpact.duration = Math.max(player.hitImpact.duration, safeDuration);
+  player.hitFlashDuration = Math.max(player.hitFlashDuration ?? 0, flashDuration);
+  player.hitFlashTimer = Math.max(player.hitFlashTimer ?? 0, flashDuration);
+  camera.startShake(shakeDuration, shakeIntensity);
+}
+
+function updatePlayerDamageFeedback(dt) {
+  player.hitFlashTimer = Math.max(0, (player.hitFlashTimer ?? 0) - dt);
+
+  if ((player.hitImpact.timer ?? 0) <= 0) {
+    player.hitImpact.vx = 0;
+    player.hitImpact.vy = 0;
+    player.hitImpact.timer = 0;
+    return { x: 0, y: 0 };
+  }
+
+  player.hitImpact.timer = Math.max(0, player.hitImpact.timer - dt);
+  const progress = player.hitImpact.duration > 0 ? player.hitImpact.timer / player.hitImpact.duration : 0;
+  const intensity = Math.max(0, Math.min(1, progress));
+  const impulse = {
+    x: player.hitImpact.vx * intensity,
+    y: player.hitImpact.vy * intensity,
+  };
+
+  player.hitImpact.vx *= 0.82;
+  player.hitImpact.vy *= 0.82;
+  if (player.hitImpact.timer === 0) {
+    player.hitImpact.vx = 0;
+    player.hitImpact.vy = 0;
+    player.hitImpact.duration = 0;
+  }
+
+  return impulse;
+}
+
+function renderPlayerDamageFlash(rendererRef, flashTimer = 0, flashDuration = 0) {
+  if (flashTimer <= 0 || flashDuration <= 0) return;
+  const normalized = Math.max(0, Math.min(1, flashTimer / flashDuration));
+  const alpha = 0.18 * normalized * normalized;
+  if (alpha <= 0.001) return;
+
+  rendererRef.ui.ctx.save();
+  rendererRef.ui.ctx.globalAlpha = alpha;
+  rendererRef.ui.ctx.fillStyle = '#ff3b30';
+  rendererRef.ui.ctx.fillRect(0, 0, rendererRef.ui.canvas.width, rendererRef.ui.canvas.height);
+  rendererRef.ui.ctx.restore();
+}
+
 function getPlayerMoveDirection(gameplayInputBlocked) {
   const dx = Number(!gameplayInputBlocked && input.isDown('d')) - Number(!gameplayInputBlocked && input.isDown('a'));
   const dy = Number(!gameplayInputBlocked && input.isDown('s')) - Number(!gameplayInputBlocked && input.isDown('w'));
@@ -767,6 +839,7 @@ function handlePlayer(dt) {
   const moveX = moveDirection.x;
   const moveY = moveDirection.y;
 
+  const damageImpulse = updatePlayerDamageFeedback(dt);
   const targetSpeed = runtimeConfig.get('player.speed');
   const accel = runtimeConfig.get('player.acceleration');
   const decel = runtimeConfig.get('player.deceleration');
@@ -781,7 +854,7 @@ function handlePlayer(dt) {
     player.facingVector = { x: Math.sign(moveX), y: Math.sign(moveY) };
   }
 
-  movePlayer(player.vx * dt, player.vy * dt);
+  movePlayer((player.vx + damageImpulse.x) * dt, (player.vy + damageImpulse.y) * dt);
 
   const { width, height } = getMapDimensions();
   if (player.x < 0 || player.y < 0 || player.x >= width || player.y >= height) {
@@ -1011,7 +1084,7 @@ function tick(now) {
     handlePlayer(dt);
     if (enemyAiEnabled) {
       updateEnemies(enemies, player, dt, projectiles, runtimeConfig, { map, tileSize: 1, system: abilitySystem });
-      updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem, runtimeConfig);
+      updateEnemyPlayerInteractions(enemies, player, dt, combatTextSystem, runtimeConfig, applyPlayerDamageImpact);
     } else {
       for (const enemy of enemies) {
         enemy.vx = 0;
@@ -1038,6 +1111,7 @@ function tick(now) {
         goldPiles.push(drop);
       },
       runtimeConfig,
+      applyPlayerDamageImpact,
     );
     projectiles = combat.projectiles;
     for (const dead of combat.slain) handleEnemyDefeat(dead);
@@ -1121,6 +1195,7 @@ function tick(now) {
     activeRoom,
   );
   drawHUD(renderer, player, abilitySystem);
+  renderPlayerDamageFlash(renderer, player.hitFlashTimer, player.hitFlashDuration);
   if (roomTransitionSystem.fadeAlpha > 0) {
     renderer.ui.ctx.save();
     renderer.ui.ctx.globalAlpha = roomTransitionSystem.fadeAlpha;

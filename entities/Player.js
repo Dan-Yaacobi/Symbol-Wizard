@@ -27,6 +27,14 @@ export class Player extends Entity {
         attack: 0.08,
       },
       frameDurations: null,
+      hitImpact: {
+        vx: 0,
+        vy: 0,
+        timer: 0,
+        duration: 0,
+      },
+      hitFlashTimer: 0,
+      hitFlashDuration: 0,
     });
 
     this.frameDurations = this.animationTimings;
