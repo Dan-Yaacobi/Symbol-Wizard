@@ -207,6 +207,7 @@ export class SpellEffectSystem {
           break;
         case 'trail':
           if (hook === 'onTick') this.#trail(effect, effectContext);
+          if ((hook === 'onHit' || hook === 'onExpire') && effect.persistOnImpact) this.#trail(effect, { ...effectContext, forceSpawn: true });
           break;
         case 'split':
           if (hook === 'onHit') this.#split(effect, effectContext);
@@ -400,13 +401,22 @@ export class SpellEffectSystem {
     const projectile = context?.projectile;
     const system = context?.system;
     const dt = context?.dt ?? 0;
-    if (!projectile || !system || dt <= 0) return;
+    const forceSpawn = Boolean(context?.forceSpawn);
+    if (!projectile || !system) return;
+    if (!forceSpawn && dt <= 0) return;
     projectile.effectState ??= {};
     const interval = Math.max(0.05, effect.interval ?? effect.spawnInterval ?? 0.15);
-    projectile.effectState.trailTimer = (projectile.effectState.trailTimer ?? 0) + dt;
-    if (projectile.effectState.trailTimer < interval) return;
-    projectile.effectState.trailTimer = 0;
-    const duration = Math.max(0.1, effect.duration ?? effect.lifetime ?? 0.6);
+    if (!forceSpawn) {
+      projectile.effectState.trailTimer = (projectile.effectState.trailTimer ?? 0) + dt;
+      if (projectile.effectState.trailTimer < interval) return;
+      projectile.effectState.trailTimer = 0;
+    }
+    const durationMin = Number.isFinite(effect.durationMin) ? effect.durationMin : (Number.isFinite(effect.duration) ? effect.duration : effect.lifetime);
+    const durationMax = Number.isFinite(effect.durationMax) ? effect.durationMax : durationMin;
+    const rolledDuration = Number.isFinite(durationMin) && Number.isFinite(durationMax)
+      ? durationMin + (Math.random() * Math.max(0, durationMax - durationMin))
+      : (effect.duration ?? effect.lifetime ?? 0.6);
+    const duration = Math.max(0.1, rolledDuration);
     const radius = Math.max(0.4, effect.radius ?? 1.2);
     const damage = Math.max(0, effect.damage ?? Math.max(1, (projectile.damage ?? 1) * (effect.damageMultiplier ?? 0.35)));
     spawnZoneInstance(system, context.instance, projectile.x, projectile.y, { radius, duration, tickInterval: effect.tickInterval ?? 0.25, damage, color: effect.color ?? projectile.trailColor ?? '#9fdfff' });
