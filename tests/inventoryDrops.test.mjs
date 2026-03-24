@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Player } from '../entities/Player.js';
 import { CombatTextSystem } from '../systems/CombatTextSystem.js';
 import { getItemDefinition, ItemRegistry } from '../data/ItemRegistry.js';
+import { ITEM_CATALOG } from '../data/itemCatalog.js';
 import { addItem, createInventory, ensureInventory, getItemCount, hasItem, isInventory, populateInventoryWithMaxStacks, removeItem } from '../systems/InventorySystem.js';
 import { awardEnemyDrops } from '../systems/LootSystem.js';
 
@@ -23,6 +24,15 @@ function testItemRegistryContainsCraftingFeeders() {
   assert.equal(ItemRegistry.poison_gland?.tier, 2);
   assert.equal(ItemRegistry.ember_dust?.icon, '•');
   assert.equal(ItemRegistry.storm_shard?.icon, '⚡');
+  assert.equal(ItemRegistry.moss?.maxStack, 999);
+  assert.equal(ItemRegistry.crystal_dust?.maxStack, 999);
+  assert.equal(ItemRegistry.arcane_shard?.maxStack, 999);
+}
+
+function testItemRegistryIncludesEntireCraftingCatalog() {
+  Object.keys(ITEM_CATALOG).forEach((itemId) => {
+    assert.ok(getItemDefinition(itemId), `${itemId} should exist in ItemRegistry`);
+  });
 }
 
 function testInventoryStacksAndCountsItems() {
@@ -203,6 +213,7 @@ function testPickupCombatTextCapsVisibleEntries() {
 
 function run() {
   testItemRegistryContainsCraftingFeeders();
+  testItemRegistryIncludesEntireCraftingCatalog();
   testInventoryStacksAndCountsItems();
   testInventoryFailsWhenFull();
   testPlayerKeepsCanonicalInventoryShape();
