@@ -4,7 +4,7 @@ import { applyElementModifiers, composeSpellWithElement } from './ElementSystem.
 import { getBehaviorExecutor } from './behaviors/index.js';
 import { resolveComponent } from './components/index.js';
 import { updateOrbitBehavior } from './behaviors/orbit.js';
-import { updateBeamBehavior } from './behaviors/beam.js';
+import { cleanupBeamBehavior, updateBeamBehavior } from './behaviors/beam.js';
 import { SpellEffectSystem } from './SpellEffectSystem.js';
 
 export function resolveTarget(context = {}) {
@@ -142,6 +142,7 @@ export function castSpell(spellOrArray, context = {}) {
 
   const resolvedTarget = resolveTarget(context);
   let didCastAny = false;
+  const castInstances = [];
 
   for (const spell of spells) {
     const finalSpell = composeSpellWithElement(spell, context.element ?? context.elementOverride ?? spell.element ?? null);
@@ -191,10 +192,11 @@ export function castSpell(spellOrArray, context = {}) {
     if (!behaviorSuccess) return { ok: false, reason: `behavior-failed:${instance.base.behavior}` };
 
     if (Array.isArray(context.activeSpellInstances)) context.activeSpellInstances.push({ instance, components });
+    castInstances.push(instance);
     didCastAny = true;
   }
 
-  return didCastAny ? { ok: true, reason: 'cast' } : { ok: false, reason: 'no-spells-cast' };
+  return didCastAny ? { ok: true, reason: 'cast', instances: castInstances } : { ok: false, reason: 'no-spells-cast', instances: [] };
 }
 
 export function updateSpellInstances(activeSpellInstances, dt, context = {}) {
@@ -203,7 +205,6 @@ export function updateSpellInstances(activeSpellInstances, dt, context = {}) {
   for (let i = activeSpellInstances.length - 1; i >= 0; i -= 1) {
     const entry = activeSpellInstances[i];
     const instance = entry?.instance;
-    const components = entry?.components ?? [];
     if (!instance) {
       activeSpellInstances.splice(i, 1);
       continue;
@@ -211,15 +212,26 @@ export function updateSpellInstances(activeSpellInstances, dt, context = {}) {
 
     instance.state.age += dt;
     instance.state.tickTimer += dt;
+    const targetPosition = resolveTarget(context);
+    const runtimeContext = {
+      ...context,
+      targetPosition,
+      origin: context.origin ?? context.player,
+    };
 
     updateAreaBehavior(instance, dt, context);
     updateOrbitBehavior(instance, dt, context);
+    if (instance.base.behavior === 'beam') updateBeamBehavior(instance, dt, runtimeContext);
     if (!['zone', 'aura', 'nova', 'projectile'].includes(instance.base.behavior)) {
-      dispatchSpellEvent(instance, 'onTick', { ...context, dt });
+      dispatchSpellEvent(instance, 'onTick', { ...runtimeContext, dt });
     }
 
-    if (instance.state.hasHit || instance.state.age >= instance.state.lifetime) {
-      const expireContext = { ...context };
+    if (typeof context.shouldChannelSpellStop === 'function' && instance.state?.isChanneled) {
+      if (context.shouldChannelSpellStop(instance)) instance.state.shouldExpire = true;
+    }
+
+    if (instance.state.hasHit || instance.state.shouldExpire || instance.state.age >= instance.state.lifetime) {
+      const expireContext = { ...runtimeContext };
       if (['zone', 'aura', 'nova'].includes(instance.base.behavior) && instance.state.zone) {
         expireContext.x = instance.state.zone.x;
         expireContext.y = instance.state.zone.y;
@@ -229,6 +241,7 @@ export function updateSpellInstances(activeSpellInstances, dt, context = {}) {
         expireContext.damage = instance.state.zone.damage;
       }
       dispatchSpellEvent(instance, 'onExpire', expireContext);
+      if (instance.base.behavior === 'beam') cleanupBeamBehavior(instance, expireContext);
       activeSpellInstances.splice(i, 1);
     }
   }
