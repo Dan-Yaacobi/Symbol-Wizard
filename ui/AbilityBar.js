@@ -99,6 +99,18 @@ export class AbilityBar {
         <span class="combat-slot__label">Empty</span>
       `;
 
+      slot.addEventListener('dragover', (event) => {
+        event.preventDefault();
+      });
+
+      slot.addEventListener('drop', (event) => {
+        event.preventDefault();
+        const spellId = event.dataTransfer?.getData('application/x-spell-id')
+          || event.dataTransfer?.getData('text/plain');
+        if (!spellId) return;
+        this.abilitySystem.assignAbilityToSlot(i, spellId);
+      });
+
       this.barEl.appendChild(slot);
       this.slotElements.push({
         root: slot,
