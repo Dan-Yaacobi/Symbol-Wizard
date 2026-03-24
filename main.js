@@ -614,6 +614,12 @@ const dialogueManager = new DialogueManager({
 
 const forcedBlockingTiles = new Set(['denseTree', 'rockCliff', 'deepWater', 'stoneWall']);
 let interactLatch = false;
+const abilityMouseButtons = ['left', 'right', 'middle'];
+const abilityButtonDownLatch = {
+  left: false,
+  right: false,
+  middle: false,
+};
 
 
 function triggerDestructionSound(kind) {
@@ -882,7 +888,7 @@ function handlePlayer(dt) {
   }
 
   player.mana = Math.min(player.maxMana, player.mana + player.manaRegen * dt);
-  abilitySystem.tick(dt);
+  abilitySystem.tick(dt, { targetPosition: input.getMouseWorldPosition() });
   combatHud.updateOrbs();
   updateEntityState(player, dt);
   updateEntityFacingFromVelocity(player);
@@ -915,15 +921,29 @@ function handlePlayer(dt) {
     }
     interactLatch = interactDown;
 
-    const target = input.getMouseWorldPosition();
-    const abilityMouseButtons = ['left', 'right', 'middle'];
     for (let i = 0; i < abilityMouseButtons.length; i += 1) {
-      if (input.consumeMouseButtonPress(abilityMouseButtons[i])) {
+      const button = abilityMouseButtons[i];
+      const isDown = Boolean(input.mouse?.[button]);
+      const wasDown = Boolean(abilityButtonDownLatch[button]);
+      const target = input.getMouseWorldPosition();
+      const ability = abilitySystem.getAbilityBySlot(i);
+
+      if (ability?.behavior === 'beam') {
+        if (isDown && !wasDown) abilitySystem.beginChannelCast(i, { player, target });
+        if (!isDown && wasDown) abilitySystem.endChannelCast(i, 'released');
+      } else if (input.consumeMouseButtonPress(button)) {
         abilitySystem.castSlot(i, { player, target });
       }
+
+      abilityButtonDownLatch[button] = isDown;
     }
   } else {
     interactLatch = false;
+    for (let i = 0; i < abilityMouseButtons.length; i += 1) {
+      const button = abilityMouseButtons[i];
+      abilityButtonDownLatch[button] = false;
+      abilitySystem.endChannelCast(i, 'ui-blocked');
+    }
     input.clearMouseButtonPresses();
   }
 }

@@ -28,13 +28,14 @@ export class AbilitySystem {
     this.activeFreeze = null;
     this.elementInteractionSystem = elementInteractionSystem;
     this.listeners = new Set();
+    this.activeChannelCasts = new Map();
 
     for (const spell of definitions) {
       this.cooldowns.set(spell.id, 0);
     }
   }
 
-  tick(dt) {
+  tick(dt, context = {}) {
     for (const [spellId, value] of this.cooldowns.entries()) {
       this.cooldowns.set(spellId, Math.max(0, value - dt));
     }
@@ -46,7 +47,12 @@ export class AbilitySystem {
     this.updateStatusEffects(dt);
     this.updateFreeze(dt);
     this.updatePlayerAction(dt);
-    updateSpellInstances(this.activeSpellInstances, dt, { system: this, player: this.player });
+    updateSpellInstances(this.activeSpellInstances, dt, {
+      ...context,
+      system: this,
+      player: this.player,
+      shouldChannelSpellStop: (instance) => this.shouldStopChanneling(instance),
+    });
   }
 
 
@@ -276,6 +282,7 @@ export class AbilitySystem {
   castSlot(slotIndex, context) {
     const spell = this.getAbilityBySlot(slotIndex);
     if (!spell) return { ok: false, reason: 'empty-slot' };
+    if (spell.behavior === 'beam') return this.beginChannelCast(slotIndex, context);
 
     const cooldown = this.cooldowns.get(spell.id) ?? 0;
     if (cooldown > 0) return { ok: false, reason: 'cooldown' };
@@ -316,6 +323,63 @@ export class AbilitySystem {
     }
 
     return { ok: true, reason: 'cast', abilityId: spell.id };
+  }
+
+  beginChannelCast(slotIndex, context = {}) {
+    const existing = this.activeChannelCasts.get(slotIndex);
+    if (existing?.active) return { ok: true, reason: 'already-channeling', abilityId: existing.abilityId };
+
+    const spell = this.getAbilityBySlot(slotIndex);
+    if (!spell) return { ok: false, reason: 'empty-slot' };
+    if (this.player.mana <= 0) return { ok: false, reason: 'mana' };
+
+    const cooldown = this.cooldowns.get(spell.id) ?? 0;
+    if (cooldown > 0) return { ok: false, reason: 'cooldown' };
+
+    const castResult = castSpell(spell, {
+      ...context,
+      system: this,
+      player: this.player,
+      activeSpellInstances: this.activeSpellInstances,
+    });
+    if (!castResult.ok) return { ok: false, reason: castResult.reason, abilityId: spell.id };
+
+    const instance = castResult.instances?.[0];
+    this.activeChannelCasts.set(slotIndex, {
+      slotIndex,
+      abilityId: spell.id,
+      spell,
+      active: true,
+      instance,
+    });
+    this.emitChange('cast-started', { abilityId: spell.id, slotIndex, channeling: true });
+    return { ok: true, reason: 'channel-started', abilityId: spell.id };
+  }
+
+  endChannelCast(slotIndex, reason = 'released') {
+    const channel = this.activeChannelCasts.get(slotIndex);
+    if (!channel?.active) return false;
+    channel.active = false;
+    if (channel.instance?.state) channel.instance.state.shouldExpire = true;
+    this.cooldowns.set(channel.spell.id, channel.spell.cooldown);
+    this.activeChannelCasts.delete(slotIndex);
+    this.emitChange('cast-ended', { abilityId: channel.abilityId, slotIndex, reason, channeling: true });
+    return true;
+  }
+
+  shouldStopChanneling(instance) {
+    for (const [slotIndex, channel] of this.activeChannelCasts.entries()) {
+      if (!channel.active) continue;
+      if (channel.instance === instance) {
+        if (!instance?.state?.beam) return true;
+        if (this.player.mana <= 0) {
+          this.endChannelCast(slotIndex, 'mana-empty');
+          return true;
+        }
+        return false;
+      }
+    }
+    return Boolean(instance?.state?.isChanneled);
   }
 
   getCooldownPercent(spellId) {
@@ -380,6 +444,23 @@ export class AbilitySystem {
     if (!effect || typeof effect !== 'object') return;
     const ttl = effect.ttl ?? 0.2;
     this.effects.push({ ttl, maxTtl: ttl, ...effect });
+  }
+
+  upsertEffectById(effectId, effect) {
+    if (!effectId || !effect || typeof effect !== 'object') return;
+    const index = this.effects.findIndex((entry) => entry?.effectId === effectId);
+    if (index >= 0) {
+      const current = this.effects[index];
+      this.effects[index] = { ...current, ...effect, effectId };
+      return;
+    }
+    const ttl = Number.isFinite(effect.ttl) ? effect.ttl : Number.POSITIVE_INFINITY;
+    this.effects.push({ ttl, maxTtl: ttl, ...effect, effectId });
+  }
+
+  removeEffectById(effectId) {
+    if (!effectId) return;
+    this.effects = this.effects.filter((effect) => effect?.effectId !== effectId);
   }
 
   getActiveEffects() {
