@@ -1500,12 +1500,10 @@ function tick(now) {
     framePerf.ui += framePerf.uiInventory;
   }
   if (spellbook.isOpen()) {
-    timed('uiSpellbook', framePerf, () => spellbook.render());
-    framePerf.ui += framePerf.uiSpellbook;
+    framePerf.uiSpellbook = 0;
   }
   if (isCraftingUIOpen) {
-    timed('uiCrafting', framePerf, () => spellCraftingWindow.render());
-    framePerf.ui += framePerf.uiCrafting;
+    framePerf.uiCrafting = 0;
   }
 
   input.endFrame();

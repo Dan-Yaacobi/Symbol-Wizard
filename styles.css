@@ -215,7 +215,7 @@ body {
   justify-content: center;
   gap: clamp(16px, 2vw, 24px);
   z-index: 25;
-  pointer-events: none;
+  pointer-events: auto;
   width: min(100%, 640px);
 }
 
@@ -238,7 +238,7 @@ body {
   display: grid;
   grid-template-columns: repeat(3, minmax(72px, 88px));
   gap: clamp(10px, 1.5vw, 16px);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .combat-slot {
