@@ -96,6 +96,7 @@ function buildParameters(recipe, finalStats, element) {
 
 function isEffectCompatible(recipe, effect) {
   if (!effect?.type) return false;
+  if (effect.type === 'double_bolt' && recipe.behavior !== 'projectile') return false;
   if (['zone', 'aura', 'nova'].includes(recipe.behavior) && ['pierce', 'bounce', 'split', 'emit_projectiles'].includes(effect.type)) return false;
   if (recipe.behavior === 'beam' && ['pierce', 'bounce', 'split'].includes(effect.type)) return false;
   return true;

@@ -111,11 +111,11 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
       rollCountWeights: { 0: 2, 1: 6, 2: 2 },
       common: [
         { type: 'explode', label: 'Explosion', weight: 4, radius: 2.4, damageMultiplier: 0.72 },
-        { type: 'knockback', label: 'Knockback', weight: 3, force: 1.3 },
       ],
       uncommon: [
         { type: 'pierce', label: 'Pierce', weight: 3, count: 2 },
-        { type: 'trail', label: 'Cinder Trail', weight: 2, radius: 1.1, duration: 0.65, damageMultiplier: 0.34, color: '#ff9f66' },
+        { type: 'trail', label: 'Cinder Trail', weight: 2, radius: 1.1, durationMin: 3, durationMax: 5, damageMultiplier: 0.34, color: '#ff9f66', persistOnImpact: true },
+        { type: 'double_bolt', label: 'Double Bolt', weight: 2, count: 2, spreadDegrees: 14, damageMultiplier: 0.68 },
       ],
       rare: [
         { type: 'split', label: 'Split', weight: 2, count: 2, maxDepth: 1, spreadDegrees: 26 },
