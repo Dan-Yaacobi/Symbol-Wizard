@@ -8,7 +8,7 @@ export const ITEM_CATALOG = Object.freeze({
   storm_shard: Object.freeze({ id: 'storm_shard', name: 'Storm Shard' }),
   poison_gland: Object.freeze({ id: 'poison_gland', name: 'Poison Gland' }),
   moss: Object.freeze({ id: 'moss', name: 'Moss' }),
-  arcane_shard: Object.freeze({ id: 'arcane_shard', name: 'Arcane Shard' }),
+  arcane_shard: Object.freeze({ id: 'arcane_shard', name: 'Arcane Core' }),
   crystal_dust: Object.freeze({ id: 'crystal_dust', name: 'Crystal Dust' }),
 });
 

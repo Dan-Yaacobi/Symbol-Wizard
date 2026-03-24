@@ -1,9 +1,14 @@
+import { ITEM_CATALOG } from './itemCatalog.js';
+
 const ITEM_TYPES = Object.freeze({
   RESOURCE: 'resource',
   RARE: 'rare',
   BOSS: 'boss',
   CURRENCY: 'currency',
 });
+
+const DEFAULT_ITEM_TYPE = ITEM_TYPES.RESOURCE;
+const DEFAULT_SAFE_MAX_STACK = 999;
 
 const ITEM_DEFINITIONS = [
   { id: 'wood', name: 'Wood', type: ITEM_TYPES.RESOURCE, tier: 1, stackable: true, maxStack: 99, icon: '🪵' },
@@ -20,9 +25,26 @@ const ITEM_DEFINITIONS = [
   { id: 'storm_shard', name: 'Storm Shard', type: ITEM_TYPES.RARE, tier: 2, stackable: true, maxStack: 99, icon: '⚡' },
 ];
 
+const ITEM_DEFINITION_MAP = new Map(ITEM_DEFINITIONS.map((item) => [item.id, item]));
+
+for (const catalogEntry of Object.values(ITEM_CATALOG)) {
+  if (!catalogEntry?.id || ITEM_DEFINITION_MAP.has(catalogEntry.id)) continue;
+  ITEM_DEFINITION_MAP.set(catalogEntry.id, {
+    id: catalogEntry.id,
+    name: catalogEntry.name ?? catalogEntry.id,
+    type: DEFAULT_ITEM_TYPE,
+    tier: 1,
+    stackable: true,
+    maxStack: DEFAULT_SAFE_MAX_STACK,
+    icon: '•',
+  });
+}
+
+const ALL_ITEM_DEFINITIONS = Object.freeze(Array.from(ITEM_DEFINITION_MAP.values()));
+
 export const ItemType = ITEM_TYPES;
-export const ItemRegistry = Object.freeze(Object.fromEntries(ITEM_DEFINITIONS.map((item) => [item.id, Object.freeze({ ...item })])));
-export const ItemList = Object.freeze(ITEM_DEFINITIONS.map((item) => ItemRegistry[item.id]));
+export const ItemRegistry = Object.freeze(Object.fromEntries(ALL_ITEM_DEFINITIONS.map((item) => [item.id, Object.freeze({ ...item })])));
+export const ItemList = Object.freeze(ALL_ITEM_DEFINITIONS.map((item) => ItemRegistry[item.id]));
 
 export function getItemDefinition(itemId) {
   return ItemRegistry[itemId] ?? null;
