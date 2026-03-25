@@ -114,7 +114,7 @@ function testBonusEffectsStayWithinValidPoolAndRemainUnique() {
   const effectTypes = spell.bonusEffects.map((effect) => effect.type);
   assert.ok(effectTypes.length <= 2);
   assert.equal(new Set(effectTypes).size, effectTypes.length);
-  assert.ok(effectTypes.every((type) => ['pierce', 'knockback', 'explode', 'trail', 'split'].includes(type)));
+  assert.ok(effectTypes.every((type) => ['pierce', 'knockback', 'gravity_pull', 'explode', 'trail', 'zone_trail', 'split', 'periodic_explosion'].includes(type)));
 }
 
 function testEveryCraftableBehaviorCastsAtRuntime() {

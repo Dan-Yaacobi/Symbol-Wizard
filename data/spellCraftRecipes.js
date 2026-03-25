@@ -426,13 +426,16 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
       common: [
         { type: 'pierce', label: 'Phase Pierce', weight: 3, count: 2 },
         { type: 'knockback', label: 'Arcane Pulse', weight: 2, force: 1.4 },
+        { type: 'gravity_pull', label: 'Gravity Pull', weight: 3, radius: 5.5, force: 3.5, color: '#c6b6ff' },
       ],
       uncommon: [
         { type: 'explode', label: 'Arc Burst', weight: 3, radius: 2.7, damageMultiplier: 0.78, color: '#b395ff' },
         { type: 'trail', label: 'Aether Wake', weight: 2, radius: 1.2, duration: 0.75, damageMultiplier: 0.32, color: '#bca7ff' },
+        { type: 'zone_trail', label: 'Zone Trail', weight: 3, interval: 0.45, minDistance: 0.75, radius: 1.35, duration: 1.6, tickInterval: 0.24, damageMultiplier: 0.35, color: '#c3adff' },
       ],
       rare: [
         { type: 'split', label: 'Fracture', weight: 2, count: 3, maxDepth: 1, spreadDegrees: 28 },
+        { type: 'periodic_explosion', label: 'Periodic Explosion', weight: 2, interval: 0.65, radius: 2.3, damageMultiplier: 0.5, color: '#b395ff' },
       ],
     },
     visuals: {
