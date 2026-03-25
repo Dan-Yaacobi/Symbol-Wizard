@@ -13,22 +13,6 @@ const projectileSprite = [
   ],
 ];
 
-function castBlink({ player, target, system, spellLevel = 1 }) {
-  const maxRange = 8 + spellLevel * 1.5;
-  const dx = target.x - player.x;
-  const dy = target.y - player.y;
-  const distance = Math.hypot(dx, dy) || 1;
-  const clamped = Math.min(maxRange, distance);
-
-  const nx = player.x + (dx / distance) * clamped;
-  const ny = player.y + (dy / distance) * clamped;
-
-  if (system.isWalkable(nx, ny)) {
-    player.x = nx;
-    player.y = ny;
-  }
-}
-
 function castTimeFreeze({ system, spellLevel = 1 }) {
   const extendedFreezeLevels = spellLevel >= 2 ? 1 : 0;
   const reducedCooldownLevels = spellLevel >= 3 ? 1 : 0;
@@ -224,11 +208,19 @@ export const SpellRegistry = {
     name: 'Blink',
     icon: '>',
     description: 'Teleport a short distance toward the target direction.',
+    behavior: 'blink',
+    targeting: 'cursor',
+    element: 'void',
+    components: [],
+    parameters: {
+      range: 9,
+      color: '#b39bff',
+    },
+    cost: 18,
     damage: null,
     range: 9,
     cooldown: 4.2,
     manaCost: 12,
-    cast: castBlink,
   },
   'time-freeze': {
     id: 'time-freeze',
