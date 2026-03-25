@@ -29,6 +29,7 @@ export class AbilitySystem {
     this.elementInteractionSystem = elementInteractionSystem;
     this.listeners = new Set();
     this.activeChannelCasts = new Map();
+    this.pendingDoubleBlinkCasts = new Map();
 
     for (const spell of definitions) {
       this.cooldowns.set(spell.id, 0);
@@ -45,6 +46,7 @@ export class AbilitySystem {
       .filter((effect) => effect.ttl > 0);
 
     this.updateStatusEffects(dt);
+    this.updatePendingDoubleBlink(dt);
     this.updateFreeze(dt);
     this.updatePlayerAction(dt);
     updateSpellInstances(this.activeSpellInstances, dt, {
@@ -53,6 +55,45 @@ export class AbilitySystem {
       player: this.player,
       shouldChannelSpellStop: (instance) => this.shouldStopChanneling(instance),
     });
+  }
+
+  updatePendingDoubleBlink(dt) {
+    if (!Number.isFinite(dt) || dt <= 0 || this.pendingDoubleBlinkCasts.size === 0) return;
+    for (const [spellId, pending] of this.pendingDoubleBlinkCasts.entries()) {
+      const nextRemaining = (pending.remaining ?? 0) - dt;
+      if (nextRemaining > 0) {
+        this.pendingDoubleBlinkCasts.set(spellId, { ...pending, remaining: nextRemaining });
+        continue;
+      }
+      const spell = this.definitions.get(spellId);
+      const cooldown = this.getSpellCooldownValue(spell);
+      this.cooldowns.set(spellId, cooldown);
+      this.pendingDoubleBlinkCasts.delete(spellId);
+      this.emitChange('double-blink-expired', { abilityId: spellId });
+    }
+  }
+
+  getSpellManaCost(spell) {
+    if (!spell) return 0;
+    if (Number.isFinite(spell.parameters?.manaCost)) return Math.max(0, spell.parameters.manaCost);
+    return Math.max(0, spell.manaCost ?? 0);
+  }
+
+  getSpellCooldownValue(spell) {
+    if (!spell) return 0;
+    if (Number.isFinite(spell.parameters?.cooldown)) return Math.max(0, spell.parameters.cooldown);
+    return Math.max(0, spell.cooldown ?? 0);
+  }
+
+  spellHasAugment(spell, augmentId) {
+    if (!spell || !augmentId) return false;
+    const componentMatch = (spell.components ?? []).some((component) => (
+      component === augmentId
+      || component?.id === augmentId
+      || component?.type === augmentId
+    ));
+    if (componentMatch) return true;
+    return (spell.effects ?? []).some((effect) => effect?.id === augmentId || effect?.type === augmentId);
   }
 
 
@@ -284,13 +325,18 @@ export class AbilitySystem {
     if (!spell) return { ok: false, reason: 'empty-slot' };
     if (spell.behavior === 'beam') return this.beginChannelCast(slotIndex, context);
 
+    const hasDoubleBlink = spell.behavior === 'blink' && this.spellHasAugment(spell, 'double_blink');
+    const pendingDoubleBlink = hasDoubleBlink ? this.pendingDoubleBlinkCasts.get(spell.id) : null;
     const cooldown = this.cooldowns.get(spell.id) ?? 0;
     if (cooldown > 0) return { ok: false, reason: 'cooldown' };
 
-    if (this.player.mana < spell.manaCost) return { ok: false, reason: 'mana' };
+    const manaCost = this.getSpellManaCost(spell);
+    const cooldownDuration = this.getSpellCooldownValue(spell);
+    if (this.player.mana < manaCost) return { ok: false, reason: 'mana' };
 
-    this.player.mana -= spell.manaCost;
-    this.cooldowns.set(spell.id, spell.cooldown);
+    this.player.mana -= manaCost;
+    const shouldDelayCooldown = hasDoubleBlink && !pendingDoubleBlink;
+    this.cooldowns.set(spell.id, shouldDelayCooldown ? 0 : cooldownDuration);
     this.emitChange('cast-started', { abilityId: spell.id, slotIndex });
     this.player.activeAction = {
       type: 'cast',
@@ -308,7 +354,7 @@ export class AbilitySystem {
           activeSpellInstances: this.activeSpellInstances,
         });
         if (!castResult.ok) {
-          this.player.mana = Math.min(this.player.maxMana, this.player.mana + spell.manaCost);
+          this.player.mana = Math.min(this.player.maxMana, this.player.mana + manaCost);
           this.cooldowns.set(spell.id, 0);
           return { ok: false, reason: castResult.reason, abilityId: spell.id };
         }
@@ -316,10 +362,23 @@ export class AbilitySystem {
         spell.cast({ ...context, system: this, spellLevel: 1, spell });
       }
     } catch (error) {
-      this.player.mana = Math.min(this.player.maxMana, this.player.mana + spell.manaCost);
+      this.player.mana = Math.min(this.player.maxMana, this.player.mana + manaCost);
       this.cooldowns.set(spell.id, 0);
       console.error(`[AbilitySystem] Failed to cast spell "${spell.id}".`, error);
       return { ok: false, reason: 'cast-error', abilityId: spell.id };
+    }
+
+    if (hasDoubleBlink) {
+      if (pendingDoubleBlink) {
+        this.pendingDoubleBlinkCasts.delete(spell.id);
+        this.cooldowns.set(spell.id, cooldownDuration);
+      } else {
+        const windowDuration = Number.isFinite(spell.parameters?.doubleBlinkWindow)
+          ? Math.max(0.2, spell.parameters.doubleBlinkWindow)
+          : 2.5;
+        this.pendingDoubleBlinkCasts.set(spell.id, { remaining: windowDuration });
+        this.cooldowns.set(spell.id, 0);
+      }
     }
 
     return { ok: true, reason: 'cast', abilityId: spell.id };
@@ -386,7 +445,8 @@ export class AbilitySystem {
     const spell = this.definitions.get(spellId);
     if (!spell) return 0;
     const remaining = this.cooldowns.get(spellId) ?? 0;
-    return spell.cooldown <= 0 ? 0 : remaining / spell.cooldown;
+    const duration = this.getSpellCooldownValue(spell);
+    return duration <= 0 ? 0 : remaining / duration;
   }
 
   getCooldownRemaining(spellId) {
@@ -395,7 +455,7 @@ export class AbilitySystem {
 
   getCooldownDuration(spellId) {
     const spell = this.definitions.get(spellId);
-    return Math.max(0, spell?.cooldown ?? 0);
+    return this.getSpellCooldownValue(spell);
   }
 
   getAbilities() {

@@ -49,6 +49,19 @@ function buildStatusComponent(effect) {
   return effect?.statusType ? 'apply_status_on_hit' : null;
 }
 
+function buildAugmentComponent(effect) {
+  switch (effect?.type) {
+    case 'double_blink':
+      return 'double_blink';
+    case 'thunder_blink':
+      return 'thunder_blink';
+    case 'shadow_blink':
+      return 'shadow_blink';
+    default:
+      return null;
+  }
+}
+
 function buildParameters(recipe, finalStats, element) {
   const visuals = recipe.visuals ?? {};
   const parameters = {
@@ -280,9 +293,10 @@ export function craftSpell({ recipeId, element = null, random = Math.random } = 
   const finalStats = applyProfile(baseStats, profile);
   const guaranteedEffects = getRecipeGuaranteedEffects(recipe, appliedElement);
   const bonusEffects = selectBonusEffects(recipe, rng);
-  const components = guaranteedEffects
-    .map(buildStatusComponent)
-    .filter(Boolean);
+  const components = [
+    ...guaranteedEffects.map(buildStatusComponent),
+    ...bonusEffects.map(buildAugmentComponent),
+  ].filter(Boolean);
   const parameters = buildParameters(recipe, finalStats, appliedElement);
 
   const craftedSpell = {
