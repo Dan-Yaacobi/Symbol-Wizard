@@ -207,7 +207,8 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       }
     }
 
-    if (enemy.frozen) {
+    const isStunned = enemy.statusEffects instanceof Map && enemy.statusEffects.has('stun');
+    if (enemy.frozen || isStunned) {
       stopEnemy(enemy);
       enemy.targetX = enemy.x;
       enemy.targetY = enemy.y;

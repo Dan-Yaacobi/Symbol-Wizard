@@ -5,6 +5,9 @@ import { spawnZoneOnHitComponent } from './spawn_zone_on_hit.js';
 import { increaseSpeedComponent } from './increase_speed.js';
 import { increaseDamageComponent } from './increase_damage.js';
 import { pierceComponent } from './pierce.js';
+import { doubleBlinkComponent } from './double_blink.js';
+import { thunderBlinkComponent } from './thunder_blink.js';
+import { shadowBlinkComponent } from './shadow_blink.js';
 
 const COMPONENTS = new Map([
   [explodeOnHitComponent.id, explodeOnHitComponent],
@@ -14,6 +17,9 @@ const COMPONENTS = new Map([
   [increaseSpeedComponent.id, increaseSpeedComponent],
   [increaseDamageComponent.id, increaseDamageComponent],
   [pierceComponent.id, pierceComponent],
+  [doubleBlinkComponent.id, doubleBlinkComponent],
+  [thunderBlinkComponent.id, thunderBlinkComponent],
+  [shadowBlinkComponent.id, shadowBlinkComponent],
 ]);
 export const ComponentRegistry = Object.freeze(Object.fromEntries(COMPONENTS));
 
