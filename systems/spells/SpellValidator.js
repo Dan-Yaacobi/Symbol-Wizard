@@ -18,7 +18,7 @@ function collectEffectTypes(spell) {
   ].map(normalizeEffectType).filter(Boolean));
 }
 
-const VALID_BEHAVIORS = new Set(['projectile', 'zone', 'beam', 'burst', 'summon', 'orbit', 'chain', 'aura', 'nova']);
+const VALID_BEHAVIORS = new Set(['projectile', 'zone', 'beam', 'burst', 'summon', 'orbit', 'chain', 'aura', 'nova', 'blink']);
 
 function validateBehaviorParameters(behavior, parameters, cost, overload) {
   if (behavior === 'projectile') {
@@ -49,6 +49,10 @@ function validateBehaviorParameters(behavior, parameters, cost, overload) {
     if (maxJumps < 4 || maxJumps > 10) {
       return { valid: false, reason: 'invalid-max-jumps-bounds', message: 'Chain spells require parameters.maxJumps in the range [4, 10].', cost, overload };
     }
+  }
+
+  if (behavior === 'blink' && !Number.isFinite(parameters?.range)) {
+    return { valid: false, reason: 'invalid-blink-range', message: 'Blink spells require a numeric parameters.range.', cost, overload };
   }
 
   if (['zone', 'aura', 'nova'].includes(behavior)) {

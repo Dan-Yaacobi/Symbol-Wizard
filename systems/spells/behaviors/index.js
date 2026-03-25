@@ -5,6 +5,7 @@ import { executeBehavior as executeChain } from './chain.js';
 import { executeBehavior as executeOrbit } from './orbit.js';
 import { executeBehavior as executeNova } from './nova.js';
 import { executeBehavior as executeAura } from './aura.js';
+import { executeBehavior as executeBlink } from './blink.js';
 
 const behaviorMap = {
   projectile: executeProjectile,
@@ -22,6 +23,7 @@ const behaviorMap = {
   orbit: executeOrbit,
   aura: executeAura,
   nova: executeNova,
+  blink: executeBlink,
 };
 
 export function getBehaviorExecutor(behaviorId) {
