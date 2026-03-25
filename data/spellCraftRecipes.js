@@ -289,7 +289,7 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     },
     statRanges: {
       damage: [4, 7],
-      radius: [4.5, 6.2],
+      radius: [6, 7.2],
       duration: [0.35, 0.7],
       tickInterval: [0.12, 0.2],
       cooldown: [1.8, 2.7],
@@ -334,7 +334,7 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
       speed: [2.2, 3.8],
       duration: [1.8, 3.1],
       count: [2, 4],
-      hitRadius: [0.75, 1.1],
+      hitRadius: [1.15, 1.5],
       cooldown: [1.5, 2.4],
       manaCost: [11, 15],
     },
@@ -426,7 +426,7 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
       common: [
         { type: 'pierce', label: 'Phase Pierce', weight: 3, count: 2 },
         { type: 'knockback', label: 'Arcane Pulse', weight: 2, force: 1.4 },
-        { type: 'gravity_pull', label: 'Gravity Pull', weight: 3, radius: 5.5, force: 3.5, color: '#c6b6ff' },
+        { type: 'gravity_pull', label: 'Gravity Pull', weight: 3, radius: 8.5, force: 8.4, color: '#c6b6ff' },
       ],
       uncommon: [
         { type: 'explode', label: 'Arc Burst', weight: 3, radius: 2.7, damageMultiplier: 0.78, color: '#b395ff' },

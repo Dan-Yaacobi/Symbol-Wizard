@@ -13,7 +13,7 @@ export function executeBehavior(instance, context) {
     speed,
     count,
     damage: Number.isFinite(instance.parameters?.damage) ? instance.parameters.damage : 1,
-    hitRadius: Number.isFinite(instance.parameters?.hitRadius) ? instance.parameters.hitRadius : 0.9,
+    hitRadius: Number.isFinite(instance.parameters?.hitRadius) ? Math.max(1.15, instance.parameters.hitRadius) : 1.15,
     currentAngle: 0,
     hitCooldown: Number.isFinite(instance.parameters?.hitCooldown) ? Math.max(0, instance.parameters.hitCooldown) : 0.12,
     recentHits: new Map(),
@@ -54,10 +54,14 @@ export function updateOrbitBehavior(instance, dt, context = {}) {
     orb.x = caster.x + Math.cos(angle) * orbitState.radius;
     orb.y = caster.y + Math.sin(angle) * orbitState.radius;
 
-    const targets = system.getEntitiesInRadius(orb.x, orb.y, orbitState.hitRadius);
+    const queryRadius = orbitState.hitRadius + 2.5;
+    const targets = system.getEntitiesInRadius(orb.x, orb.y, queryRadius);
     for (const target of targets) {
       if (orbitState.recentHits.has(target)) continue;
       if (!target?.alive) continue;
+      const targetRadius = Number.isFinite(target.radius) ? Math.max(0, target.radius) : 0;
+      const distance = Math.hypot((target.x ?? 0) - orb.x, (target.y ?? 0) - orb.y);
+      if (distance > orbitState.hitRadius + targetRadius) continue;
 
       system.applySpellDamage(target, orbitState.damage, {
         eventName: 'onHit',
