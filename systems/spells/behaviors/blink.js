@@ -1,18 +1,5 @@
 import { createSpellInstance } from '../SpellInstance.js';
 
-function resolveBlinkDestination(origin, targetPosition, maxRange) {
-  const dx = targetPosition.x - origin.x;
-  const dy = targetPosition.y - origin.y;
-  const distance = Math.hypot(dx, dy);
-  if (!Number.isFinite(distance) || distance <= 0) return { x: origin.x, y: origin.y };
-
-  const clamped = Math.min(maxRange, distance);
-  return {
-    x: origin.x + (dx / distance) * clamped,
-    y: origin.y + (dy / distance) * clamped,
-  };
-}
-
 function pointToSegmentDistance(point, start, end) {
   const segX = end.x - start.x;
   const segY = end.y - start.y;
@@ -42,6 +29,66 @@ function getBlinkPathTargets(system, start, end, thickness = 0.7) {
     if (distance <= radius + thickness) hits.push(enemy);
   }
   return hits;
+}
+
+function isTileWalkable(system, x, y) {
+  if (typeof system?.isWalkable === 'function') return Boolean(system.isWalkable(x, y));
+  const tx = Math.round(x);
+  const ty = Math.round(y);
+  return Boolean(system?.map?.[ty]?.[tx]?.walkable);
+}
+
+function canOccupyBlinkPosition(system, origin, x, y) {
+  if (!isTileWalkable(system, x, y)) return false;
+
+  // AbilitySystem#isWalkable only probes a single tile. For blink we need occupancy validation.
+  const hasMap = Array.isArray(system?.map);
+  if (!hasMap) return true;
+
+  const tileRadius = Number.isFinite(origin?.radius)
+    ? Math.max(0, Math.round(origin.radius / 2))
+    : 1;
+  if (tileRadius <= 0) return true;
+
+  const centerX = Math.round(x);
+  const centerY = Math.round(y);
+
+  for (let dy = -tileRadius; dy <= tileRadius; dy += 1) {
+    for (let dx = -tileRadius; dx <= tileRadius; dx += 1) {
+      const tx = centerX + dx;
+      const ty = centerY + dy;
+      if (!system.map?.[ty]?.[tx]?.walkable) return false;
+    }
+  }
+
+  return true;
+}
+
+function resolvePathConstrainedDestination({ system, origin, startX, startY, dirX, dirY, desiredDistance, stepDistance }) {
+  let furthestValid = { x: startX, y: startY };
+  let traversed = 0;
+  let invalidGap = 0;
+  const maxBypassGap = Number.isFinite(system?.blinkObstacleBypassDistance)
+    ? Math.max(stepDistance, system.blinkObstacleBypassDistance)
+    : 1.5;
+
+  while (traversed < desiredDistance) {
+    const nextDistance = Math.min(desiredDistance, traversed + stepDistance);
+    const nextX = startX + dirX * nextDistance;
+    const nextY = startY + dirY * nextDistance;
+
+    if (canOccupyBlinkPosition(system, origin, nextX, nextY)) {
+      furthestValid = { x: nextX, y: nextY };
+      invalidGap = 0;
+    } else {
+      invalidGap += nextDistance - traversed;
+      if (invalidGap > maxBypassGap) break;
+    }
+
+    traversed = nextDistance;
+  }
+
+  return furthestValid;
 }
 
 function spawnShadowZone(instance, context, startX, startY) {
@@ -105,13 +152,24 @@ export function executeBehavior(instance, context) {
   const targetDy = targetPosition.y - startY;
   const targetDistance = Math.hypot(targetDx, targetDy);
   if (!Number.isFinite(targetDistance) || targetDistance <= 0) return false;
+
+  const dirX = targetDx / targetDistance;
+  const dirY = targetDy / targetDistance;
   const desiredDistance = Math.max(minRange, Math.min(maxRange, targetDistance));
-  const destination = {
-    x: startX + (targetDx / targetDistance) * desiredDistance,
-    y: startY + (targetDy / targetDistance) * desiredDistance,
-  };
-  const destinationIsWalkable = system.isWalkable?.(destination.x, destination.y);
-  if (!destinationIsWalkable) return false;
+  const stepDistance = Number.isFinite(instance.parameters?.blinkStepDistance)
+    ? Math.max(0.05, instance.parameters.blinkStepDistance)
+    : 0.25;
+
+  const destination = resolvePathConstrainedDestination({
+    system,
+    origin,
+    startX,
+    startY,
+    dirX,
+    dirY,
+    desiredDistance,
+    stepDistance,
+  });
 
   origin.x = destination.x;
   origin.y = destination.y;
