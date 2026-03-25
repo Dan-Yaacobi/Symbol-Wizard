@@ -525,20 +525,21 @@ export class SpellEffectSystem {
     const dt = context?.dt ?? 0;
     if (!projectile || !system || dt <= 0) return;
 
-    const radius = Math.max(0.75, effect.radius ?? 5);
-    const pullForce = Math.max(0.1, effect.force ?? 3.2);
-    const targets = system.getEntitiesInRadius?.(projectile.x, projectile.y, radius) ?? [];
+    const radius = Math.max(1, effect.radius ?? 7.5);
+    const pullForce = Math.max(0.2, effect.force ?? 8.4);
+    const targets = system.getEntitiesInRadius?.(projectile.x, projectile.y, radius + 2.5) ?? [];
 
     for (const target of targets) {
       if (!target?.alive) continue;
       const dx = projectile.x - target.x;
       const dy = projectile.y - target.y;
       const distance = Math.hypot(dx, dy);
-      if (distance <= 0.05 || distance > radius) continue;
+      const targetRadius = Number.isFinite(target.radius) ? Math.max(0, target.radius) : 0;
+      if (distance <= 0.05 || distance > radius + targetRadius) continue;
       const nx = dx / distance;
       const ny = dy / distance;
-      const distanceFactor = 1 - (distance / radius);
-      const step = pullForce * (0.45 + (distanceFactor * 0.55)) * dt;
+      const distanceFactor = Math.max(0, 1 - (distance / radius));
+      const step = pullForce * (0.8 + (distanceFactor * 1.05)) * dt;
       const nextTargetX = (Number.isFinite(target.targetX) ? target.targetX : target.x) + nx * step;
       const nextTargetY = (Number.isFinite(target.targetY) ? target.targetY : target.y) + ny * step;
       if (system.isWalkable?.(nextTargetX, nextTargetY) === false) continue;
