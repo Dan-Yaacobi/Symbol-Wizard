@@ -114,7 +114,9 @@ function testThunderAndShadowBlinkApplyEffects() {
 function testBlinkStopsAtLastValidPositionWhenBlocked() {
   const map = createWalkableMap();
   for (let y = 0; y < map.length; y += 1) {
-    map[y][16] = { walkable: false };
+    for (let x = 16; x < map[y].length; x += 1) {
+      map[y][x] = { walkable: false };
+    }
   }
 
   const spell = {
@@ -186,6 +188,45 @@ function testBlinkCanBypassThinObstacleWhenSpaceExists() {
 
   assert.equal(result.ok, true);
   assert.ok(player.x > 20.5, `expected to pass thin obstacle, got ${player.x}`);
+}
+
+function testBlinkCanBypassWiderObstacleWithinScaledGap() {
+  const map = createWalkableMap();
+  for (let x = 14; x <= 18; x += 1) {
+    map[10][x] = { walkable: false };
+  }
+
+  const spell = {
+    ...SpellRegistry.blink,
+    parameters: {
+      ...SpellRegistry.blink.parameters,
+      range: 12,
+      minimumRange: 6,
+      blinkStepDistance: 0.25,
+    },
+  };
+
+  const system = {
+    enemies: [],
+    activeSpellInstances: [],
+    map,
+    isWalkable(x, y) {
+      return Boolean(this.map?.[Math.round(y)]?.[Math.round(x)]?.walkable);
+    },
+    spawnEffect() {},
+  };
+  const player = { x: 10, y: 10, radius: 0 };
+
+  const result = castSpell(spell, {
+    player,
+    origin: player,
+    system,
+    activeSpellInstances: system.activeSpellInstances,
+    targetPosition: { x: 22, y: 10 },
+  });
+
+  assert.equal(result.ok, true);
+  assert.ok(player.x > 20.5, `expected to pass wider obstacle, got ${player.x}`);
 }
 
 function testBlinkUsesUnifiedOccupancyChecksForBlockingObjects() {
@@ -294,6 +335,7 @@ function run() {
   testThunderAndShadowBlinkApplyEffects();
   testBlinkStopsAtLastValidPositionWhenBlocked();
   testBlinkCanBypassThinObstacleWhenSpaceExists();
+  testBlinkCanBypassWiderObstacleWithinScaledGap();
   testBlinkUsesUnifiedOccupancyChecksForBlockingObjects();
   testDoubleBlinkDefersCooldownUntilSecondCast();
   testBlinkSupportsStackedAugmentsTogether();

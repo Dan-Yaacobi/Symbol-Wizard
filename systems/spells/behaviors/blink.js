@@ -106,9 +106,10 @@ function resolvePathConstrainedDestination({ system, origin, startX, startY, dir
   let furthestValid = { x: startX, y: startY };
   let traversed = 0;
   let invalidGap = 0;
+  const scaledBypassGap = Math.max(4, desiredDistance * 0.5);
   const maxBypassGap = Number.isFinite(system?.blinkObstacleBypassDistance)
     ? Math.max(stepDistance, system.blinkObstacleBypassDistance)
-    : 1.5;
+    : Math.max(stepDistance, Math.min(desiredDistance, scaledBypassGap));
 
   while (traversed < desiredDistance) {
     const nextDistance = Math.min(desiredDistance, traversed + stepDistance);
