@@ -236,6 +236,24 @@ function testRecipeCraftingStateReportsMissingIngredients() {
   ]);
 }
 
+function testLightningChainMaxJumpsRollsAsIntegerWithinBounds() {
+  const lowRoll = craftSpell({ recipeId: 'lightning_chain', random: sequenceRng([0.2, 0, 0, 0.4, 0.4, 0.4, 0.4, 0.4]) });
+  const highRoll = craftSpell({ recipeId: 'lightning_chain', random: sequenceRng([0.2, 1, 1, 0.4, 0.4, 0.4, 0.4, 0.4]) });
+
+  for (const spell of [lowRoll, highRoll]) {
+    assert.ok(Number.isInteger(spell.baseStats.maxJumps));
+    assert.ok(Number.isInteger(spell.finalStats.maxJumps));
+    assert.ok(Number.isInteger(spell.parameters.maxJumps));
+    assert.ok(spell.parameters.maxJumps >= 4);
+    assert.ok(spell.parameters.maxJumps <= 10);
+  }
+}
+
+function testLightningChainJumpRangeIsMeaningfullyLargerByDefault() {
+  const spell = craftSpell({ recipeId: 'lightning_chain', random: sequenceRng([0.2, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]) });
+  assert.ok(spell.parameters.chainRange >= 9);
+}
+
 function run() {
   testRecipesExposeSupportedBehaviorsAndElements();
   testDefaultSpellbookIsClean();
@@ -248,6 +266,8 @@ function run() {
   testArcaneOrbHasSlowHeavyPersistentProjectileIdentity();
   testRecipeCraftingConsumesItemsAndAddsSpell();
   testRecipeCraftingStateReportsMissingIngredients();
+  testLightningChainMaxJumpsRollsAsIntegerWithinBounds();
+  testLightningChainJumpRangeIsMeaningfullyLargerByDefault();
   console.log('Spell crafting tests passed.');
 }
 

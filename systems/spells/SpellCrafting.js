@@ -10,8 +10,13 @@ function clamp(value, min, max) {
 
 function roundStatValue(key, value) {
   if (!Number.isFinite(value)) return value;
-  if (['damage', 'speed', 'manaCost'].includes(key)) return Math.round(value);
+  if (['damage', 'speed', 'manaCost', 'maxJumps'].includes(key)) return Math.round(value);
   return Math.round(value * 100) / 100;
+}
+
+function normalizeMaxJumps(value) {
+  if (!Number.isFinite(value)) return 4;
+  return clamp(Math.round(value), 4, 10);
 }
 
 function createRng(random = Math.random) {
@@ -67,7 +72,7 @@ function buildParameters(recipe, finalStats, element) {
 
   if (recipe.behavior === 'chain') {
     parameters.range = finalStats.range;
-    parameters.maxJumps = finalStats.maxJumps;
+    parameters.maxJumps = normalizeMaxJumps(finalStats.maxJumps);
     parameters.chainRange = finalStats.chainRange;
   }
 
@@ -122,6 +127,9 @@ function applyProfile(baseStats, profile) {
   if (Number.isFinite(finalStats.tickInterval)) {
     finalStats.tickInterval = clamp(finalStats.tickInterval, 0.12, 1.5);
   }
+  if (Number.isFinite(finalStats.maxJumps)) {
+    finalStats.maxJumps = normalizeMaxJumps(finalStats.maxJumps);
+  }
   return finalStats;
 }
 
@@ -129,6 +137,9 @@ function rollStats(recipe, random) {
   const baseStats = {};
   for (const [key, range] of Object.entries(recipe.statRanges ?? {})) {
     baseStats[key] = roundStatValue(key, rollRange(range, random));
+    if (key === 'maxJumps') {
+      baseStats[key] = normalizeMaxJumps(baseStats[key]);
+    }
   }
   return baseStats;
 }

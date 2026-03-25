@@ -1,7 +1,9 @@
 import { SpellEffectSystem } from '../SpellEffectSystem.js';
 const DEFAULT_CAST_RANGE = 14;
-const DEFAULT_JUMP_RANGE = 5.5;
-const DEFAULT_MAX_JUMPS = 2;
+const DEFAULT_JUMP_RANGE = 9;
+const DEFAULT_MAX_JUMPS = 4;
+const MIN_MAX_JUMPS = 4;
+const MAX_MAX_JUMPS = 10;
 
 function resolveInitialTarget(system, originX, originY, targetX, targetY, castRange) {
   const candidates = system?.enemies ?? [];
@@ -63,7 +65,7 @@ export function executeBehavior(instance, context) {
     ? instance.parameters.maxJumps
     : instance.parameters?.chainCount;
   const maxJumps = Number.isFinite(maxJumpsRaw)
-    ? Math.max(0, Math.floor(maxJumpsRaw))
+    ? Math.max(MIN_MAX_JUMPS, Math.min(MAX_MAX_JUMPS, Math.round(maxJumpsRaw)))
     : DEFAULT_MAX_JUMPS;
   const baseDamage = Number.isFinite(instance.parameters?.damage) ? instance.parameters.damage : 2;
   const damageFalloff = Number.isFinite(instance.parameters?.damageFalloff) ? instance.parameters.damageFalloff : 1;

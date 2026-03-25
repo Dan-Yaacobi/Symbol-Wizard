@@ -175,7 +175,7 @@ export class SpellbookWindow {
       if (Number.isFinite(selected.cooldown)) stats.push(`Cooldown: ${selected.cooldown}s`);
       if (Number.isFinite(selected.range)) stats.push(`Range: ${selected.range}`);
       if (Number.isFinite(effectiveRadius)) stats.push(`AoE Radius: ${effectiveRadius}`);
-      if (Number.isFinite(maxJumps)) stats.push(`Max Jumps: +${maxJumps}`);
+      if (Number.isFinite(maxJumps)) stats.push(`Max Jumps: +${Math.round(maxJumps)}`);
       if (Number.isFinite(chainRange)) stats.push(`Jump Radius: ${chainRange}`);
       if (selected.crafted) stats.push(`Profile: ${selected.profile?.name ?? 'Unknown'}`);
       const effectSummary = selected.crafted
