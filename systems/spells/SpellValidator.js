@@ -41,6 +41,15 @@ function validateBehaviorParameters(behavior, parameters, cost, overload) {
   if (behavior === 'chain' && !Number.isFinite(parameters?.maxJumps ?? parameters?.chainCount)) {
     return { valid: false, reason: 'invalid-max-jumps', message: 'Chain spells require a numeric parameters.maxJumps.', cost, overload };
   }
+  if (behavior === 'chain') {
+    const maxJumps = parameters?.maxJumps ?? parameters?.chainCount;
+    if (!Number.isInteger(maxJumps)) {
+      return { valid: false, reason: 'invalid-max-jumps-integer', message: 'Chain spells require an integer parameters.maxJumps.', cost, overload };
+    }
+    if (maxJumps < 4 || maxJumps > 10) {
+      return { valid: false, reason: 'invalid-max-jumps-bounds', message: 'Chain spells require parameters.maxJumps in the range [4, 10].', cost, overload };
+    }
+  }
 
   if (['zone', 'aura', 'nova'].includes(behavior)) {
     if (!Number.isFinite(parameters?.radius)) {
