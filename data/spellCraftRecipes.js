@@ -205,7 +205,7 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     },
     statRanges: {
       damage: [6, 10],
-      chainCount: [2, 4],
+      maxJumps: [2, 4],
       chainRange: [4.5, 6.5],
       cooldown: [0.55, 0.9],
       manaCost: [9, 13],

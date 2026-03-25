@@ -165,10 +165,18 @@ export class SpellbookWindow {
       const effectiveRadius = Number.isFinite(selected?.parameters?.radius)
         ? selected.parameters.radius
         : (Number.isFinite(selected?.finalStats?.radius) ? selected.finalStats.radius : null);
+      const maxJumps = Number.isFinite(selected?.parameters?.maxJumps)
+        ? selected.parameters.maxJumps
+        : (Number.isFinite(selected?.finalStats?.maxJumps) ? selected.finalStats.maxJumps : null);
+      const chainRange = Number.isFinite(selected?.parameters?.chainRange)
+        ? selected.parameters.chainRange
+        : (Number.isFinite(selected?.finalStats?.chainRange) ? selected.finalStats.chainRange : null);
       if (Number.isFinite(selected.damage)) stats.push(`Damage: ${selected.damage}`);
       if (Number.isFinite(selected.cooldown)) stats.push(`Cooldown: ${selected.cooldown}s`);
       if (Number.isFinite(selected.range)) stats.push(`Range: ${selected.range}`);
       if (Number.isFinite(effectiveRadius)) stats.push(`AoE Radius: ${effectiveRadius}`);
+      if (Number.isFinite(maxJumps)) stats.push(`Max Jumps: +${maxJumps}`);
+      if (Number.isFinite(chainRange)) stats.push(`Jump Radius: ${chainRange}`);
       if (selected.crafted) stats.push(`Profile: ${selected.profile?.name ?? 'Unknown'}`);
       const effectSummary = selected.crafted
         ? `Guaranteed: ${(selected.guaranteedEffects ?? []).map((effect) => effect.label).join(', ') || 'None'} • Bonus: ${(selected.bonusEffects ?? []).map((effect) => effect.label).join(', ') || 'None'}`
