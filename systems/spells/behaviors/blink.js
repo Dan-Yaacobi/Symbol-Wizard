@@ -105,11 +105,6 @@ function canOccupyBlinkPosition(system, origin, x, y) {
 function resolvePathConstrainedDestination({ system, origin, startX, startY, dirX, dirY, desiredDistance, stepDistance }) {
   let furthestValid = { x: startX, y: startY };
   let traversed = 0;
-  let invalidGap = 0;
-  const scaledBypassGap = Math.max(4, desiredDistance * 0.5);
-  const maxBypassGap = Number.isFinite(system?.blinkObstacleBypassDistance)
-    ? Math.max(stepDistance, system.blinkObstacleBypassDistance)
-    : Math.max(stepDistance, Math.min(desiredDistance, scaledBypassGap));
 
   while (traversed < desiredDistance) {
     const nextDistance = Math.min(desiredDistance, traversed + stepDistance);
@@ -118,10 +113,6 @@ function resolvePathConstrainedDestination({ system, origin, startX, startY, dir
 
     if (canOccupyBlinkPosition(system, origin, nextX, nextY)) {
       furthestValid = { x: nextX, y: nextY };
-      invalidGap = 0;
-    } else {
-      invalidGap += nextDistance - traversed;
-      if (invalidGap > maxBypassGap) break;
     }
 
     traversed = nextDistance;
