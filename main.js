@@ -754,6 +754,11 @@ function canOccupyPlayerPosition(x, y) {
   return isWalkable(x, y) && !collidesWithBlockingObjectAt(player, x, y, worldObjects);
 }
 
+abilitySystem.canOccupyPosition = (entity, x, y) => {
+  if (!entity) return false;
+  return canOccupyPlayerPosition(x, y);
+};
+
 function movePlayer(dx, dy) {
   const prevX = player.x;
   const prevY = player.y;
