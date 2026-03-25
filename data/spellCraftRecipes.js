@@ -354,24 +354,25 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
       arcane: [{ type: 'identity', label: 'Unstable Arcana', statusType: null, duration: 0 }],
     },
     statRanges: {
-      damage: [6, 10],
-      radius: [3.5, 5.2],
-      duration: [0.25, 0.45],
-      tickInterval: [0.1, 0.16],
+      damage: [7, 11],
+      knockbackPower: [6.8, 9.4],
+      radius: [3.6, 5.4],
+      duration: [0.2, 0.34],
       cooldown: [1.2, 2],
       manaCost: [10, 14],
     },
     weightedProfiles: { fast: 4, heavy: 3, efficient: 3 },
     effectPool: {
-      rollCountWeights: { 0: 3, 1: 5, 2: 2 },
+      rollCountWeights: { 0: 2, 1: 6, 2: 2 },
       common: [
-        { type: 'knockback', label: 'Arc Pulse', weight: 4, force: 1.4 },
+        { type: 'leave_zone', label: 'Lingering Field', weight: 4, duration: 2.8, tickInterval: 0.24, damageMultiplier: 0.42, color: '#c3adff' },
       ],
       uncommon: [
         { type: 'explode', label: 'Arc Burst', weight: 2, radius: 2.6, damageMultiplier: 0.6, color: '#b395ff' },
-        { type: 'trail', label: 'Aether Wake', weight: 2, radius: 1.2, duration: 0.75, damageMultiplier: 0.24, color: '#bca7ff' },
       ],
-      rare: [],
+      rare: [
+        { type: 'bolt_burst', label: 'Astral Ring', weight: 2, count: 8, speed: 54, ttl: 0.9, damageMultiplier: 0.5, radius: 0.9, color: '#d5c2ff' },
+      ],
     },
     visuals: {
       color: colorForElement('arcane'),
