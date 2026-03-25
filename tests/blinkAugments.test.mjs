@@ -110,6 +110,83 @@ function testThunderAndShadowBlinkApplyEffects() {
   assert.ok((enemy.hitCount ?? 0) >= 1);
 }
 
+
+function testBlinkStopsAtLastValidPositionWhenBlocked() {
+  const map = createWalkableMap();
+  for (let y = 0; y < map.length; y += 1) {
+    map[y][16] = { walkable: false };
+  }
+
+  const spell = {
+    ...SpellRegistry.blink,
+    parameters: {
+      ...SpellRegistry.blink.parameters,
+      range: 12,
+      minimumRange: 6,
+      blinkStepDistance: 0.25,
+    },
+  };
+
+  const system = {
+    enemies: [],
+    activeSpellInstances: [],
+    map,
+    isWalkable(x, y) {
+      return Boolean(this.map?.[Math.round(y)]?.[Math.round(x)]?.walkable);
+    },
+    spawnEffect() {},
+  };
+  const player = { x: 10, y: 10, radius: 1.8 };
+
+  const result = castSpell(spell, {
+    player,
+    origin: player,
+    system,
+    activeSpellInstances: system.activeSpellInstances,
+    targetPosition: { x: 25, y: 10 },
+  });
+
+  assert.equal(result.ok, true);
+  assert.ok(player.x < 14.6, `expected to stop before wall, got ${player.x}`);
+  assert.ok(player.x > 13.2, `expected to advance near obstacle, got ${player.x}`);
+}
+
+function testBlinkCanBypassThinObstacleWhenSpaceExists() {
+  const map = createWalkableMap();
+  map[10][14] = { walkable: false };
+
+  const spell = {
+    ...SpellRegistry.blink,
+    parameters: {
+      ...SpellRegistry.blink.parameters,
+      range: 12,
+      minimumRange: 6,
+      blinkStepDistance: 0.25,
+    },
+  };
+
+  const system = {
+    enemies: [],
+    activeSpellInstances: [],
+    map,
+    isWalkable(x, y) {
+      return Boolean(this.map?.[Math.round(y)]?.[Math.round(x)]?.walkable);
+    },
+    spawnEffect() {},
+  };
+  const player = { x: 10, y: 10, radius: 0 };
+
+  const result = castSpell(spell, {
+    player,
+    origin: player,
+    system,
+    activeSpellInstances: system.activeSpellInstances,
+    targetPosition: { x: 22, y: 10 },
+  });
+
+  assert.equal(result.ok, true);
+  assert.ok(player.x > 20.5, `expected to pass thin obstacle, got ${player.x}`);
+}
 function testDoubleBlinkDefersCooldownUntilSecondCast() {
   const { system, player } = createSystemHarness();
   const blinkWithDouble = {
@@ -146,6 +223,8 @@ function testDoubleBlinkDefersCooldownUntilSecondCast() {
 function run() {
   testBlinkRangeAndMinimumDistance();
   testThunderAndShadowBlinkApplyEffects();
+  testBlinkStopsAtLastValidPositionWhenBlocked();
+  testBlinkCanBypassThinObstacleWhenSpaceExists();
   testDoubleBlinkDefersCooldownUntilSecondCast();
   console.log('blinkAugments.test: ok');
 }
