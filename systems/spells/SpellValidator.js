@@ -38,8 +38,8 @@ function validateBehaviorParameters(behavior, parameters, cost, overload) {
     return { valid: false, reason: 'invalid-beam-duration', message: 'Beam spells require a numeric parameters.duration.', cost, overload };
   }
 
-  if (behavior === 'chain' && !Number.isFinite(parameters?.chainCount)) {
-    return { valid: false, reason: 'invalid-chain-count', message: 'Chain spells require a numeric parameters.chainCount.', cost, overload };
+  if (behavior === 'chain' && !Number.isFinite(parameters?.maxJumps ?? parameters?.chainCount)) {
+    return { valid: false, reason: 'invalid-max-jumps', message: 'Chain spells require a numeric parameters.maxJumps.', cost, overload };
   }
 
   if (['zone', 'aura', 'nova'].includes(behavior)) {

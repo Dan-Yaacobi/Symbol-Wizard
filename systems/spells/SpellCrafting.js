@@ -67,7 +67,7 @@ function buildParameters(recipe, finalStats, element) {
 
   if (recipe.behavior === 'chain') {
     parameters.range = finalStats.range;
-    parameters.chainCount = finalStats.chainCount;
+    parameters.maxJumps = finalStats.maxJumps;
     parameters.chainRange = finalStats.chainRange;
   }
 
