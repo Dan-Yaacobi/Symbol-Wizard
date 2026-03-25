@@ -235,25 +235,40 @@ function drawAbilityEffect(renderer, camera, effect) {
   const lifeRatio = effect.maxTtl > 0 ? Math.max(0, effect.ttl / effect.maxTtl) : 1;
 
   if (effect.type === 'lightning') {
-    const dx = effect.toX - effect.fromX;
-    const dy = effect.toY - effect.fromY;
-    const distance = Math.hypot(dx, dy) || 1;
-    const steps = Math.max(4, Math.round(distance * 3));
-    const nx = -dy / distance;
-    const ny = dx / distance;
-    const jitterAmplitude = Math.min(1.2, 0.45 + distance * 0.04) * (effect.intensity ?? 1);
+    const points = Array.isArray(effect.points) && effect.points.length >= 2
+      ? effect.points
+      : null;
 
-    for (let i = 0; i <= steps; i += 1) {
-      const t = i / steps;
-      const pulse = 1 - Math.abs(0.5 - t) * 2;
-      const jitter = (Math.random() - 0.5) * jitterAmplitude * pulse;
-      const x = effect.fromX + dx * t + nx * jitter;
-      const y = effect.fromY + dy * t + ny * jitter;
-      const sx = worldToScreenCell(x, camera.x);
-      const sy = worldToScreenCell(y, camera.y);
+    if (points) {
+      for (let index = 0; index < points.length; index += 1) {
+        const point = points[index];
+        const sx = worldToScreenCell(point.x, camera.x);
+        const sy = worldToScreenCell(point.y, camera.y);
+        const glyph = index % 2 === 0 ? '⚡' : '≈';
+        drawCell(renderer, { glyph: '*', fg: effect.glowColor ?? '#9ad5ff', layer: renderLayers.effects }, sx, sy);
+        drawCell(renderer, { glyph, fg: effect.color ?? '#f3fbff', layer: renderLayers.effects }, sx, sy);
+      }
+    } else {
+      const dx = effect.toX - effect.fromX;
+      const dy = effect.toY - effect.fromY;
+      const distance = Math.hypot(dx, dy) || 1;
+      const steps = Math.max(4, Math.round(distance * 3));
+      const nx = -dy / distance;
+      const ny = dx / distance;
+      const jitterAmplitude = Math.min(1.2, 0.45 + distance * 0.04) * (effect.intensity ?? 1);
 
-      drawCell(renderer, { glyph: '*', fg: effect.glowColor ?? '#9ad5ff', layer: renderLayers.effects }, sx, sy);
-      drawCell(renderer, { glyph: '≈', fg: effect.color ?? '#f3fbff', layer: renderLayers.effects }, sx, sy);
+      for (let i = 0; i <= steps; i += 1) {
+        const t = i / steps;
+        const pulse = 1 - Math.abs(0.5 - t) * 2;
+        const jitter = (Math.random() - 0.5) * jitterAmplitude * pulse;
+        const x = effect.fromX + dx * t + nx * jitter;
+        const y = effect.fromY + dy * t + ny * jitter;
+        const sx = worldToScreenCell(x, camera.x);
+        const sy = worldToScreenCell(y, camera.y);
+
+        drawCell(renderer, { glyph: '*', fg: effect.glowColor ?? '#9ad5ff', layer: renderLayers.effects }, sx, sy);
+        drawCell(renderer, { glyph: '≈', fg: effect.color ?? '#f3fbff', layer: renderLayers.effects }, sx, sy);
+      }
     }
 
     return;

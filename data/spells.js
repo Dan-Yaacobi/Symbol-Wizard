@@ -213,7 +213,7 @@ export const SpellRegistry = {
     element: 'void',
     components: [],
     parameters: {
-      range: 12,
+      range: 15,
       minimumRange: 6,
       cooldown: 4.2,
       manaCost: 12,
@@ -221,7 +221,7 @@ export const SpellRegistry = {
     },
     cost: 18,
     damage: null,
-    range: 12,
+    range: 15,
     cooldown: 4.2,
     manaCost: 12,
   },
