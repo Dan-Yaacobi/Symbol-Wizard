@@ -1,3 +1,5 @@
+import { runChainPropagation } from './chainPropagation.js';
+
 const LEGACY_EFFECT_MAP = Object.freeze({
   explode_on_hit: 'explode',
   spawn_zone_on_hit: 'zone_on_hit',
@@ -383,23 +385,29 @@ export class SpellEffectSystem {
   static #chain(effect, context) {
     const { system, target, instance } = context;
     if (!system || !target) return;
-    const visited = new Set([...(context.chainVisited ?? []), target]);
+    const maxJumps = clampInt(effect.count ?? effect.chainCount ?? effect.maxJumps, 2, 0);
     const radius = Number.isFinite(effect.radius) ? effect.radius : 5;
-    let remaining = clampInt(effect.count ?? effect.chainCount, 1, 1);
-    let current = target;
-    const chainDamage = Number.isFinite(effect.damage) ? effect.damage : (context.damage ?? 0) * (effect.damageMultiplier ?? 0.7);
-    while (remaining > 0) {
-      const candidates = (system.getEntitiesInRadius?.(current.x, current.y, radius) ?? [])
-        .filter((enemy) => enemy && enemy.alive && !visited.has(enemy))
-        .sort((a, b) => Math.hypot(a.x - current.x, a.y - current.y) - Math.hypot(b.x - current.x, b.y - current.y));
-      const next = candidates[0];
-      if (!next) break;
-      visited.add(next);
-      system.spawnEffect?.({ type: 'lightning', fromX: current.x, fromY: current.y, toX: next.x, toY: next.y, color: effect.color ?? '#ffe76a', ttl: 0.1 });
-      system.applySpellDamage?.(next, chainDamage, { eventName: 'onHit', instance, sourceX: current.x, sourceY: current.y, hitParticleColor: effect.color ?? '#ffe76a', meta: { chainVisited: visited } });
-      current = next;
-      remaining -= 1;
-    }
+    const baseDamage = Number.isFinite(effect.damage) ? effect.damage : (context.damage ?? 0) * (effect.damageMultiplier ?? 0.7);
+    const damageFalloff = Number.isFinite(effect.damageFalloff) ? effect.damageFalloff : 0.8;
+    runChainPropagation({
+      system,
+      initialTarget: target,
+      maxJumps,
+      jumpRadius: radius,
+      baseDamage,
+      damageFalloff,
+      onJump: ({ target: chainedTarget, damage, fromX, fromY, toX, toY, visited }) => {
+        system.spawnEffect?.({ type: 'lightning', fromX, fromY, toX, toY, color: effect.color ?? '#ffe76a', ttl: 0.1 });
+        system.applySpellDamage?.(chainedTarget, damage, {
+          eventName: 'onHit',
+          instance,
+          sourceX: fromX,
+          sourceY: fromY,
+          hitParticleColor: effect.color ?? '#ffe76a',
+          meta: { chainVisited: visited },
+        });
+      },
+    });
   }
 
   static #bounce(effect, context) {
