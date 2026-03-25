@@ -220,12 +220,42 @@ function testDoubleBlinkDefersCooldownUntilSecondCast() {
   assert.ok(system.getCooldownRemaining('blink') > 0);
 }
 
+function testBlinkSupportsStackedAugmentsTogether() {
+  const { system, enemies } = createSystemHarness();
+  const blinkStacked = {
+    ...SpellRegistry.blink,
+    components: ['double_blink', 'thunder_blink', 'shadow_blink'],
+    parameters: {
+      ...SpellRegistry.blink.parameters,
+      range: 12,
+      minimumRange: 6,
+      thunderStunDuration: 1,
+    },
+  };
+  system.definitions.set('blink', blinkStacked);
+
+  const first = system.castSlot(0, { targetPosition: { x: 20, y: 10 } });
+  assert.equal(first.ok, true);
+  assert.equal(system.getCooldownRemaining('blink'), 0);
+  assert.equal(enemies[0].statusEffects.has('stun'), true);
+  assert.ok(system.activeSpellInstances.length > 0);
+
+  const lightningTrailEffect = system.effects.find((effect) => effect?.type === 'lightning');
+  assert.ok(Array.isArray(lightningTrailEffect?.points));
+  assert.ok(lightningTrailEffect.points.length >= 2);
+
+  const second = system.castSlot(0, { targetPosition: { x: 24, y: 10 } });
+  assert.equal(second.ok, true);
+  assert.ok(system.getCooldownRemaining('blink') > 0);
+}
+
 function run() {
   testBlinkRangeAndMinimumDistance();
   testThunderAndShadowBlinkApplyEffects();
   testBlinkStopsAtLastValidPositionWhenBlocked();
   testBlinkCanBypassThinObstacleWhenSpaceExists();
   testDoubleBlinkDefersCooldownUntilSecondCast();
+  testBlinkSupportsStackedAugmentsTogether();
   console.log('blinkAugments.test: ok');
 }
 

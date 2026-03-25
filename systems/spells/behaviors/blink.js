@@ -31,6 +31,40 @@ function getBlinkPathTargets(system, start, end, thickness = 0.7) {
   return hits;
 }
 
+function buildLightningPathPoints(start, end, options = {}) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const distance = Math.hypot(dx, dy);
+  if (!Number.isFinite(distance) || distance <= 0.01) {
+    return [{ x: start.x, y: start.y }, { x: end.x, y: end.y }];
+  }
+
+  const segmentLength = Math.max(0.35, Number.isFinite(options.segmentLength) ? options.segmentLength : 0.5);
+  const maxAmplitude = Math.max(0.1, Number.isFinite(options.amplitude) ? options.amplitude : 0.45);
+  const segments = Math.max(2, Math.round(distance / segmentLength));
+  const tangentX = dx / distance;
+  const tangentY = dy / distance;
+  const normalX = -tangentY;
+  const normalY = tangentX;
+  const points = [{ x: start.x, y: start.y }];
+
+  for (let index = 1; index < segments; index += 1) {
+    const t = index / segments;
+    const alongX = start.x + dx * t;
+    const alongY = start.y + dy * t;
+    const pulse = Math.sin(t * Math.PI);
+    const direction = index % 2 === 0 ? 1 : -1;
+    const offset = maxAmplitude * pulse * direction;
+    points.push({
+      x: alongX + normalX * offset,
+      y: alongY + normalY * offset,
+    });
+  }
+
+  points.push({ x: end.x, y: end.y });
+  return points;
+}
+
 function isTileWalkable(system, x, y) {
   if (typeof system?.isWalkable === 'function') return Boolean(system.isWalkable(x, y));
   const tx = Math.round(x);
@@ -96,8 +130,8 @@ function spawnShadowZone(instance, context, startX, startY) {
   const system = context?.system;
   if (!system) return;
 
-  const duration = Math.max(0.4, Number.isFinite(instance.parameters.shadowZoneDuration) ? instance.parameters.shadowZoneDuration : 2.4);
-  const radius = Math.max(0.5, Number.isFinite(instance.parameters.shadowZoneRadius) ? instance.parameters.shadowZoneRadius : 2.6);
+  const duration = Math.max(0.4, Number.isFinite(instance.parameters.shadowZoneDuration) ? instance.parameters.shadowZoneDuration : 3.8);
+  const radius = Math.max(0.5, Number.isFinite(instance.parameters.shadowZoneRadius) ? instance.parameters.shadowZoneRadius : 3.8);
   const tickInterval = Math.max(0.1, Number.isFinite(instance.parameters.shadowZoneTickInterval) ? instance.parameters.shadowZoneTickInterval : 0.35);
   const damage = Math.max(0, Number.isFinite(instance.parameters.shadowZoneDamage) ? instance.parameters.shadowZoneDamage : 2);
   const color = instance.parameters.shadowZoneColor ?? '#4a2f75';
@@ -176,6 +210,25 @@ export function executeBehavior(instance, context) {
 
   if (instance.parameters?.thunderBlink) {
     const stunnedTargets = getBlinkPathTargets(system, { x: startX, y: startY }, destination, instance.parameters.thunderPathWidth ?? 0.8);
+    const lightningPathPoints = buildLightningPathPoints(
+      { x: startX, y: startY },
+      destination,
+      {
+        amplitude: instance.parameters.thunderTrailAmplitude ?? 0.45,
+        segmentLength: instance.parameters.thunderTrailSegmentLength ?? 0.5,
+      },
+    );
+    system.spawnEffect?.({
+      type: 'lightning',
+      fromX: startX,
+      fromY: startY,
+      toX: destination.x,
+      toY: destination.y,
+      points: lightningPathPoints,
+      color: instance.parameters.thunderTrailColor ?? '#fff6ad',
+      glowColor: instance.parameters.thunderTrailGlowColor ?? '#ffea75',
+      ttl: 0.18,
+    });
     const stunDuration = Math.max(0.2, Number.isFinite(instance.parameters.thunderStunDuration) ? instance.parameters.thunderStunDuration : 1.05);
     for (const enemy of stunnedTargets) {
       system.applyStatus?.(enemy, 'stun', stunDuration);

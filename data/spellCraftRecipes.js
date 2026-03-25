@@ -419,7 +419,7 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     },
     weightedProfiles: { fast: 4, heavy: 1, efficient: 5 },
     effectPool: {
-      rollCountWeights: { 0: 3, 1: 6, 2: 1 },
+      rollCountWeights: { 0: 3, 1: 6, 2: 1, 3: 0.35 },
       common: [
         { type: 'double_blink', label: 'Double Blink', weight: 3 },
       ],

@@ -269,6 +269,24 @@ function testBlinkCraftingRollsRangeManaCooldownAndBlinkAugments() {
   assert.ok(spell.bonusEffects.some((effect) => ['double_blink', 'thunder_blink', 'shadow_blink'].includes(effect.type)));
 }
 
+function testBlinkCraftingCanRollThreeUniqueAugments() {
+  const spell = craftSpell({
+    recipeId: 'void_blink',
+    random: sequenceRng([
+      0.95, // profile
+      0.5, 0.5, 0.5, // stat rolls
+      0.99, // roll count => 3
+      0.1, 0.7, 0.95, // rarity picks => common, uncommon, rare
+      0.2, 0.2, 0.2, // pool picks
+    ]),
+  });
+  assert.equal(spell.bonusEffects.length, 3);
+  assert.deepEqual(
+    spell.bonusEffects.map((effect) => effect.type).sort(),
+    ['double_blink', 'shadow_blink', 'thunder_blink'],
+  );
+}
+
 function run() {
   testRecipesExposeSupportedBehaviorsAndElements();
   testDefaultSpellbookIsClean();
@@ -284,6 +302,7 @@ function run() {
   testLightningChainMaxJumpsRollsAsIntegerWithinBounds();
   testLightningChainJumpRangeIsMeaningfullyLargerByDefault();
   testBlinkCraftingRollsRangeManaCooldownAndBlinkAugments();
+  testBlinkCraftingCanRollThreeUniqueAugments();
   console.log('Spell crafting tests passed.');
 }
 
