@@ -13,6 +13,23 @@ const projectileSprite = [
   ],
 ];
 
+const orbProjectileSprite = [
+  [
+    '  oOo  ',
+    ' o@@@o ',
+    'o@OOO@o',
+    ' o@@@o ',
+    '  oOo  ',
+  ],
+  [
+    '  O0O  ',
+    ' O@@@O ',
+    'O@###@O',
+    ' O@@@O ',
+    '  O0O  ',
+  ],
+];
+
 function colorForElement(element) {
   switch (element) {
     case 'fire': return '#ff9f66';
@@ -395,12 +412,12 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
       arcane: [{ type: 'identity', label: 'Unstable Arcana', statusType: null, duration: 0 }],
     },
     statRanges: {
-      damage: [8, 13],
-      speed: [42, 58],
-      ttl: [0.95, 1.3],
+      damage: [15, 22],
+      speed: [18, 30],
+      ttl: [1.8, 2.7],
       cooldown: [0.5, 0.9],
       manaCost: [8, 12],
-      size: [1.15, 1.55],
+      size: [1.9, 2.5],
     },
     weightedProfiles: { fast: 2, heavy: 4, efficient: 4 },
     effectPool: {
@@ -420,7 +437,7 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     visuals: {
       color: colorForElement('arcane'),
       hitParticleColor: '#d5c2ff',
-      spriteFrames: projectileSprite,
+      spriteFrames: orbProjectileSprite,
     },
   },
 ]);

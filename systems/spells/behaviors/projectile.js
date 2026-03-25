@@ -34,13 +34,14 @@ export function executeBehavior(instance, context) {
     : 1;
   const step = projectileCount > 1 ? spreadDegrees / (projectileCount - 1) : 0;
   const start = -spreadDegrees / 2;
+  const isArcaneOrb = instance?.recipeId === 'arcane_orb' || instance?.base?.recipeId === 'arcane_orb';
 
   let firstProjectile = null;
   let spawnedProjectileCount = 0;
   for (let i = 0; i < projectileCount; i += 1) {
     const offset = start + step * i;
     const direction = hasDoubleBolt ? rotateDirection(normX, normY, offset) : { dx: normX, dy: normY };
-    const projectile = system.createProjectile(origin.x, origin.y, direction.dx, direction.dy, {
+    const projectileOverrides = {
       speed: instance.parameters?.speed ?? 65,
       damage: Math.max(1, Math.round((instance.parameters?.damage ?? 3) * damageMultiplier)),
       ttl: instance.parameters?.ttl ?? instance.parameters?.lifetime ?? 0.9,
@@ -55,7 +56,15 @@ export function executeBehavior(instance, context) {
         if (!instance.parameters?.pierce) instance.state.hasHit = true;
         instance.handleEvent('onHit', payload);
       },
-    });
+    };
+    if (instance.parameters?.directionalSpriteFrames !== undefined) {
+      projectileOverrides.directionalSpriteFrames = instance.parameters.directionalSpriteFrames;
+    } else if (isArcaneOrb) {
+      projectileOverrides.directionalSpriteFrames = null;
+      projectileOverrides.trailSpawnInterval = 0.065;
+      projectileOverrides.trailParticleLifetime = { min: 0.2, max: 0.35 };
+    }
+    const projectile = system.createProjectile(origin.x, origin.y, direction.dx, direction.dy, projectileOverrides);
     if (!projectile) continue;
     if (!firstProjectile) firstProjectile = projectile;
     spawnedProjectileCount += 1;

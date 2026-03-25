@@ -173,6 +173,28 @@ function testProfileModifiersChangeStatsFromBaseToFinal() {
   assert.ok(spell.finalStats.cooldown > spell.baseStats.cooldown);
 }
 
+function testArcaneOrbHasSlowHeavyPersistentProjectileIdentity() {
+  const spell = craftSpell({ recipeId: 'arcane_orb', random: sequenceRng([0.55, 0.4, 0.55, 0.5, 0.6, 0.4, 0.4, 0.4]) });
+  const system = buildCastingSystem();
+  const player = { x: 2, y: 2, facingX: 1, facingY: 0 };
+
+  assert.equal(castSpell(spell, {
+    player,
+    system,
+    activeSpellInstances: system.activeSpellInstances,
+    targetPosition: { x: 9, y: 2 },
+  }).ok, true);
+
+  const orb = system.projectiles[0];
+  assert.ok(orb);
+  assert.ok(orb.speed < SpellRegistry['magic-bolt'].parameters.speed);
+  assert.ok(orb.damage > SpellRegistry['magic-bolt'].parameters.damage);
+  assert.ok(orb.ttl > SpellRegistry['magic-bolt'].parameters.ttl);
+  assert.ok((orb.radius ?? 0) > SpellRegistry['magic-bolt'].parameters.size);
+  assert.equal(orb.directionalSpriteFrames, null);
+  assert.ok(Array.isArray(orb.spriteFrames) && orb.spriteFrames[0]?.length >= 5);
+}
+
 function testRecipeCraftingConsumesItemsAndAddsSpell() {
   const player = new Player(0, 0);
   player.unlockRecipe('frost_beam');
@@ -223,6 +245,7 @@ function run() {
   testEveryCraftableBehaviorCastsAtRuntime();
   testOrbitAndAreaSpellsContinueUpdatingAfterCast();
   testProfileModifiersChangeStatsFromBaseToFinal();
+  testArcaneOrbHasSlowHeavyPersistentProjectileIdentity();
   testRecipeCraftingConsumesItemsAndAddsSpell();
   testRecipeCraftingStateReportsMissingIngredients();
   console.log('Spell crafting tests passed.');
