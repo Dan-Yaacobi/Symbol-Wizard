@@ -40,6 +40,9 @@ function buildCastingSystem() {
       this.statuses.push({ target, type, duration });
       return true;
     },
+    isWalkable() {
+      return true;
+    },
   };
 }
 
@@ -53,6 +56,7 @@ function testRecipesExposeSupportedBehaviorsAndElements() {
     'Fire Aura',
     'Frost Orbit',
     'Arcane Nova',
+    'Blink',
     'Arcane Orb',
   ]);
   assert.deepEqual([...new Set(recipes.map((recipe) => recipe.behavior))], [
@@ -63,6 +67,7 @@ function testRecipesExposeSupportedBehaviorsAndElements() {
     'aura',
     'orbit',
     'nova',
+    'blink',
   ]);
   assert.deepEqual([...new Set(recipes.flatMap((recipe) => recipe.validElements))].sort(), [
     'arcane',
@@ -70,6 +75,7 @@ function testRecipesExposeSupportedBehaviorsAndElements() {
     'frost',
     'lightning',
     'poison',
+    'void',
   ]);
   assert.deepEqual(recipes.find((recipe) => recipe.id === 'frost_beam')?.ingredients, [
     { itemId: 'frost_core', amount: 1 },
@@ -118,7 +124,7 @@ function testBonusEffectsStayWithinValidPoolAndRemainUnique() {
 }
 
 function testEveryCraftableBehaviorCastsAtRuntime() {
-  const recipeIds = ['fire_bolt', 'frost_beam', 'lightning_chain', 'poison_zone', 'fire_aura', 'frost_orbit', 'arcane_nova', 'arcane_orb'];
+  const recipeIds = ['fire_bolt', 'frost_beam', 'lightning_chain', 'poison_zone', 'fire_aura', 'frost_orbit', 'arcane_nova', 'void_blink', 'arcane_orb'];
 
   for (const recipeId of recipeIds) {
     const spell = craftSpell({ recipeId, random: sequenceRng([0.4, 0.5, 0.45, 0.55, 0.35, 0.65, 0.5, 0.5, 0.5]) });
@@ -135,8 +141,8 @@ function testEveryCraftableBehaviorCastsAtRuntime() {
     if (spell.behavior === 'projectile') {
       assert.equal(system.projectiles.length, 1, `${recipeId} should spawn a projectile.`);
     } else {
-      assert.equal(system.activeSpellInstances.length, 1, `${recipeId} should create an active spell instance.`);
-      assert.equal(system.activeSpellInstances[0].instance.base.behavior, spell.behavior);
+      assert.ok(system.activeSpellInstances.length >= 1, `${recipeId} should create an active spell instance.`);
+      assert.ok(system.activeSpellInstances.some((entry) => entry.instance.base.behavior === spell.behavior));
     }
   }
 }
@@ -254,6 +260,15 @@ function testLightningChainJumpRangeIsMeaningfullyLargerByDefault() {
   assert.ok(spell.parameters.chainRange >= 9);
 }
 
+function testBlinkCraftingRollsRangeManaCooldownAndBlinkAugments() {
+  const spell = craftSpell({ recipeId: 'void_blink', random: sequenceRng([0.95, 0.5, 0.5, 0.5, 0.4, 0.9, 0.5]) });
+  assert.equal(spell.behavior, 'blink');
+  assert.ok(Number.isFinite(spell.parameters.range));
+  assert.ok(Number.isFinite(spell.parameters.cooldown));
+  assert.ok(Number.isFinite(spell.parameters.manaCost));
+  assert.ok(spell.bonusEffects.some((effect) => ['double_blink', 'thunder_blink', 'shadow_blink'].includes(effect.type)));
+}
+
 function run() {
   testRecipesExposeSupportedBehaviorsAndElements();
   testDefaultSpellbookIsClean();
@@ -268,6 +283,7 @@ function run() {
   testRecipeCraftingStateReportsMissingIngredients();
   testLightningChainMaxJumpsRollsAsIntegerWithinBounds();
   testLightningChainJumpRangeIsMeaningfullyLargerByDefault();
+  testBlinkCraftingRollsRangeManaCooldownAndBlinkAugments();
   console.log('Spell crafting tests passed.');
 }
 

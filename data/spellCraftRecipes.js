@@ -397,6 +397,45 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
     },
   },
   {
+    id: 'void_blink',
+    name: 'Blink',
+    behavior: 'blink',
+    targeting: 'cursor',
+    icon: '>',
+    validElements: ['void'],
+    ingredients: [
+      ingredient('arcane_shard', 1),
+      ingredient('essence', 5),
+      ingredient('crystal_dust', 4),
+    ],
+    craftingSummary: 'A short-range phase step that repositions the caster in an instant.',
+    guaranteedEffects: {
+      void: [{ type: 'identity', label: 'Phase Step', statusType: null, duration: 0 }],
+    },
+    statRanges: {
+      range: [10, 14],
+      cooldown: [3.4, 5.2],
+      manaCost: [10, 14],
+    },
+    weightedProfiles: { fast: 4, heavy: 1, efficient: 5 },
+    effectPool: {
+      rollCountWeights: { 0: 3, 1: 6, 2: 1 },
+      common: [
+        { type: 'double_blink', label: 'Double Blink', weight: 3 },
+      ],
+      uncommon: [
+        { type: 'thunder_blink', label: 'Thunder Blink', weight: 2 },
+      ],
+      rare: [
+        { type: 'shadow_blink', label: 'Shadow Blink', weight: 1 },
+      ],
+    },
+    visuals: {
+      color: '#b39bff',
+      hitParticleColor: '#d9cfff',
+    },
+  },
+  {
     id: 'arcane_orb',
     name: 'Arcane Orb',
     behavior: 'projectile',
