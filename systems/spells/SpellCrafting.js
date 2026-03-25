@@ -75,6 +75,9 @@ function buildParameters(recipe, finalStats, element) {
     parameters.radius = finalStats.radius;
     parameters.duration = finalStats.duration;
     parameters.tickInterval = finalStats.tickInterval;
+    if (Number.isFinite(finalStats.knockbackPower)) {
+      parameters.knockbackPower = finalStats.knockbackPower;
+    }
   }
 
   if (recipe.behavior === 'orbit') {
