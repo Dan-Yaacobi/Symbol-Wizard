@@ -45,6 +45,23 @@ function normalizeEffectsList(effectRefs = [], parameters = {}) {
       effect.tickInterval = Number.isFinite(effect.tickInterval) ? effect.tickInterval : (Number.isFinite(parameters.spawnZoneTickInterval) ? parameters.spawnZoneTickInterval : 0.3);
       effect.damage = Number.isFinite(effect.damage) ? effect.damage : (Number.isFinite(parameters.spawnZoneDamage) ? parameters.spawnZoneDamage : 1);
     }
+    if (effect.type === 'gravity_pull') {
+      effect.radius = Number.isFinite(effect.radius) ? effect.radius : 5;
+      effect.force = Number.isFinite(effect.force) ? effect.force : 3.2;
+    }
+    if (effect.type === 'periodic_explosion') {
+      effect.interval = Number.isFinite(effect.interval) ? effect.interval : 0.7;
+      effect.radius = Number.isFinite(effect.radius) ? effect.radius : 2.3;
+      effect.damageMultiplier = Number.isFinite(effect.damageMultiplier) ? effect.damageMultiplier : 0.45;
+    }
+    if (effect.type === 'zone_trail') {
+      effect.interval = Number.isFinite(effect.interval) ? effect.interval : 0.45;
+      effect.minDistance = Number.isFinite(effect.minDistance) ? effect.minDistance : 0.7;
+      effect.radius = Number.isFinite(effect.radius) ? effect.radius : 1.35;
+      effect.duration = Number.isFinite(effect.duration) ? effect.duration : 1.4;
+      effect.tickInterval = Number.isFinite(effect.tickInterval) ? effect.tickInterval : 0.25;
+      effect.damageMultiplier = Number.isFinite(effect.damageMultiplier) ? effect.damageMultiplier : 0.3;
+    }
     normalized.push(effect);
   }
   return normalized;
@@ -69,7 +86,7 @@ function copyComponent(component) {
   return { ...component, hooks: component.hooks ? { ...component.hooks } : component.hooks };
 }
 
-function createRuntimeHandleEvent(instance) {
+function createRuntimeHandleEvent() {
   return function handleEvent(eventName, payload) {
     this.components.forEach((component) => {
       if (typeof component?.hooks?.[eventName] === 'function') {
@@ -179,6 +196,14 @@ export class SpellEffectSystem {
       if (effect.type === 'trail') {
         projectile.effectState.trailTimer = 0;
       }
+      if (effect.type === 'periodic_explosion') {
+        projectile.effectState.periodicExplosionTimer = 0;
+      }
+      if (effect.type === 'zone_trail') {
+        projectile.effectState.zoneTrailTimer = 0;
+        projectile.effectState.zoneTrailLastX = projectile.x;
+        projectile.effectState.zoneTrailLastY = projectile.y;
+      }
     }
     return projectile;
   }
@@ -217,6 +242,15 @@ export class SpellEffectSystem {
           break;
         case 'zone_on_hit':
           if (hook === 'onHit') this.#zoneOnHit(effect, effectContext);
+          break;
+        case 'gravity_pull':
+          if (hook === 'onTick') this.#gravityPull(effect, effectContext);
+          break;
+        case 'periodic_explosion':
+          if (hook === 'onTick') this.#periodicExplosion(effect, effectContext);
+          break;
+        case 'zone_trail':
+          if (hook === 'onTick') this.#zoneTrail(effect, effectContext);
           break;
         case 'emit_projectiles':
           this.#emitProjectiles(effect, hook, effectContext);
@@ -347,7 +381,7 @@ export class SpellEffectSystem {
   }
 
   static #chain(effect, context) {
-    const { system, target, instance, x, y } = context;
+    const { system, target, instance } = context;
     if (!system || !target) return;
     const visited = new Set([...(context.chainVisited ?? []), target]);
     const radius = Number.isFinite(effect.radius) ? effect.radius : 5;
@@ -483,6 +517,91 @@ export class SpellEffectSystem {
       record.positions.add(positionKey);
     }
     spawnZoneInstance(system, instance, x, y, effect);
+  }
+
+  static #gravityPull(effect, context) {
+    const projectile = context?.projectile;
+    const system = context?.system;
+    const dt = context?.dt ?? 0;
+    if (!projectile || !system || dt <= 0) return;
+
+    const radius = Math.max(0.75, effect.radius ?? 5);
+    const pullForce = Math.max(0.1, effect.force ?? 3.2);
+    const targets = system.getEntitiesInRadius?.(projectile.x, projectile.y, radius) ?? [];
+
+    for (const target of targets) {
+      if (!target?.alive) continue;
+      const dx = projectile.x - target.x;
+      const dy = projectile.y - target.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance <= 0.05 || distance > radius) continue;
+      const nx = dx / distance;
+      const ny = dy / distance;
+      const distanceFactor = 1 - (distance / radius);
+      const step = pullForce * (0.45 + (distanceFactor * 0.55)) * dt;
+      const nextTargetX = (Number.isFinite(target.targetX) ? target.targetX : target.x) + nx * step;
+      const nextTargetY = (Number.isFinite(target.targetY) ? target.targetY : target.y) + ny * step;
+      if (system.isWalkable?.(nextTargetX, nextTargetY) === false) continue;
+      target.targetX = nextTargetX;
+      target.targetY = nextTargetY;
+      target.vx = (target.vx ?? 0) + nx * step * 0.35;
+      target.vy = (target.vy ?? 0) + ny * step * 0.35;
+    }
+  }
+
+  static #periodicExplosion(effect, context) {
+    const projectile = context?.projectile;
+    const system = context?.system;
+    const dt = context?.dt ?? 0;
+    if (!projectile || !system || dt <= 0) return;
+
+    projectile.effectState ??= {};
+    projectile.effectState.periodicExplosionTimer = (projectile.effectState.periodicExplosionTimer ?? 0) + dt;
+    const interval = Math.max(0.1, effect.interval ?? 0.7);
+    while (projectile.effectState.periodicExplosionTimer + 1e-9 >= interval) {
+      projectile.effectState.periodicExplosionTimer -= interval;
+      this.#explode(effect, {
+        ...context,
+        x: projectile.x,
+        y: projectile.y,
+        target: null,
+        damage: context.damage ?? projectile.damage ?? 0,
+      });
+    }
+  }
+
+  static #zoneTrail(effect, context) {
+    const projectile = context?.projectile;
+    const system = context?.system;
+    const dt = context?.dt ?? 0;
+    if (!projectile || !system || dt <= 0) return;
+
+    projectile.effectState ??= {};
+    projectile.effectState.zoneTrailTimer = (projectile.effectState.zoneTrailTimer ?? 0) + dt;
+    const interval = Math.max(0.08, effect.interval ?? 0.45);
+    if (projectile.effectState.zoneTrailTimer + 1e-9 < interval) return;
+
+    const previousX = Number.isFinite(projectile.effectState.zoneTrailLastX) ? projectile.effectState.zoneTrailLastX : projectile.x;
+    const previousY = Number.isFinite(projectile.effectState.zoneTrailLastY) ? projectile.effectState.zoneTrailLastY : projectile.y;
+    const movedDistance = Math.hypot(projectile.x - previousX, projectile.y - previousY);
+    const minDistance = Math.max(0, effect.minDistance ?? 0);
+    if (movedDistance + 1e-9 < minDistance) return;
+
+    projectile.effectState.zoneTrailTimer = 0;
+    projectile.effectState.zoneTrailLastX = projectile.x;
+    projectile.effectState.zoneTrailLastY = projectile.y;
+
+    const duration = Math.max(0.15, effect.duration ?? effect.lifetime ?? 1.4);
+    const radius = Math.max(0.4, effect.radius ?? 1.35);
+    const damage = Math.max(0, effect.damage ?? Math.max(1, (projectile.damage ?? 1) * (effect.damageMultiplier ?? 0.3)));
+    spawnZoneInstance(system, context.instance, projectile.x, projectile.y, {
+      radius,
+      duration,
+      tickInterval: effect.tickInterval ?? 0.25,
+      damage,
+      color: effect.color ?? projectile.color ?? '#bca7ff',
+    });
+    system.spawnEffect?.({ type: 'burst', x: projectile.x, y: projectile.y, radius, ttl: 0.12, color: effect.color ?? projectile.color ?? '#bca7ff' });
   }
 }
 

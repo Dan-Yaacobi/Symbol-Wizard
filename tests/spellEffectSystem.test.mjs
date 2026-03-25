@@ -342,6 +342,63 @@ function testExplicitUnsupportedCombosAreRejected() {
   assert.equal(zoneEmit.valid, false);
 }
 
+function testOrbGravityPullAppliesContinuousForce() {
+  const enemy = makeEnemy(5, 0);
+  enemy.targetX = enemy.x;
+  enemy.targetY = enemy.y;
+  enemy.vx = 0;
+  enemy.vy = 0;
+  const system = makeSystem([enemy]);
+  const instance = buildInstance([{ type: 'gravity_pull', radius: 8, force: 4 }]);
+  const projectile = SpellEffectSystem.initializeProjectile({ x: 0, y: 0, dx: 1, dy: 0, damage: 8 }, instance);
+  SpellEffectSystem.applyEffects('onTick', { projectile, instance, system, dt: 0.1, x: projectile.x, y: projectile.y, damage: projectile.damage });
+  assert.ok(enemy.targetX < 5);
+}
+
+function testOrbPeriodicExplosionUsesInterval() {
+  const enemy = makeEnemy(0.6, 0);
+  const system = makeSystem([enemy]);
+  const instance = buildInstance([{ type: 'periodic_explosion', interval: 0.5, radius: 1.4, damage: 2 }]);
+  const projectile = SpellEffectSystem.initializeProjectile({ x: 0, y: 0, dx: 1, dy: 0, damage: 8 }, instance);
+  SpellEffectSystem.applyEffects('onTick', { projectile, instance, system, dt: 0.2, x: projectile.x, y: projectile.y, damage: projectile.damage });
+  assert.equal(system.damageEvents.length, 0);
+  SpellEffectSystem.applyEffects('onTick', { projectile, instance, system, dt: 0.3, x: projectile.x, y: projectile.y, damage: projectile.damage });
+  assert.equal(system.damageEvents.length, 1);
+  SpellEffectSystem.applyEffects('onTick', { projectile, instance, system, dt: 0.1, x: projectile.x, y: projectile.y, damage: projectile.damage });
+  assert.equal(system.damageEvents.length, 1);
+}
+
+function testOrbZoneTrailSpawnsWithIntervalAndDistance() {
+  const system = makeSystem();
+  const instance = buildInstance([{ type: 'zone_trail', interval: 0.4, minDistance: 0.5, radius: 1.2, duration: 1 }]);
+  const projectile = SpellEffectSystem.initializeProjectile({ x: 0, y: 0, dx: 1, dy: 0, damage: 8 }, instance);
+  SpellEffectSystem.applyEffects('onTick', { projectile, instance, system, dt: 0.4, x: projectile.x, y: projectile.y, damage: projectile.damage });
+  assert.equal(system.activeSpellInstances.length, 0);
+  projectile.x = 0.7;
+  SpellEffectSystem.applyEffects('onTick', { projectile, instance, system, dt: 0.4, x: projectile.x, y: projectile.y, damage: projectile.damage });
+  assert.equal(system.activeSpellInstances.length, 1);
+  SpellEffectSystem.applyEffects('onTick', { projectile, instance, system, dt: 0.1, x: projectile.x, y: projectile.y, damage: projectile.damage });
+  assert.equal(system.activeSpellInstances.length, 1);
+}
+
+function testOrbAugmentationsStackTogether() {
+  const enemy = makeEnemy(1, 0);
+  enemy.targetX = enemy.x;
+  enemy.targetY = enemy.y;
+  const system = makeSystem([enemy]);
+  const instance = buildInstance([
+    { type: 'gravity_pull', radius: 3.5, force: 2.8 },
+    { type: 'periodic_explosion', interval: 0.5, radius: 1.5, damage: 2 },
+    { type: 'zone_trail', interval: 0.5, minDistance: 0.25, radius: 1.1, duration: 1 },
+  ]);
+  const projectile = SpellEffectSystem.initializeProjectile({ x: 0, y: 0, dx: 1, dy: 0, damage: 8 }, instance);
+  projectile.x = 0.4;
+  SpellEffectSystem.applyEffects('onTick', { projectile, instance, system, dt: 0.5, x: projectile.x, y: projectile.y, damage: projectile.damage });
+  assert.ok(enemy.targetX < 1);
+  assert.equal(system.damageEvents.length, 1);
+  assert.equal(system.activeSpellInstances.length, 1);
+}
+
 function run() {
   testPierceCountDecrements();
   testSplitDepthProtection();
@@ -356,6 +413,10 @@ function run() {
   testBeamEmitProjectilesAugmentsInsteadOfReplacing();
   testZoneZoneOnHitCanCascadeWithDepthCap();
   testExplicitUnsupportedCombosAreRejected();
+  testOrbGravityPullAppliesContinuousForce();
+  testOrbPeriodicExplosionUsesInterval();
+  testOrbZoneTrailSpawnsWithIntervalAndDistance();
+  testOrbAugmentationsStackTogether();
   console.log('Spell effect system tests passed.');
 }
 
