@@ -106,6 +106,12 @@ function buildParameters(recipe, finalStats, element) {
     parameters.hitRadius = finalStats.hitRadius;
   }
 
+  if (recipe.behavior === 'blink') {
+    parameters.range = finalStats.range;
+    parameters.cooldown = finalStats.cooldown;
+    parameters.manaCost = finalStats.manaCost;
+  }
+
   const statusEffect = getRecipeGuaranteedEffects(recipe, element).find((effect) => effect.type === 'status');
   if (statusEffect?.statusType) {
     parameters.statusType = statusEffect.statusType;
