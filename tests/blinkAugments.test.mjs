@@ -187,6 +187,46 @@ function testBlinkCanBypassThinObstacleWhenSpaceExists() {
   assert.equal(result.ok, true);
   assert.ok(player.x > 20.5, `expected to pass thin obstacle, got ${player.x}`);
 }
+
+function testBlinkUsesUnifiedOccupancyChecksForBlockingObjects() {
+  const spell = {
+    ...SpellRegistry.blink,
+    parameters: {
+      ...SpellRegistry.blink.parameters,
+      range: 12,
+      minimumRange: 6,
+      blinkStepDistance: 0.1,
+    },
+  };
+
+  const house = { x: 16, y: 10, radius: 1.8 };
+  const system = {
+    enemies: [],
+    activeSpellInstances: [],
+    isWalkable: () => true,
+    canOccupyPosition(entity, x, y) {
+      if (!Number.isFinite(entity?.radius)) return true;
+      const minDistance = entity.radius + house.radius;
+      return Math.hypot(x - house.x, y - house.y) >= minDistance;
+    },
+    spawnEffect() {},
+  };
+  const player = { x: 10, y: 10, radius: 0.8 };
+
+  const result = castSpell(spell, {
+    player,
+    origin: player,
+    system,
+    activeSpellInstances: system.activeSpellInstances,
+    targetPosition: { x: 25, y: 10 },
+  });
+
+  assert.equal(result.ok, true);
+  const distanceToHouse = Math.hypot(player.x - house.x, player.y - house.y);
+  assert.ok(distanceToHouse >= player.radius + house.radius, `expected no overlap with house, got distance ${distanceToHouse}`);
+  assert.ok(player.x > 13, `expected to advance close to house, got ${player.x}`);
+}
+
 function testDoubleBlinkDefersCooldownUntilSecondCast() {
   const { system, player } = createSystemHarness();
   const blinkWithDouble = {
@@ -254,6 +294,7 @@ function run() {
   testThunderAndShadowBlinkApplyEffects();
   testBlinkStopsAtLastValidPositionWhenBlocked();
   testBlinkCanBypassThinObstacleWhenSpaceExists();
+  testBlinkUsesUnifiedOccupancyChecksForBlockingObjects();
   testDoubleBlinkDefersCooldownUntilSecondCast();
   testBlinkSupportsStackedAugmentsTogether();
   console.log('blinkAugments.test: ok');

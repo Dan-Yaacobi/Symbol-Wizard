@@ -73,6 +73,10 @@ function isTileWalkable(system, x, y) {
 }
 
 function canOccupyBlinkPosition(system, origin, x, y) {
+  if (typeof system?.canOccupyPosition === 'function') {
+    return Boolean(system.canOccupyPosition(origin, x, y));
+  }
+
   if (!isTileWalkable(system, x, y)) return false;
 
   // AbilitySystem#isWalkable only probes a single tile. For blink we need occupancy validation.
@@ -191,8 +195,8 @@ export function executeBehavior(instance, context) {
   const dirY = targetDy / targetDistance;
   const desiredDistance = Math.max(minRange, Math.min(maxRange, targetDistance));
   const stepDistance = Number.isFinite(instance.parameters?.blinkStepDistance)
-    ? Math.max(0.05, instance.parameters.blinkStepDistance)
-    : 0.25;
+    ? Math.max(0.02, instance.parameters.blinkStepDistance)
+    : 0.1;
 
   const destination = resolvePathConstrainedDestination({
     system,
