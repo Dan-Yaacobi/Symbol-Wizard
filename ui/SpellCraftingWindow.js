@@ -1,4 +1,5 @@
 import { getItemName } from '../data/itemCatalog.js';
+import { getRecipeGuaranteedEffects, SPELL_CRAFT_PROFILES } from '../data/spellCraftRecipes.js';
 import { getUnlockedSpellCraftRecipes, craftRecipeSpell, getRecipeCraftingState } from '../systems/spells/SpellCrafting.js';
 
 function toLabel(value) {
@@ -13,26 +14,120 @@ function formatStatValue(value) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.00$/, '');
 }
 
-function buildStatMarkup(label, baseValue, finalValue) {
-  const deltaClass = finalValue > baseValue ? 'positive' : (finalValue < baseValue ? 'negative' : 'neutral');
-  return `
-    <li class="craft-stat-row ${deltaClass}">
-      <span>${label}</span>
-      <strong>${formatStatValue(baseValue)} → ${formatStatValue(finalValue)}</strong>
-    </li>
-  `;
-}
-
-function effectMarkup(effect) {
-  const rarity = effect.rarity ? `<span class="craft-tag craft-tag--rarity">${toLabel(effect.rarity)}</span>` : '';
-  return `<li><span>${effect.label ?? toLabel(effect.type)}</span>${rarity}</li>`;
-}
-
 function ingredientMarkup(ingredient) {
   return `
     <li class="craft-ingredient-row ${ingredient.hasEnough ? 'ready' : 'missing'}">
       <span>${getItemName(ingredient.itemId)}</span>
       <strong>${ingredient.owned}/${ingredient.amount}</strong>
+    </li>
+  `;
+}
+
+function getBehaviorLabel(behavior) {
+  switch (behavior) {
+    case 'projectile': return 'Bolt';
+    case 'beam': return 'Beam';
+    case 'orbit':
+    case 'zone':
+    case 'nova': return 'Orb';
+    case 'chain': return 'Chain';
+    case 'blink': return 'Blink';
+    default: return toLabel(behavior);
+  }
+}
+
+function getBehaviorGlyph(behavior) {
+  switch (behavior) {
+    case 'projectile': return '➤';
+    case 'beam': return '┃';
+    case 'orbit':
+    case 'zone':
+    case 'nova': return '◉';
+    case 'chain': return 'ϟ';
+    case 'blink': return '✦';
+    default: return '✧';
+  }
+}
+
+function getElementColor(element) {
+  switch (element) {
+    case 'fire': return '#ff9f66';
+    case 'frost': return '#bfe8ff';
+    case 'lightning': return '#ffe76a';
+    case 'poison': return '#8ed96f';
+    case 'arcane':
+    default:
+      return '#b296ff';
+  }
+}
+
+function augmentToPrefix(label) {
+  if (!label) return '';
+  const value = label.toLowerCase();
+  if (value.includes('shock') || value.includes('lightning') || value.includes('static')) return 'Chain';
+  if (value.includes('shadow')) return 'Shadow';
+  if (value.includes('explode') || value.includes('burst')) return 'Explosive';
+  if (value.includes('burn') || value.includes('cinder')) return 'Scorching';
+  if (value.includes('slow') || value.includes('freeze')) return 'Frozen';
+  return toLabel(label).split(' ')[0];
+}
+
+function getEffectPool(recipe) {
+  return ['common', 'uncommon', 'rare'].flatMap((rarity) =>
+    (recipe?.effectPool?.[rarity] ?? []).map((effect) => ({ ...effect, rarity })),
+  );
+}
+
+function getPrimaryPreviewAugment(recipe) {
+  const effects = getEffectPool(recipe).filter((effect) => Number.isFinite(effect.weight) || effect.label);
+  if (!effects.length) return null;
+  return effects.sort((a, b) => (b.weight ?? 1) - (a.weight ?? 1))[0] ?? null;
+}
+
+function getMidpointStats(recipe) {
+  const stats = {};
+  for (const [key, [min, max]] of Object.entries(recipe?.statRanges ?? {})) {
+    stats[key] = (min + max) / 2;
+  }
+  return stats;
+}
+
+function buildComposedName({ recipe, element, keyAugment }) {
+  const behaviorLabel = getBehaviorLabel(recipe?.behavior);
+  const elementLabel = toLabel(element || recipe?.validElements?.[0] || 'Arcane');
+  const augmentPrefix = augmentToPrefix(keyAugment?.label);
+  return `${augmentPrefix ? `${augmentPrefix} ` : ''}${elementLabel} ${behaviorLabel}`.replace(/\s+/g, ' ').trim();
+}
+
+function buildPreviewData({ recipe, element, lastCraftedSpell }) {
+  const selectedElement = element || recipe?.validElements?.[0] || '';
+  const guaranteedEffects = getRecipeGuaranteedEffects(recipe, selectedElement);
+  const keyAugment = lastCraftedSpell?.bonusEffects?.[0] ?? guaranteedEffects[0] ?? getPrimaryPreviewAugment(recipe);
+
+  const baseStats = getMidpointStats(recipe);
+  const efficientModifiers = SPELL_CRAFT_PROFILES.efficient?.modifiers ?? {};
+  const estimatedStats = Object.fromEntries(
+    Object.entries(baseStats).map(([key, value]) => [key, value * (efficientModifiers[key] ?? 1)]),
+  );
+
+  return {
+    selectedElement,
+    guaranteedEffects,
+    keyAugment,
+    composedName: buildComposedName({ recipe, element: selectedElement, keyAugment }),
+    iconGlyph: getBehaviorGlyph(recipe?.behavior),
+    iconColor: getElementColor(selectedElement),
+    behaviorSummary: recipe?.craftingSummary ?? 'Configure behavior, element, and augment details.',
+    estimatedStats,
+    rolledStats: lastCraftedSpell?.finalStats ?? null,
+  };
+}
+
+function buildStatRow(label, estimated, rolled) {
+  return `
+    <li class="craft-stat-row">
+      <span>${label}</span>
+      <strong>${formatStatValue(estimated)}${Number.isFinite(rolled) ? ` <em>(${formatStatValue(rolled)} rolled)</em>` : ''}</strong>
     </li>
   `;
 }
@@ -68,7 +163,7 @@ export class SpellCraftingWindow {
     if (!this.recipes.some((recipe) => recipe.id === this.selectedRecipeId)) {
       this.selectedRecipeId = this.recipes[0]?.id ?? '';
     }
-    const recipe = this.recipes.find((recipe) => recipe.id === this.selectedRecipeId) ?? null;
+    const recipe = this.recipes.find((entry) => entry.id === this.selectedRecipeId) ?? null;
     if (!recipe) {
       this.selectedElement = '';
       return null;
@@ -192,16 +287,16 @@ export class SpellCraftingWindow {
     const selectedElement = this.getSelectedElement();
     const craftingState = this.getCraftingState();
     const canCraft = Boolean(recipe) && craftingState.canCraft && this.craftState !== 'charging';
-    const result = this.lastCraftedSpell;
-    const identityStats = result
-      ? Object.entries(result.finalStats).map(([key, finalValue]) => buildStatMarkup(toLabel(key), result.baseStats[key], finalValue)).join('')
-      : '<li class="craft-stat-row neutral"><span>No craft rolled yet</span><strong>Craft to reveal stats</strong></li>';
+    const scopedLastResult = this.lastCraftedSpell?.recipeId === recipe?.id && this.lastCraftedSpell?.element === selectedElement
+      ? this.lastCraftedSpell
+      : null;
+    const preview = buildPreviewData({ recipe, element: selectedElement, lastCraftedSpell: scopedLastResult });
 
     const recipeMarkup = this.recipes.length > 0
       ? this.recipes.map((entry) => `
         <button type="button" class="craft-option-button ${entry.id === this.selectedRecipeId ? 'selected' : ''}" data-recipe="${entry.id}">
-          <span>${entry.name}</span>
-          <small>${toLabel(entry.behavior)}</small>
+          <span>${toLabel(entry.name)}</span>
+          <small>${getBehaviorLabel(entry.behavior)}</small>
         </button>
       `).join('')
       : '<p class="craft-muted">No recipes unlocked yet.</p>';
@@ -209,82 +304,99 @@ export class SpellCraftingWindow {
     const elementMarkup = (recipe?.validElements ?? []).map((element) => `
       <button type="button" class="craft-option-button ${element === selectedElement ? 'selected' : ''}" data-element="${element}">
         <span>${toLabel(element)}</span>
-        <small>${recipe.validElements.length === 1 ? 'Fixed' : 'Valid'}</small>
+        <small>${recipe.validElements.length === 1 ? 'Fixed' : 'Selectable'}</small>
       </button>
     `).join('');
+
+    const augmentList = [
+      ...preview.guaranteedEffects.map((effect) => ({ label: effect.label ?? toLabel(effect.type), detail: 'Guaranteed identity augment', rarity: 'guaranteed' })),
+      ...getEffectPool(recipe).map((effect) => ({
+        label: effect.label ?? toLabel(effect.type),
+        detail: `${toLabel(effect.rarity)} roll • ${effect.type}`,
+        rarity: effect.rarity,
+      })),
+    ];
+
+    const augmentMarkup = augmentList.length
+      ? `<ul class="craft-augment-list">${augmentList.map((augment) => `
+          <li class="craft-augment-item craft-augment-item--${augment.rarity}" title="${augment.detail}">
+            <span>${augment.label}</span>
+            <small>${augment.detail}</small>
+          </li>
+        `).join('')}</ul>`
+      : '<p class="craft-muted">No augments available.</p>';
 
     const ingredientRows = craftingState.ingredients.length > 0
       ? craftingState.ingredients.map(ingredientMarkup).join('')
       : '<li class="craft-ingredient-row missing"><span>No ingredient list</span><strong>—</strong></li>';
     const missingIngredients = craftingState.ingredients.filter((ingredient) => !ingredient.hasEnough);
     const ingredientSummary = missingIngredients.length === 0
-      ? 'Can craft now.'
+      ? 'All required materials are available.'
       : `Missing: ${missingIngredients.map((ingredient) => `${getItemName(ingredient.itemId)} (${ingredient.amount - ingredient.owned})`).join(', ')}`;
 
-    const guaranteedEffects = result?.guaranteedEffects?.map(effectMarkup).join('') ?? '<li><span>Recipe identity effect will appear here.</span></li>';
-    const bonusEffects = result?.bonusEffects?.length
-      ? result.bonusEffects.map(effectMarkup).join('')
-      : '<li><span>No bonus effects rolled.</span></li>';
+    const statsMarkup = [
+      buildStatRow('Damage', preview.estimatedStats.damage, preview.rolledStats?.damage),
+      buildStatRow('Cooldown', preview.estimatedStats.cooldown, preview.rolledStats?.cooldown),
+      buildStatRow('Mana Cost', preview.estimatedStats.manaCost, preview.rolledStats?.manaCost),
+      buildStatRow('Range', preview.estimatedStats.range ?? ((preview.estimatedStats.speed ?? 0) * (preview.estimatedStats.ttl ?? 0)) / 5, preview.rolledStats?.range),
+      ...Object.entries(preview.estimatedStats)
+        .filter(([key]) => !['damage', 'cooldown', 'manaCost', 'range', 'speed', 'ttl'].includes(key))
+        .map(([key, value]) => buildStatRow(toLabel(key), value, preview.rolledStats?.[key])),
+    ].join('');
+
+    const actionLabel = this.craftState === 'charging' ? 'CRAFTING…' : 'CRAFT SPELL';
+    const actionHint = canCraft ? 'Ready to craft.' : ingredientSummary;
 
     this.el.innerHTML = `
       <header class="spell-crafting-header">
         <h3>Spell Crafting</h3>
-        <p>C to close • Fixed recipes with required items</p>
+        <p>C to close • Behavior + element + augment composition with live preview</p>
       </header>
-      <div class="spell-crafting-layout spell-crafting-layout--overhauled ${this.craftState}">
-        <section class="craft-section">
-          <h4>1. Unlocked Recipes</h4>
-          <p class="craft-section-copy">Only unlocked recipes appear here for now.</p>
-          <div class="craft-option-list">${recipeMarkup}</div>
-        </section>
-        <section class="craft-section">
-          <h4>2. Elements & Ingredients</h4>
-          <p class="craft-section-copy">Behavior and element are recipe-driven; materials gate the craft.</p>
-          <div class="craft-option-list">${elementMarkup || '<p class="craft-muted">No elements available.</p>'}</div>
-          <ul class="craft-ingredient-list">${ingredientRows}</ul>
-          <p class="craft-recipe-status ${craftingState.canCraft ? 'ready' : 'missing'}">${ingredientSummary}</p>
-        </section>
-        <section class="craft-section craft-section--summary">
-          <h4>3. Craft Action</h4>
-          <div class="craft-result-banner ${this.craftState}">
-            <strong>${recipe?.name ?? 'No Recipe Selected'}</strong>
-            <span>${recipe?.craftingSummary ?? 'Unlock a recipe to begin.'}</span>
+      <div class="spell-crafting-layout ${this.craftState}">
+        <section class="craft-panel craft-panel--inputs">
+          <div class="craft-subsection">
+            <h4>Spell Type (Behavior)</h4>
+            <div class="craft-option-list">${recipeMarkup}</div>
           </div>
-          <button type="button" class="craft-button" ${canCraft ? '' : 'disabled'}>${this.craftState === 'charging' ? 'CRAFTING…' : 'CRAFT SPELL'}</button>
-          <p class="craft-feedback ${this.feedbackType}">${this.feedback || (recipe ? ingredientSummary : 'Unlock a recipe to start crafting.')}</p>
+          <div class="craft-subsection">
+            <h4>Element</h4>
+            <div class="craft-option-list">${elementMarkup || '<p class="craft-muted">No elements available.</p>'}</div>
+          </div>
+          <div class="craft-subsection">
+            <h4>Augments</h4>
+            ${augmentMarkup}
+          </div>
         </section>
-        <section class="craft-section craft-section--result">
-          <h4>4. Result Preview</h4>
-          <div class="craft-result-card ${result ? 'is-ready' : ''}">
-            <div class="craft-result-heading">
-              <div>
-                <p class="craft-result-label">Spell Identity</p>
-                <h5>${result?.name ?? recipe?.name ?? 'Awaiting Craft'}</h5>
-              </div>
-              <div class="craft-result-tags">
-                <span class="craft-tag">${toLabel(result?.recipeId ?? recipe?.id ?? 'recipe')}</span>
-                <span class="craft-tag">${toLabel(result?.element ?? (selectedElement || 'element'))}</span>
-                <span class="craft-tag">${result?.profile?.name ?? 'Profile Pending'}</span>
-              </div>
-            </div>
-            <div class="craft-result-grid">
-              <section>
-                <h6>Guaranteed Effects</h6>
-                <ul class="craft-effect-list">${guaranteedEffects}</ul>
-              </section>
-              <section>
-                <h6>Bonus Effects</h6>
-                <ul class="craft-effect-list">${bonusEffects}</ul>
-              </section>
-            </div>
-            <section>
-              <h6>Stat Roll Breakdown</h6>
-              <ul class="craft-stat-list">${identityStats}</ul>
-            </section>
-            <section class="craft-result-summary">
-              <h6>Roll Readout</h6>
-              <p>${result?.profile?.summary ?? 'The rolled profile summary will appear after crafting.'}</p>
-            </section>
+
+        <section class="craft-panel craft-panel--preview">
+          <p class="craft-result-label">Result Preview</p>
+          <h4>${preview.composedName || 'Awaiting Recipe'}</h4>
+          <div class="craft-live-icon" style="--element-color:${preview.iconColor}">
+            <span>${preview.iconGlyph}</span>
+            <em>${preview.keyAugment?.label ? preview.keyAugment.label[0].toUpperCase() : '•'}</em>
+          </div>
+          <p class="craft-preview-description">${preview.behaviorSummary}</p>
+          <div class="craft-result-tags">
+            <span class="craft-tag">${getBehaviorLabel(recipe?.behavior)}</span>
+            <span class="craft-tag">${toLabel(preview.selectedElement || 'Arcane')}</span>
+            <span class="craft-tag">${preview.keyAugment?.label ?? 'No key augment'}</span>
+          </div>
+        </section>
+
+        <section class="craft-panel craft-panel--stats">
+          <h4>Stats & Parameters</h4>
+          <ul class="craft-stat-list">${statsMarkup}</ul>
+        </section>
+
+        <section class="craft-panel craft-panel--action">
+          <div>
+            <h4>Materials</h4>
+            <ul class="craft-ingredient-list">${ingredientRows}</ul>
+            <p class="craft-recipe-status ${craftingState.canCraft ? 'ready' : 'missing'}">${actionHint}</p>
+          </div>
+          <div>
+            <button type="button" class="craft-button" ${canCraft ? '' : 'disabled'}>${actionLabel}</button>
+            <p class="craft-feedback ${this.feedbackType}">${this.feedback || actionHint}</p>
           </div>
         </section>
       </div>
@@ -292,15 +404,11 @@ export class SpellCraftingWindow {
 
     this.el.querySelectorAll('[data-recipe]').forEach((button) => {
       const recipeId = button.dataset.recipe ?? '';
-      button.addEventListener('mouseenter', () => this.selectRecipe(recipeId));
-      button.addEventListener('focus', () => this.selectRecipe(recipeId));
       button.addEventListener('click', () => this.selectRecipe(recipeId));
     });
 
     this.el.querySelectorAll('[data-element]').forEach((button) => {
       const element = button.dataset.element ?? '';
-      button.addEventListener('mouseenter', () => this.selectElement(element));
-      button.addEventListener('focus', () => this.selectElement(element));
       button.addEventListener('click', () => this.selectElement(element));
     });
 
