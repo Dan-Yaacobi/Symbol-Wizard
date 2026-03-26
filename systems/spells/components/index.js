@@ -8,6 +8,7 @@ import { pierceComponent } from './pierce.js';
 import { doubleBlinkComponent } from './double_blink.js';
 import { thunderBlinkComponent } from './thunder_blink.js';
 import { shadowBlinkComponent } from './shadow_blink.js';
+import { speedBoostAfterBlinkComponent } from './speed_boost_after_blink.js';
 
 const COMPONENTS = new Map([
   [explodeOnHitComponent.id, explodeOnHitComponent],
@@ -20,6 +21,7 @@ const COMPONENTS = new Map([
   [doubleBlinkComponent.id, doubleBlinkComponent],
   [thunderBlinkComponent.id, thunderBlinkComponent],
   [shadowBlinkComponent.id, shadowBlinkComponent],
+  [speedBoostAfterBlinkComponent.id, speedBoostAfterBlinkComponent],
 ]);
 export const ComponentRegistry = Object.freeze(Object.fromEntries(COMPONENTS));
 

@@ -240,6 +240,16 @@ export function executeBehavior(instance, context) {
 
   spawnShadowZone(instance, context, startX, startY);
 
+  if (instance.parameters?.speedBoostAfterBlink) {
+    const speedBoostDuration = Number.isFinite(instance.parameters?.blinkSpeedBoostDuration)
+      ? Math.max(0.2, instance.parameters.blinkSpeedBoostDuration)
+      : 1.6;
+    const speedBoostMultiplier = Number.isFinite(instance.parameters?.blinkSpeedBoostMultiplier)
+      ? Math.max(1, instance.parameters.blinkSpeedBoostMultiplier)
+      : 1.35;
+    system.applyTemporaryPlayerSpeedBoost?.(speedBoostMultiplier, speedBoostDuration);
+  }
+
   instance.state.cast = {
     originX: startX,
     originY: startY,

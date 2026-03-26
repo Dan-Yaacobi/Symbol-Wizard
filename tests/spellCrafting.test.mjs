@@ -266,7 +266,7 @@ function testBlinkCraftingRollsRangeManaCooldownAndBlinkAugments() {
   assert.ok(Number.isFinite(spell.parameters.range));
   assert.ok(Number.isFinite(spell.parameters.cooldown));
   assert.ok(Number.isFinite(spell.parameters.manaCost));
-  assert.ok(spell.bonusEffects.some((effect) => ['double_blink', 'thunder_blink', 'shadow_blink'].includes(effect.type)));
+  assert.ok(spell.bonusEffects.some((effect) => ['double_blink', 'thunder_blink', 'shadow_blink', 'speed_boost_after_blink'].includes(effect.type)));
 }
 
 function testBlinkCraftingCanRollThreeUniqueAugments() {

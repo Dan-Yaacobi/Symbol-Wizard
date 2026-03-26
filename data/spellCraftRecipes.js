@@ -422,6 +422,7 @@ export const SPELL_CRAFT_RECIPES = Object.freeze([
       rollCountWeights: { 0: 3, 1: 6, 2: 1, 3: 0.35 },
       common: [
         { type: 'double_blink', label: 'Double Blink', weight: 3 },
+        { type: 'speed_boost_after_blink', label: 'Afterimage Rush', weight: 2, duration: 1.6, speedMultiplier: 1.35 },
       ],
       uncommon: [
         { type: 'thunder_blink', label: 'Thunder Blink', weight: 2 },

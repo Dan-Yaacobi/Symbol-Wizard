@@ -67,6 +67,8 @@ function testThunderAndShadowBlinkApplyEffects() {
       shadowZoneTickInterval: 0.2,
       shadowZoneDamage: 2,
       thunderStunDuration: 1,
+      blinkSpeedBoostDuration: 1.2,
+      blinkSpeedBoostMultiplier: 1.3,
     },
   };
 
@@ -340,16 +342,44 @@ function testDoubleBlinkDefersCooldownUntilSecondCast() {
   assert.ok(system.getCooldownRemaining('blink') > 0);
 }
 
+
+function testSpeedBoostAfterBlinkAppliesImmediatelyAndExpires() {
+  const { system, player } = createSystemHarness();
+  const blinkWithSpeedBoost = {
+    ...SpellRegistry.blink,
+    components: ['speed_boost_after_blink'],
+    parameters: {
+      ...SpellRegistry.blink.parameters,
+      blinkSpeedBoostDuration: 1.4,
+      blinkSpeedBoostMultiplier: 1.4,
+    },
+  };
+  system.definitions.set('blink', blinkWithSpeedBoost);
+
+  assert.equal(player.moveSpeedMultiplier, undefined);
+  const cast = system.castSlot(0, { targetPosition: { x: 20, y: 10 } });
+  assert.equal(cast.ok, true);
+  assert.equal(player.moveSpeedMultiplier, 1.4);
+
+  system.tick(0.6, {});
+  assert.equal(player.moveSpeedMultiplier, 1.4);
+
+  system.tick(0.9, {});
+  assert.equal(player.moveSpeedMultiplier, 1);
+}
+
 function testBlinkSupportsStackedAugmentsTogether() {
   const { system, enemies } = createSystemHarness();
   const blinkStacked = {
     ...SpellRegistry.blink,
-    components: ['double_blink', 'thunder_blink', 'shadow_blink'],
+    components: ['double_blink', 'thunder_blink', 'shadow_blink', 'speed_boost_after_blink'],
     parameters: {
       ...SpellRegistry.blink.parameters,
       range: 12,
       minimumRange: 6,
       thunderStunDuration: 1,
+      blinkSpeedBoostDuration: 1.2,
+      blinkSpeedBoostMultiplier: 1.3,
     },
   };
   system.definitions.set('blink', blinkStacked);
@@ -359,6 +389,7 @@ function testBlinkSupportsStackedAugmentsTogether() {
   assert.equal(system.getCooldownRemaining('blink'), 0);
   assert.equal(enemies[0].statusEffects.has('stun'), true);
   assert.ok(system.activeSpellInstances.length > 0);
+  assert.equal(system.player.moveSpeedMultiplier, 1.3);
 
   const lightningTrailEffect = system.effects.find((effect) => effect?.type === 'lightning');
   assert.ok(Array.isArray(lightningTrailEffect?.points));
@@ -378,6 +409,7 @@ function run() {
   testBlinkUsesUnifiedOccupancyChecksForBlockingObjects();
   testBlinkScansPastLongInvalidSegmentToReachLaterValidSpace();
   testDoubleBlinkDefersCooldownUntilSecondCast();
+  testSpeedBoostAfterBlinkAppliesImmediatelyAndExpires();
   testBlinkSupportsStackedAugmentsTogether();
   console.log('blinkAugments.test: ok');
 }

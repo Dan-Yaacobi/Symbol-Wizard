@@ -872,7 +872,9 @@ function handlePlayer(dt) {
   const accel = runtimeConfig.get('player.acceleration');
   const decel = runtimeConfig.get('player.deceleration');
   const movementPolicy = player.activeAction?.movementPolicy;
-  const movementMultiplier = movementPolicy === 'slow' ? 0.15 : 1;
+  const policyMovementMultiplier = movementPolicy === 'slow' ? 0.15 : 1;
+  const blinkBoostMultiplier = Number.isFinite(player.moveSpeedMultiplier) ? Math.max(1, player.moveSpeedMultiplier) : 1;
+  const movementMultiplier = policyMovementMultiplier * blinkBoostMultiplier;
   const targetVx = movementPolicy === 'blocked' ? 0 : moveX * targetSpeed * movementMultiplier;
   const targetVy = movementPolicy === 'blocked' ? 0 : moveY * targetSpeed * movementMultiplier;
   const blend = Math.min(1, ((Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01) ? accel : decel) * dt);
