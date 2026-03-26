@@ -7,9 +7,11 @@ export class SpellbookWindow {
     this.visible = false;
     this.pendingEquipSlot = 0;
     this.dragPayload = null;
+    this.currentPage = 0;
+    this.spellsPerPage = 8;
 
     this.el = document.createElement('section');
-    this.el.className = 'spellbook-window hidden';
+    this.el.className = 'spellbook-window spellbook-window--spellbook hidden';
     this.root.appendChild(this.el);
 
     window.addEventListener('keydown', (event) => this.onWindowKeyDown(event));
@@ -20,7 +22,25 @@ export class SpellbookWindow {
   selectSpell(spellId, { render = true } = {}) {
     if (!spellId || this.selectedSpellId === spellId) return;
     this.selectedSpellId = spellId;
+    const spells = this.abilitySystem.getAbilities();
+    const selectedIndex = spells.findIndex((spell) => spell.id === spellId);
+    if (selectedIndex >= 0) {
+      this.currentPage = Math.floor(selectedIndex / this.spellsPerPage);
+    }
     if (render) this.render();
+  }
+
+  setPage(pageIndex) {
+    const spells = this.abilitySystem.getAbilities();
+    const totalPages = this.getTotalPages(spells);
+    const clampedPage = Math.min(Math.max(0, pageIndex), totalPages - 1);
+    if (clampedPage === this.currentPage) return;
+    this.currentPage = clampedPage;
+    const pageSpells = this.getPageSpells(spells, this.currentPage);
+    if (pageSpells.length && !pageSpells.some((spell) => spell.id === this.selectedSpellId)) {
+      this.selectedSpellId = pageSpells[0].id;
+    }
+    this.render();
   }
 
   setPendingEquipSlot(slotIndex, { equip = false } = {}) {
@@ -97,6 +117,37 @@ export class SpellbookWindow {
     this.selectSpell(spells[nextIndex].id);
   }
 
+  getTotalPages(spells) {
+    return Math.max(1, Math.ceil(spells.length / this.spellsPerPage));
+  }
+
+  getPageSpells(spells, pageIndex) {
+    const start = pageIndex * this.spellsPerPage;
+    return spells.slice(start, start + this.spellsPerPage);
+  }
+
+  getSpellVisual(spell) {
+    const iconByBehavior = {
+      projectile: '➵',
+      beam: '⌁',
+      zone: '◎',
+      aura: '✹',
+      blink: '➠',
+    };
+
+    let icon = iconByBehavior[spell?.behavior] ?? spell?.icon ?? '✦';
+    if ((spell?.components ?? []).includes('explode_on_hit')) icon = '✸';
+    if ((spell?.components ?? []).includes('chain_on_hit')) icon = 'ϟ';
+    if ((spell?.components ?? []).includes('apply_status_on_hit')) icon = '☄';
+    if (spell?.id === 'time-freeze') icon = '⌛';
+
+    const descriptor = Number.isFinite(spell?.damage)
+      ? `${spell.damage} dmg`
+      : (Number.isFinite(spell?.cooldown) ? `${spell.cooldown}s cd` : (spell?.behavior ?? 'utility'));
+
+    return { icon, descriptor };
+  }
+
   equipSelectedSpell(slotIndex) {
     if (!this.selectedSpellId) return;
     this.abilitySystem.assignAbilityToSlot(slotIndex, this.selectedSpellId);
@@ -105,36 +156,63 @@ export class SpellbookWindow {
 
   render() {
     const spells = this.abilitySystem.getAbilities();
+    const totalPages = this.getTotalPages(spells);
+    this.currentPage = Math.min(Math.max(0, this.currentPage), totalPages - 1);
 
     if (!this.selectedSpellId || !spells.some((spell) => spell.id === this.selectedSpellId)) {
       this.selectedSpellId = spells[0]?.id ?? null;
+      this.currentPage = 0;
     }
 
     const selected = spells.find((spell) => spell.id === this.selectedSpellId) ?? null;
+    const pageSpells = this.getPageSpells(spells, this.currentPage);
+    const leftPageSpells = pageSpells.slice(0, 4);
+    const rightPageSpells = pageSpells.slice(4, 8);
 
     this.el.innerHTML = `
       <header class="spellbook-header">
         <h3>Spellbook</h3>
         <p>B / Esc to close • Arrows to navigate • Enter to equip</p>
+        <div class="spellbook-pagination">
+          <button type="button" class="spellbook-page-nav spellbook-page-nav--prev" ${this.currentPage === 0 ? 'disabled' : ''}>← Previous</button>
+          <span class="spellbook-page-indicator">Page ${this.currentPage + 1} / ${totalPages}</span>
+          <button type="button" class="spellbook-page-nav spellbook-page-nav--next" ${this.currentPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+        </div>
       </header>
       <div class="spellbook-layout">
-        <aside class="spellbook-page spellbook-page--left"></aside>
-        <section class="spellbook-divider"></section>
-        <article class="spellbook-page spellbook-page--right"></article>
+        <section class="spellbook-book">
+          <aside class="spellbook-page spellbook-page--left"></aside>
+          <section class="spellbook-divider"></section>
+          <article class="spellbook-page spellbook-page--right"></article>
+        </section>
+        <article class="spellbook-page spellbook-page--details"></article>
       </div>
       <footer class="spellbook-slots"></footer>
     `;
 
     const left = this.el.querySelector('.spellbook-page--left');
     const right = this.el.querySelector('.spellbook-page--right');
+    const detailsPanel = this.el.querySelector('.spellbook-page--details');
     const slots = this.el.querySelector('.spellbook-slots');
+    const prevPageButton = this.el.querySelector('.spellbook-page-nav--prev');
+    const nextPageButton = this.el.querySelector('.spellbook-page-nav--next');
 
-    for (const spell of spells) {
+    prevPageButton?.addEventListener('click', () => this.setPage(this.currentPage - 1));
+    nextPageButton?.addEventListener('click', () => this.setPage(this.currentPage + 1));
+
+    const renderSpellButton = (spell) => {
       const item = document.createElement('button');
       item.type = 'button';
       item.className = 'spellbook-list-item';
       if (spell.id === this.selectedSpellId) item.classList.add('selected');
-      item.innerHTML = `<span class="spell-icon">${spell.icon ?? '?'}</span><span>${spell.name}</span>`;
+      const visual = this.getSpellVisual(spell);
+      item.innerHTML = `
+        <span class="spell-icon">${visual.icon}</span>
+        <span class="spellbook-list-copy">
+          <strong>${spell.name}</strong>
+          <small>${visual.descriptor}</small>
+        </span>
+      `;
       item.draggable = true;
 
       item.addEventListener('mouseenter', () => {
@@ -154,12 +232,24 @@ export class SpellbookWindow {
         event.dataTransfer?.setData('text/plain', spell.id);
         this.dragPayload = spell.id;
       });
+      return item;
+    };
 
-      left.appendChild(item);
+    for (const spell of leftPageSpells) {
+      left.appendChild(renderSpellButton(spell));
+    }
+
+    for (const spell of rightPageSpells) {
+      right.appendChild(renderSpellButton(spell));
+    }
+
+    if (!leftPageSpells.length) {
+      left.innerHTML = '<p>No spells unlocked.</p>';
+      right.innerHTML = '';
     }
 
     if (!selected) {
-      right.innerHTML = '<p>No spells unlocked.</p>';
+      detailsPanel.innerHTML = '<p>No spells unlocked.</p>';
     } else {
       const stats = [];
       const effectiveRadius = Number.isFinite(selected?.parameters?.radius)
@@ -181,8 +271,9 @@ export class SpellbookWindow {
       const effectSummary = selected.crafted
         ? `Guaranteed: ${(selected.guaranteedEffects ?? []).map((effect) => effect.label).join(', ') || 'None'} • Bonus: ${(selected.bonusEffects ?? []).map((effect) => effect.label).join(', ') || 'None'}`
         : '';
-      right.innerHTML = `
-        <div class="spellbook-details-icon">${selected.icon ?? '?'}</div>
+      const selectedVisual = this.getSpellVisual(selected);
+      detailsPanel.innerHTML = `
+        <div class="spellbook-details-icon">${selectedVisual.icon}</div>
         <h4>${selected.name}</h4>
         <p>${selected.description ?? ''}</p>
         ${effectSummary ? `<p class="spellbook-crafted-summary">${effectSummary}</p>` : ''}
