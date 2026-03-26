@@ -8,7 +8,7 @@ export class SpellbookWindow {
     this.pendingEquipSlot = 0;
     this.dragPayload = null;
     this.currentPage = 0;
-    this.spellsPerPage = 8;
+    this.spellsPerPage = 16;
 
     this.el = document.createElement('section');
     this.el.className = 'spellbook-window spellbook-window--spellbook hidden';
@@ -44,7 +44,7 @@ export class SpellbookWindow {
   }
 
   setPendingEquipSlot(slotIndex, { equip = false } = {}) {
-    if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 3) return;
+    if (!Number.isInteger(slotIndex) || slotIndex < 0 || slotIndex > 2) return;
     if (this.pendingEquipSlot === slotIndex && !equip) return;
     this.pendingEquipSlot = slotIndex;
     if (equip) this.equipSelectedSpell(slotIndex);
@@ -79,14 +79,7 @@ export class SpellbookWindow {
       return;
     }
 
-    if (key === 'enter') {
-      this.equipSelectedSpell(this.pendingEquipSlot);
-      this.pendingEquipSlot = (this.pendingEquipSlot + 1) % 4;
-      event.preventDefault();
-      return;
-    }
-
-    if (['1', '2', '3', '4'].includes(key)) {
+    if (['1', '2', '3'].includes(key)) {
       this.pendingEquipSlot = Number(key) - 1;
       this.equipSelectedSpell(this.pendingEquipSlot);
       event.preventDefault();
@@ -166,13 +159,13 @@ export class SpellbookWindow {
 
     const selected = spells.find((spell) => spell.id === this.selectedSpellId) ?? null;
     const pageSpells = this.getPageSpells(spells, this.currentPage);
-    const leftPageSpells = pageSpells.slice(0, 4);
-    const rightPageSpells = pageSpells.slice(4, 8);
+    const leftPageSpells = pageSpells.slice(0, 8);
+    const rightPageSpells = pageSpells.slice(8, 16);
 
     this.el.innerHTML = `
       <header class="spellbook-header">
         <h3>Spellbook</h3>
-        <p>B / Esc to close • Arrows to navigate • Enter to equip</p>
+        <p>B / Esc to close • Arrows to navigate • Drag to equip</p>
         <div class="spellbook-pagination">
           <button type="button" class="spellbook-page-nav spellbook-page-nav--prev" ${this.currentPage === 0 ? 'disabled' : ''}>← Previous</button>
           <span class="spellbook-page-indicator">Page ${this.currentPage + 1} / ${totalPages}</span>
@@ -281,7 +274,7 @@ export class SpellbookWindow {
       `;
     }
 
-    for (let i = 0; i < 4; i += 1) {
+    for (let i = 0; i < 3; i += 1) {
       const equipped = this.abilitySystem.getAbilityBySlot(i);
       const slot = document.createElement('button');
       slot.type = 'button';

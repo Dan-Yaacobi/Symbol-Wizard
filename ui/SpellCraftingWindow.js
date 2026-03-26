@@ -147,6 +147,24 @@ function buildStatRow(label, estimated, rolled) {
   `;
 }
 
+function getCraftQualityTier(craftedSpell) {
+  const rarities = (craftedSpell?.bonusEffects ?? []).map((effect) => effect?.rarity);
+  const rareCount = rarities.filter((rarity) => rarity === 'rare').length;
+  const uncommonCount = rarities.filter((rarity) => rarity === 'uncommon').length;
+  const bonusCount = rarities.length;
+
+  if (rareCount > 0) {
+    return { tier: 'very-rare', label: 'Very rare roll!' };
+  }
+  if (uncommonCount > 0 || bonusCount >= 2) {
+    return { tier: 'high', label: 'High quality roll!' };
+  }
+  if (bonusCount === 1) {
+    return { tier: 'medium', label: 'Solid roll.' };
+  }
+  return { tier: 'low', label: 'Basic roll.' };
+}
+
 export class SpellCraftingWindow {
   constructor({ root, spellbook, player, onCrafted }) {
     this.root = root;
@@ -159,6 +177,8 @@ export class SpellCraftingWindow {
     this.craftState = 'idle';
     this.activeCraftToken = 0;
     this.lastCraftedSpell = null;
+    this.craftProgress = 0;
+    this.craftRevealTier = '';
 
     this.recipes = this.getUnlockedRecipes();
     this.selectedRecipeId = '';
@@ -224,6 +244,12 @@ export class SpellCraftingWindow {
     this.feedbackType = type;
   }
 
+  updateCraftProgress(nextValue) {
+    this.craftProgress = Math.max(0, Math.min(1, nextValue));
+    const fill = this.el.querySelector('.craft-progress-fill');
+    if (fill) fill.style.width = `${Math.round(this.craftProgress * 100)}%`;
+  }
+
   selectRecipe(recipeId) {
     const recipe = this.recipes.find((entry) => entry.id === recipeId);
     if (!recipe) return;
@@ -259,10 +285,29 @@ export class SpellCraftingWindow {
 
     const craftToken = ++this.activeCraftToken;
     this.craftState = 'charging';
+    this.craftRevealTier = '';
+    this.updateCraftProgress(0);
     this.setFeedback(`Channeling ${recipe.name}...`, 'info');
     this.render();
 
-    await new Promise((resolve) => window.setTimeout(resolve, 220));
+    const craftDurationMs = 600 + Math.floor(Math.random() * 500);
+    const craftStart = performance.now();
+    await new Promise((resolve) => {
+      const timer = window.setInterval(() => {
+        if (craftToken !== this.activeCraftToken) {
+          window.clearInterval(timer);
+          resolve();
+          return;
+        }
+        const elapsed = performance.now() - craftStart;
+        this.updateCraftProgress(elapsed / craftDurationMs);
+        if (elapsed >= craftDurationMs) {
+          this.updateCraftProgress(1);
+          window.clearInterval(timer);
+          resolve();
+        }
+      }, 40);
+    });
     if (craftToken !== this.activeCraftToken) return;
 
     try {
@@ -275,19 +320,25 @@ export class SpellCraftingWindow {
 
       this.lastCraftedSpell = craftedSpell;
       this.craftState = 'revealed';
-      this.setFeedback(`Crafted ${craftedSpell.name}. Ingredients consumed.`, 'success');
+      const quality = getCraftQualityTier(craftedSpell);
+      this.craftRevealTier = quality.tier;
+      this.setFeedback(`Crafted ${craftedSpell.name}. ${quality.label}`, 'success');
       this.spellbook?.render?.();
       this.render();
 
       window.setTimeout(() => {
         if (this.craftState === 'revealed') {
           this.craftState = 'idle';
+          this.craftRevealTier = '';
+          this.updateCraftProgress(0);
           this.render();
         }
       }, 520);
     } catch (error) {
       console.info('[SpellCraftingWindow] Craft failed.', error);
       this.craftState = 'idle';
+      this.craftRevealTier = '';
+      this.updateCraftProgress(0);
       this.setFeedback(error instanceof Error ? error.message : 'Craft failed.', 'error');
       this.render();
     }
@@ -355,7 +406,7 @@ export class SpellCraftingWindow {
         <h3>Spell Crafting</h3>
         <p>C to close • Choose element, then spell, then craft</p>
       </header>
-      <div class="spell-crafting-layout ${this.craftState}">
+      <div class="spell-crafting-layout ${this.craftState} ${this.craftRevealTier ? `craft-reveal-${this.craftRevealTier}` : ''}">
         <section class="craft-panel craft-panel--inputs">
           <div class="craft-subsection">
             <h4>1) Element</h4>
@@ -394,6 +445,9 @@ export class SpellCraftingWindow {
           </div>
           <div>
             <button type="button" class="craft-button" ${canCraft ? '' : 'disabled'}>${actionLabel}</button>
+            <div class="craft-progress ${this.craftState === 'charging' ? 'visible' : ''}">
+              <div class="craft-progress-fill" style="width:${Math.round(this.craftProgress * 100)}%"></div>
+            </div>
             <p class="craft-feedback ${this.feedbackType}">${this.feedback || actionHint}</p>
           </div>
         </section>
