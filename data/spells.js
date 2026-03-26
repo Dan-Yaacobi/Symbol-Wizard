@@ -35,7 +35,7 @@ export const SpellRegistry = {
   'magic-bolt': {
     id: 'magic-bolt',
     name: 'Magic Bolt',
-    icon: '*',
+    icon: '➵',
     description: 'A basic arcane projectile.',
     behavior: 'projectile',
     targeting: 'cursor',
@@ -58,7 +58,7 @@ export const SpellRegistry = {
   explosive_bolt: {
     id: 'explosive_bolt',
     name: 'Explosive Bolt',
-    icon: '*',
+    icon: '✸',
     description: 'A test projectile that explodes on hit.',
     behavior: 'projectile',
     targeting: 'cursor',
@@ -87,7 +87,7 @@ export const SpellRegistry = {
   beam_test: {
     id: 'beam_test',
     name: 'Beam Test',
-    icon: '|',
+    icon: '⌁',
     description: 'Test spell for beam behavior hitting multiple targets.',
     behavior: 'beam',
     targeting: 'cursor',
@@ -111,7 +111,7 @@ export const SpellRegistry = {
   zone_test: {
     id: 'zone_test',
     name: 'Zone Test',
-    icon: 'o',
+    icon: '◎',
     description: 'Test spell for persistent zone ticking.',
     behavior: 'zone',
     targeting: 'cursor',
@@ -133,7 +133,7 @@ export const SpellRegistry = {
   pierce_bolt: {
     id: 'pierce_bolt',
     name: 'Pierce Bolt',
-    icon: '*',
+    icon: '➶',
     description: 'Projectile test spell with pierce augment.',
     behavior: 'projectile',
     targeting: 'cursor',
@@ -157,7 +157,7 @@ export const SpellRegistry = {
   status_bolt: {
     id: 'status_bolt',
     name: 'Status Bolt',
-    icon: '*',
+    icon: '☄',
     description: 'Projectile test spell that applies a status on hit.',
     behavior: 'projectile',
     targeting: 'cursor',
@@ -182,7 +182,7 @@ export const SpellRegistry = {
   'fire-burst': {
     id: 'fire-burst',
     name: 'Fire Burst',
-    icon: '#',
+    icon: '✹',
     description: 'Release a fiery blast that radiates from the caster while it is active.',
     behavior: 'aura',
     targeting: 'self',
@@ -206,7 +206,7 @@ export const SpellRegistry = {
   blink: {
     id: 'blink',
     name: 'Blink',
-    icon: '>',
+    icon: '➠',
     description: 'Teleport a short distance toward the target direction.',
     behavior: 'blink',
     targeting: 'cursor',
@@ -228,7 +228,7 @@ export const SpellRegistry = {
   'time-freeze': {
     id: 'time-freeze',
     name: 'Time Freeze',
-    icon: '@',
+    icon: '⌛',
     description: 'Freeze visible enemies in place for a short duration.',
     damage: null,
     range: null,
