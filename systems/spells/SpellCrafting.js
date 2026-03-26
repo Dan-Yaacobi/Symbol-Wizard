@@ -57,6 +57,8 @@ function buildAugmentComponent(effect) {
       return 'thunder_blink';
     case 'shadow_blink':
       return 'shadow_blink';
+    case 'speed_boost_after_blink':
+      return 'speed_boost_after_blink';
     default:
       return null;
   }

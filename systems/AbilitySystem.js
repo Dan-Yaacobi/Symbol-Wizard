@@ -30,6 +30,7 @@ export class AbilitySystem {
     this.listeners = new Set();
     this.activeChannelCasts = new Map();
     this.pendingDoubleBlinkCasts = new Map();
+    this.activePlayerSpeedBoost = null;
 
     for (const spell of definitions) {
       this.cooldowns.set(spell.id, 0);
@@ -46,6 +47,7 @@ export class AbilitySystem {
       .filter((effect) => effect.ttl > 0);
 
     this.updateStatusEffects(dt);
+    this.updatePlayerSpeedBoost(dt);
     this.updatePendingDoubleBlink(dt);
     this.updateFreeze(dt);
     this.updatePlayerAction(dt);
@@ -55,6 +57,45 @@ export class AbilitySystem {
       player: this.player,
       shouldChannelSpellStop: (instance) => this.shouldStopChanneling(instance),
     });
+  }
+
+
+  applyTemporaryPlayerSpeedBoost(multiplier = 1, duration = 0) {
+    const safeDuration = Number.isFinite(duration) ? Math.max(0, duration) : 0;
+    const safeMultiplier = Number.isFinite(multiplier) ? Math.max(1, multiplier) : 1;
+    if (safeDuration <= 0 || safeMultiplier <= 1) return false;
+
+    const existing = this.activePlayerSpeedBoost;
+    if (existing) {
+      const remaining = Math.max(0, existing.remaining ?? 0);
+      this.activePlayerSpeedBoost = {
+        remaining: Math.max(remaining, safeDuration),
+        multiplier: Math.max(existing.multiplier ?? 1, safeMultiplier),
+      };
+    } else {
+      this.activePlayerSpeedBoost = { remaining: safeDuration, multiplier: safeMultiplier };
+    }
+
+    this.player.moveSpeedMultiplier = this.activePlayerSpeedBoost.multiplier;
+    return true;
+  }
+
+  updatePlayerSpeedBoost(dt) {
+    if (!this.player) return;
+    if (!this.activePlayerSpeedBoost) {
+      this.player.moveSpeedMultiplier = 1;
+      return;
+    }
+
+    const nextRemaining = (this.activePlayerSpeedBoost.remaining ?? 0) - dt;
+    if (nextRemaining <= 0) {
+      this.activePlayerSpeedBoost = null;
+      this.player.moveSpeedMultiplier = 1;
+      return;
+    }
+
+    this.activePlayerSpeedBoost = { ...this.activePlayerSpeedBoost, remaining: nextRemaining };
+    this.player.moveSpeedMultiplier = this.activePlayerSpeedBoost.multiplier ?? 1;
   }
 
   updatePendingDoubleBlink(dt) {
