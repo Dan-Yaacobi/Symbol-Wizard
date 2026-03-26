@@ -93,6 +93,7 @@ function getMidpointStats(recipe) {
 }
 
 function buildComposedName({ recipe, element, keyAugment }) {
+  if (!recipe) return '';
   const behaviorLabel = getBehaviorLabel(recipe?.behavior);
   const elementLabel = toLabel(element || recipe?.validElements?.[0] || 'Arcane');
   const augmentPrefix = augmentToPrefix(keyAugment?.label);
@@ -100,6 +101,20 @@ function buildComposedName({ recipe, element, keyAugment }) {
 }
 
 function buildPreviewData({ recipe, element, lastCraftedSpell }) {
+  if (!recipe) {
+    return {
+      selectedElement: element || '',
+      guaranteedEffects: [],
+      keyAugment: null,
+      composedName: '',
+      iconGlyph: '✧',
+      iconColor: getElementColor(element || 'arcane'),
+      behaviorSummary: 'Pick an element and spell to preview its crafted result.',
+      estimatedStats: {},
+      rolledStats: null,
+    };
+  }
+
   const selectedElement = element || recipe?.validElements?.[0] || '';
   const guaranteedEffects = getRecipeGuaranteedEffects(recipe, selectedElement);
   const keyAugment = lastCraftedSpell?.bonusEffects?.[0] ?? guaranteedEffects[0] ?? getPrimaryPreviewAugment(recipe);
@@ -117,7 +132,7 @@ function buildPreviewData({ recipe, element, lastCraftedSpell }) {
     composedName: buildComposedName({ recipe, element: selectedElement, keyAugment }),
     iconGlyph: getBehaviorGlyph(recipe?.behavior),
     iconColor: getElementColor(selectedElement),
-    behaviorSummary: recipe?.craftingSummary ?? 'Configure behavior, element, and augment details.',
+    behaviorSummary: recipe?.craftingSummary ?? 'Configure spell behavior and element details.',
     estimatedStats,
     rolledStats: lastCraftedSpell?.finalStats ?? null,
   };
@@ -146,8 +161,8 @@ export class SpellCraftingWindow {
     this.lastCraftedSpell = null;
 
     this.recipes = this.getUnlockedRecipes();
-    this.selectedRecipeId = this.recipes[0]?.id ?? '';
-    this.selectedElement = this.getSelectedRecipe()?.validElements?.[0] ?? '';
+    this.selectedRecipeId = '';
+    this.selectedElement = '';
 
     this.el = document.createElement('section');
     this.el.className = 'spell-crafting-window hidden';
@@ -160,24 +175,19 @@ export class SpellCraftingWindow {
 
   getSelectedRecipe() {
     this.recipes = this.getUnlockedRecipes();
-    if (!this.recipes.some((recipe) => recipe.id === this.selectedRecipeId)) {
-      this.selectedRecipeId = this.recipes[0]?.id ?? '';
-    }
     const recipe = this.recipes.find((entry) => entry.id === this.selectedRecipeId) ?? null;
-    if (!recipe) {
-      this.selectedElement = '';
-      return null;
-    }
-    if (!recipe.validElements.includes(this.selectedElement)) {
-      this.selectedElement = recipe.validElements[0] ?? '';
-    }
+    if (!recipe) return null;
+    if (this.selectedElement && !recipe.validElements.includes(this.selectedElement)) return null;
     return recipe;
   }
 
+  getRecipesForSelectedElement() {
+    if (!this.selectedElement) return [];
+    return this.recipes.filter((recipe) => recipe.validElements.includes(this.selectedElement));
+  }
+
   getSelectedElement() {
-    const recipe = this.getSelectedRecipe();
-    if (!recipe) return '';
-    return recipe.validElements.includes(this.selectedElement) ? this.selectedElement : (recipe.validElements[0] ?? '');
+    return this.selectedElement;
   }
 
   getCraftingState() {
@@ -190,8 +200,8 @@ export class SpellCraftingWindow {
     if (this.visible) return;
     this.visible = true;
     this.recipes = this.getUnlockedRecipes();
-    if (!this.recipes.some((recipe) => recipe.id === this.selectedRecipeId)) {
-      this.selectedRecipeId = this.recipes[0]?.id ?? '';
+    if (this.selectedRecipeId && !this.recipes.some((recipe) => recipe.id === this.selectedRecipeId)) {
+      this.selectedRecipeId = '';
     }
     this.el.classList.remove('hidden');
     this.render();
@@ -217,16 +227,19 @@ export class SpellCraftingWindow {
   selectRecipe(recipeId) {
     const recipe = this.recipes.find((entry) => entry.id === recipeId);
     if (!recipe) return;
-    const nextElement = recipe.validElements[0] ?? '';
-    if (this.selectedRecipeId === recipe.id && this.selectedElement === nextElement) return;
+    if (!this.selectedElement || !recipe.validElements.includes(this.selectedElement)) return;
+    if (this.selectedRecipeId === recipe.id) return;
     this.selectedRecipeId = recipe.id;
-    this.selectedElement = nextElement;
     this.render();
   }
 
   selectElement(element) {
     if (!element || this.selectedElement === element) return;
     this.selectedElement = element;
+    const elementRecipes = this.getRecipesForSelectedElement();
+    if (!elementRecipes.some((recipe) => recipe.id === this.selectedRecipeId)) {
+      this.selectedRecipeId = '';
+    }
     this.render();
   }
 
@@ -283,48 +296,34 @@ export class SpellCraftingWindow {
   render() {
     if (!this.visible) return;
 
+    this.recipes = this.getUnlockedRecipes();
     const recipe = this.getSelectedRecipe();
     const selectedElement = this.getSelectedElement();
+    const elementRecipes = this.getRecipesForSelectedElement();
     const craftingState = this.getCraftingState();
-    const canCraft = Boolean(recipe) && craftingState.canCraft && this.craftState !== 'charging';
+    const canCraft = Boolean(recipe) && Boolean(selectedElement) && craftingState.canCraft && this.craftState !== 'charging';
     const scopedLastResult = this.lastCraftedSpell?.recipeId === recipe?.id && this.lastCraftedSpell?.element === selectedElement
       ? this.lastCraftedSpell
       : null;
     const preview = buildPreviewData({ recipe, element: selectedElement, lastCraftedSpell: scopedLastResult });
 
-    const recipeMarkup = this.recipes.length > 0
-      ? this.recipes.map((entry) => `
+    const recipeMarkup = !selectedElement
+      ? '<p class="craft-muted">Select an element to view available spells.</p>'
+      : elementRecipes.length > 0
+        ? elementRecipes.map((entry) => `
         <button type="button" class="craft-option-button ${entry.id === this.selectedRecipeId ? 'selected' : ''}" data-recipe="${entry.id}">
           <span>${toLabel(entry.name)}</span>
           <small>${getBehaviorLabel(entry.behavior)}</small>
         </button>
       `).join('')
-      : '<p class="craft-muted">No recipes unlocked yet.</p>';
+        : '<p class="craft-muted">No spells unlocked for this element.</p>';
 
-    const elementMarkup = (recipe?.validElements ?? []).map((element) => `
-      <button type="button" class="craft-option-button ${element === selectedElement ? 'selected' : ''}" data-element="${element}">
+    const availableElements = [...new Set(this.recipes.flatMap((entry) => entry.validElements ?? []))];
+    const elementMarkup = availableElements.map((element) => `
+      <button type="button" class="craft-element-button craft-element-button--${element} ${element === selectedElement ? 'selected' : ''}" data-element="${element}">
         <span>${toLabel(element)}</span>
-        <small>${recipe.validElements.length === 1 ? 'Fixed' : 'Selectable'}</small>
       </button>
     `).join('');
-
-    const augmentList = [
-      ...preview.guaranteedEffects.map((effect) => ({ label: effect.label ?? toLabel(effect.type), detail: 'Guaranteed identity augment', rarity: 'guaranteed' })),
-      ...getEffectPool(recipe).map((effect) => ({
-        label: effect.label ?? toLabel(effect.type),
-        detail: `${toLabel(effect.rarity)} roll • ${effect.type}`,
-        rarity: effect.rarity,
-      })),
-    ];
-
-    const augmentMarkup = augmentList.length
-      ? `<ul class="craft-augment-list">${augmentList.map((augment) => `
-          <li class="craft-augment-item craft-augment-item--${augment.rarity}" title="${augment.detail}">
-            <span>${augment.label}</span>
-            <small>${augment.detail}</small>
-          </li>
-        `).join('')}</ul>`
-      : '<p class="craft-muted">No augments available.</p>';
 
     const ingredientRows = craftingState.ingredients.length > 0
       ? craftingState.ingredients.map(ingredientMarkup).join('')
@@ -345,41 +344,40 @@ export class SpellCraftingWindow {
     ].join('');
 
     const actionLabel = this.craftState === 'charging' ? 'CRAFTING…' : 'CRAFT SPELL';
-    const actionHint = canCraft ? 'Ready to craft.' : ingredientSummary;
+    const actionHint = !selectedElement
+      ? 'Select an element first.'
+      : !recipe
+        ? 'Select a spell to continue.'
+        : (canCraft ? 'Ready to craft.' : ingredientSummary);
 
     this.el.innerHTML = `
       <header class="spell-crafting-header">
         <h3>Spell Crafting</h3>
-        <p>C to close • Behavior + element + augment composition with live preview</p>
+        <p>C to close • Choose element, then spell, then craft</p>
       </header>
       <div class="spell-crafting-layout ${this.craftState}">
         <section class="craft-panel craft-panel--inputs">
           <div class="craft-subsection">
-            <h4>Spell Type (Behavior)</h4>
+            <h4>1) Element</h4>
+            <div class="craft-element-grid">${elementMarkup || '<p class="craft-muted">No elements available.</p>'}</div>
+          </div>
+          <div class="craft-subsection">
+            <h4>2) Spell</h4>
             <div class="craft-option-list">${recipeMarkup}</div>
-          </div>
-          <div class="craft-subsection">
-            <h4>Element</h4>
-            <div class="craft-option-list">${elementMarkup || '<p class="craft-muted">No elements available.</p>'}</div>
-          </div>
-          <div class="craft-subsection">
-            <h4>Augments</h4>
-            ${augmentMarkup}
           </div>
         </section>
 
         <section class="craft-panel craft-panel--preview">
           <p class="craft-result-label">Result Preview</p>
-          <h4>${preview.composedName || 'Awaiting Recipe'}</h4>
+          <h4>${preview.composedName || 'Awaiting Spell Selection'}</h4>
           <div class="craft-live-icon" style="--element-color:${preview.iconColor}">
             <span>${preview.iconGlyph}</span>
             <em>${preview.keyAugment?.label ? preview.keyAugment.label[0].toUpperCase() : '•'}</em>
           </div>
           <p class="craft-preview-description">${preview.behaviorSummary}</p>
           <div class="craft-result-tags">
-            <span class="craft-tag">${getBehaviorLabel(recipe?.behavior)}</span>
-            <span class="craft-tag">${toLabel(preview.selectedElement || 'Arcane')}</span>
-            <span class="craft-tag">${preview.keyAugment?.label ?? 'No key augment'}</span>
+            <span class="craft-tag">${recipe ? getBehaviorLabel(recipe?.behavior) : 'No Spell Selected'}</span>
+            <span class="craft-tag">${toLabel(preview.selectedElement || 'Select Element')}</span>
           </div>
         </section>
 
