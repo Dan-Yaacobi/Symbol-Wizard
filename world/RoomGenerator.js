@@ -229,6 +229,7 @@ export class RoomGenerator {
         objectClusterCenters: objectDebug.clusterCenters,
         objectBlockedPlacementTiles: objectDebug.blockedPlacementTiles,
         objectOccupiedFootprintTiles: objectDebug.occupiedFootprintTiles,
+        objectClearanceZones: objectDebug.objectClearanceZones,
         enemySpawnPoints: spawnedEnemies.debug.enemySpawnPoints,
         enemyGroupCenters: spawnedEnemies.debug.enemyGroupCenters,
         entranceSafetyAnchors: spawnedEnemies.debug.entranceSafetyAnchors,

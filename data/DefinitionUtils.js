@@ -19,6 +19,7 @@ export function createDefinition(definition = {}) {
     clusterMin: Number.isFinite(Number(definition.clusterMin)) ? Math.max(1, Math.floor(Number(definition.clusterMin))) : undefined,
     clusterMax: Number.isFinite(Number(definition.clusterMax)) ? Math.max(1, Math.floor(Number(definition.clusterMax))) : undefined,
     clusterRadius: Number.isFinite(Number(definition.clusterRadius)) ? Math.max(1, Number(definition.clusterRadius)) : undefined,
+    clearanceRadius: Number.isFinite(Number(definition.clearanceRadius)) ? Math.max(0, Number(definition.clearanceRadius)) : 0,
     isCollidable: Boolean(definition.isCollidable ?? definition.blocksMovement ?? definition.collision),
     isInteractable: Boolean(definition.isInteractable ?? definition.interactable),
     ...definition,

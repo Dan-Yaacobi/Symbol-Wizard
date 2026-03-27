@@ -275,6 +275,7 @@ export class DevToolsPanel {
       showLandingTiles: enabled('debug.showLandingTiles'),
       showEnemySpawnZones: enabled('debug.showEnemySpawnZones'),
       showAntDenTriggerRadius: enabled('debug.showAntDenTriggerRadius'),
+      showObjectClearanceRadius: enabled('debug.showObjectClearanceRadius'),
       selectedEntityRef: this.selectedEntity,
       selectedTileRef: this.selectedTile,
       aggroRange: this.config.get('enemies.aggroRange'),

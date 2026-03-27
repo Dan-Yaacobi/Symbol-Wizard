@@ -1,78 +1,21 @@
 {
   "id": "fire_ant",
   "anchor": {
-    "x": 4,
-    "y": 4
+    "x": 2,
+    "y": 3
   },
   "defaultGrid": {
-    "width": 9,
-    "height": 9
+    "width": 5,
+    "height": 7
   },
   "animations": {
     "idle": [
       {
-        "width": 9,
-        "height": 9,
+        "width": 5,
+        "height": 7,
         "offsetY": 0,
         "cells": [
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -97,32 +40,12 @@
               "ch": " ",
               "fg": null,
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
               "bg": null
             },
             {
@@ -141,32 +64,12 @@
               "bg": null
             },
             {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
               "ch": "\\",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -191,24 +94,9 @@
               "ch": " ",
               "fg": null,
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": "/",
               "fg": "#3f2618",
@@ -220,19 +108,9 @@
               "bg": null
             },
             {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
               "ch": "O",
-              "fg": "#bf4e2f",
-              "bg": "#26110b"
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
+              "fg": "#bf4f2f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -243,24 +121,9 @@
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -273,7 +136,7 @@
             },
             {
               "ch": "|",
-              "fg": "#4a2a1d",
+              "fg": "#6e3f25",
               "bg": null
             },
             {
@@ -285,24 +148,9 @@
               "ch": " ",
               "fg": null,
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": "/",
               "fg": "#3f2618",
@@ -314,19 +162,9 @@
               "bg": null
             },
             {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
               "ch": "@",
-              "fg": "#9f3e28",
-              "bg": "#1f0e09"
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
+              "fg": "#92331f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -337,24 +175,9 @@
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -367,64 +190,7 @@
             },
             {
               "ch": "^",
-              "fg": "#ffb169",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
+              "fg": "#f3b180",
               "bg": null
             },
             {
@@ -441,68 +207,11 @@
         ]
       },
       {
-        "width": 9,
-        "height": 9,
+        "width": 5,
+        "height": 7,
         "offsetY": 0,
         "cells": [
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -527,31 +236,11 @@
               "ch": " ",
               "fg": null,
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "/",
+              "ch": "\\",
               "fg": "#3f2618",
               "bg": null
             },
@@ -571,18 +260,8 @@
               "bg": null
             },
             {
-              "ch": "\\",
+              "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
@@ -593,18 +272,8 @@
               "bg": null
             },
             {
-              "ch": "/",
+              "ch": "\\",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
               "bg": null
             },
             {
@@ -613,17 +282,7 @@
               "bg": null
             },
             {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": "\\",
+              "ch": "/",
               "fg": "#3f2618",
               "bg": null
             },
@@ -635,17 +294,7 @@
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "/",
+              "ch": "\\",
               "fg": "#3f2618",
               "bg": null
             },
@@ -656,8 +305,8 @@
             },
             {
               "ch": "O",
-              "fg": "#bf4e2f",
-              "bg": "#26110b"
+              "fg": "#bf4f2f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -665,18 +314,8 @@
               "bg": null
             },
             {
-              "ch": "\\",
+              "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
@@ -687,37 +326,17 @@
               "bg": null
             },
             {
-              "ch": "/",
+              "ch": "\\",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
               "bg": null
             },
             {
               "ch": "|",
-              "fg": "#4a2a1d",
+              "fg": "#6e3f25",
               "bg": null
             },
             {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": "\\",
+              "ch": "/",
               "fg": "#3f2618",
               "bg": null
             },
@@ -729,17 +348,7 @@
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "/",
+              "ch": "\\",
               "fg": "#3f2618",
               "bg": null
             },
@@ -750,8 +359,8 @@
             },
             {
               "ch": "@",
-              "fg": "#9f3e28",
-              "bg": "#1f0e09"
+              "fg": "#92331f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -759,32 +368,12 @@
               "bg": null
             },
             {
-              "ch": "\\",
+              "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -797,64 +386,7 @@
             },
             {
               "ch": "^",
-              "fg": "#ffb169",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
+              "fg": "#f3b180",
               "bg": null
             },
             {
@@ -873,68 +405,11 @@
     ],
     "walk": [
       {
-        "width": 9,
-        "height": 9,
+        "width": 5,
+        "height": 7,
         "offsetY": 0,
         "cells": [
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -959,32 +434,12 @@
               "ch": " ",
               "fg": null,
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
             {
               "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             },
             {
@@ -1003,32 +458,12 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -1053,24 +488,9 @@
               "ch": " ",
               "fg": null,
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": "/",
               "fg": "#3f2618",
@@ -1082,19 +502,9 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "O",
-              "fg": "#bf4e2f",
-              "bg": "#26110b"
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
+              "fg": "#bf4f2f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -1105,24 +515,9 @@
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -1135,22 +530,12 @@
             },
             {
               "ch": "|",
-              "fg": "#4a2a1d",
+              "fg": "#6e3f25",
               "bg": null
             },
             {
               "ch": "\\",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             },
             {
@@ -1171,29 +556,9 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
               "ch": "@",
-              "fg": "#9f3e28",
-              "bg": "#1f0e09"
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
+              "fg": "#92331f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -1218,75 +583,8 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "^",
-              "fg": "#ffb169",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
+              "fg": "#f3b180",
               "bg": null
             },
             {
@@ -1303,73 +601,11 @@
         ]
       },
       {
-        "width": 9,
-        "height": 9,
+        "width": 5,
+        "height": 7,
         "offsetY": 0,
         "cells": [
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -1394,19 +630,9 @@
               "ch": " ",
               "fg": null,
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": "/",
               "fg": "#3f2618",
@@ -1418,19 +644,9 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "o",
               "fg": "#d86740",
               "bg": "#2b120b"
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             },
             {
               "ch": "-",
@@ -1441,27 +657,12 @@
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
             {
               "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
               "bg": null
             },
             {
@@ -1480,16 +681,6 @@
               "bg": null
             },
             {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
@@ -1497,48 +688,28 @@
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "/",
               "fg": "#3f2618",
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
+              "ch": "-",
+              "fg": "#4a2a1d",
               "bg": null
             },
             {
               "ch": "O",
-              "fg": "#bf4e2f",
-              "bg": "#26110b"
+              "fg": "#bf4f2f",
+              "bg": "#2b120b"
             },
             {
-              "ch": " ",
-              "fg": null,
+              "ch": "-",
+              "fg": "#4a2a1d",
               "bg": null
             },
             {
               "ch": "\\",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
@@ -1546,16 +717,6 @@
             {
               "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
               "bg": null
             },
             {
@@ -1565,17 +726,7 @@
             },
             {
               "ch": "|",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
+              "fg": "#6e3f25",
               "bg": null
             },
             {
@@ -1590,11 +741,6 @@
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": "/",
               "fg": "#3f2618",
@@ -1606,19 +752,9 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "@",
-              "fg": "#9f3e28",
-              "bg": "#1f0e09"
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
+              "fg": "#92331f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -1629,19 +765,9 @@
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -1659,69 +785,7 @@
             },
             {
               "ch": "^",
-              "fg": "#ffb169",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
+              "fg": "#f3b180",
               "bg": null
             },
             {
@@ -1733,63 +797,11 @@
         ]
       },
       {
-        "width": 9,
-        "height": 9,
+        "width": 5,
+        "height": 7,
         "offsetY": 0,
         "cells": [
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -1814,37 +826,12 @@
               "ch": " ",
               "fg": null,
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
             {
               "ch": "\\",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             },
             {
@@ -1863,16 +850,6 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
               "ch": "/",
               "fg": "#3f2618",
               "bg": null
@@ -1885,18 +862,13 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "/",
+              "ch": "\\",
               "fg": "#3f2618",
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
             {
@@ -1905,32 +877,12 @@
               "bg": null
             },
             {
-              "ch": "\\",
+              "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": "\\",
               "fg": "#3f2618",
@@ -1939,22 +891,12 @@
             {
               "ch": "-",
               "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             },
             {
               "ch": "O",
-              "fg": "#bf4e2f",
-              "bg": "#26110b"
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
+              "fg": "#bf4f2f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -1965,11 +907,6 @@
               "ch": "/",
               "fg": "#3f2618",
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
@@ -1979,43 +916,23 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "/",
+              "ch": "\\",
               "fg": "#3f2618",
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
             {
               "ch": "|",
-              "fg": "#4a2a1d",
+              "fg": "#6e3f25",
               "bg": null
             },
             {
-              "ch": "\\",
+              "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
@@ -2023,16 +940,6 @@
             {
               "ch": "\\",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             },
             {
@@ -2042,18 +949,8 @@
             },
             {
               "ch": "@",
-              "fg": "#9f3e28",
-              "bg": "#1f0e09"
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
+              "fg": "#92331f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -2073,75 +970,8 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "^",
-              "fg": "#ffb169",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
+              "fg": "#f3b180",
               "bg": null
             },
             {
@@ -2165,8 +995,8 @@
     ],
     "attack": [
       {
-        "width": 9,
-        "height": 9,
+        "width": 5,
+        "height": 7,
         "offsetY": 0,
         "cells": [
           [
@@ -2181,28 +1011,8 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "v",
               "fg": "#f3b180",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             },
             {
@@ -2217,66 +1027,9 @@
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "v",
-              "fg": "#f3b180",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "v",
-              "fg": "#f3b180",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
               "bg": null
             },
             {
@@ -2295,40 +1048,20 @@
               "bg": null
             },
             {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
               "ch": "\\",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "/",
               "fg": "#3f2618",
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
             {
@@ -2337,40 +1070,20 @@
               "bg": null
             },
             {
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            },
+            {
               "ch": "\\",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
               "bg": null
             },
             {
@@ -2380,13 +1093,8 @@
             },
             {
               "ch": "O",
-              "fg": "#bf4e2f",
-              "bg": "#26110b"
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
+              "fg": "#bf4f2f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -2397,74 +1105,39 @@
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "/",
               "fg": "#3f2618",
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
             {
               "ch": "|",
-              "fg": "#4a2a1d",
+              "fg": "#6e3f25",
+              "bg": null
+            },
+            {
+              "ch": " ",
+              "fg": null,
               "bg": null
             },
             {
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
               "bg": null
             },
             {
@@ -2474,13 +1147,8 @@
             },
             {
               "ch": "@",
-              "fg": "#9f3e28",
-              "bg": "#1f0e09"
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
+              "fg": "#92331f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -2491,24 +1159,9 @@
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -2521,64 +1174,7 @@
             },
             {
               "ch": "^",
-              "fg": "#ffb169",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
+              "fg": "#f3b180",
               "bg": null
             },
             {
@@ -2595,78 +1191,11 @@
         ]
       },
       {
-        "width": 9,
-        "height": 9,
+        "width": 5,
+        "height": 7,
         "offsetY": 0,
         "cells": [
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "v",
-              "fg": "#f3b180",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "v",
-              "fg": "#f3b180",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "v",
-              "fg": "#f3b180",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -2697,16 +1226,6 @@
             {
               "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             },
             {
@@ -2725,16 +1244,6 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
@@ -2742,23 +1251,13 @@
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "/",
               "fg": "#3f2618",
+              "bg": null
+            },
+            {
+              "ch": "-",
+              "fg": "#4a2a1d",
               "bg": null
             },
             {
@@ -2767,40 +1266,20 @@
               "bg": null
             },
             {
+              "ch": "-",
+              "fg": "#4a2a1d",
+              "bg": null
+            },
+            {
               "ch": "\\",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
               "bg": null
             },
             {
@@ -2810,13 +1289,8 @@
             },
             {
               "ch": "O",
-              "fg": "#bf4e2f",
-              "bg": "#26110b"
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
+              "fg": "#bf4f2f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -2827,24 +1301,9 @@
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -2857,7 +1316,7 @@
             },
             {
               "ch": "|",
-              "fg": "#4a2a1d",
+              "fg": "#6e3f25",
               "bg": null
             },
             {
@@ -2869,24 +1328,9 @@
               "ch": " ",
               "fg": null,
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": "/",
               "fg": "#3f2618",
@@ -2898,19 +1342,9 @@
               "bg": null
             },
             {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
               "ch": "@",
-              "fg": "#9f3e28",
-              "bg": "#1f0e09"
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
+              "fg": "#92331f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -2921,24 +1355,9 @@
               "ch": "\\",
               "fg": "#3f2618",
               "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -2951,64 +1370,7 @@
             },
             {
               "ch": "^",
-              "fg": "#ffb169",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
+              "fg": "#f3b180",
               "bg": null
             },
             {
@@ -3025,8 +1387,8 @@
         ]
       },
       {
-        "width": 9,
-        "height": 9,
+        "width": 5,
+        "height": 7,
         "offsetY": 0,
         "cells": [
           [
@@ -3041,73 +1403,6 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "v",
-              "fg": "#f3b180",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "v",
-              "fg": "#f3b180",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "v",
-              "fg": "#f3b180",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "v",
               "fg": "#f3b180",
               "bg": null
@@ -3125,23 +1420,13 @@
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "/",
+              "ch": "\\",
               "fg": "#3f2618",
               "bg": null
             },
             {
               "ch": "-",
               "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             },
             {
@@ -3150,45 +1435,25 @@
               "bg": "#2b120b"
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "-",
               "fg": "#4a2a1d",
               "bg": null
             },
             {
-              "ch": "\\",
+              "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
           [
             {
-              "ch": "/",
-              "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
               "ch": " ",
               "fg": null,
+              "bg": null
+            },
+            {
+              "ch": "\\",
+              "fg": "#3f2618",
               "bg": null
             },
             {
@@ -3197,40 +1462,20 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": "\\",
-              "fg": "#3f2618",
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
               "ch": "/",
               "fg": "#3f2618",
               "bg": null
             },
             {
-              "ch": "-",
-              "fg": "#4a2a1d",
+              "ch": " ",
+              "fg": null,
+              "bg": null
+            }
+          ],
+          [
+            {
+              "ch": "\\",
+              "fg": "#3f2618",
               "bg": null
             },
             {
@@ -3240,8 +1485,8 @@
             },
             {
               "ch": "O",
-              "fg": "#bf4e2f",
-              "bg": "#26110b"
+              "fg": "#bf4f2f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -3249,18 +1494,8 @@
               "bg": null
             },
             {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": "\\",
+              "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
@@ -3271,38 +1506,18 @@
               "bg": null
             },
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "/",
+              "ch": "\\",
               "fg": "#3f2618",
               "bg": null
             },
             {
               "ch": "|",
-              "fg": "#4a2a1d",
+              "fg": "#6e3f25",
               "bg": null
             },
             {
-              "ch": "\\",
+              "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             },
             {
@@ -3313,18 +1528,8 @@
           ],
           [
             {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": "/",
+              "ch": "\\",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": "-",
-              "fg": "#4a2a1d",
               "bg": null
             },
             {
@@ -3334,8 +1539,8 @@
             },
             {
               "ch": "@",
-              "fg": "#9f3e28",
-              "bg": "#1f0e09"
+              "fg": "#92331f",
+              "bg": "#2b120b"
             },
             {
               "ch": "-",
@@ -3343,32 +1548,12 @@
               "bg": null
             },
             {
-              "ch": "-",
-              "fg": "#4a2a1d",
-              "bg": null
-            },
-            {
-              "ch": "\\",
+              "ch": "/",
               "fg": "#3f2618",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
               "bg": null
             }
           ],
           [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
             {
               "ch": " ",
               "fg": null,
@@ -3381,64 +1566,7 @@
             },
             {
               "ch": "^",
-              "fg": "#ffb169",
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            }
-          ],
-          [
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
-              "bg": null
-            },
-            {
-              "ch": " ",
-              "fg": null,
+              "fg": "#f3b180",
               "bg": null
             },
             {

@@ -61,6 +61,10 @@ function collectObjectTiles(center, footprint) {
   return normalizeFootprintCells(footprint).map((cell) => ({ x: center.x + cell.x, y: center.y + cell.y }));
 }
 
+function sanitizeClearanceRadius(source) {
+  return Math.max(0, Number(source?.clearanceRadius) || 0);
+}
+
 function rotateFootprintCells(footprint, quarterTurns = 0) {
   const turns = ((quarterTurns % 4) + 4) % 4;
   return normalizeFootprintCells(footprint).map((cell) => {
@@ -258,7 +262,23 @@ function violatesAnchorDistance(tilesToCheck, anchors = [], minDistance = 0) {
   return false;
 }
 
-function validatePlacement({ tiles, center, definition, footprint = definition.footprint, occupiedTiles, blockedMask, safetyConfig, densityField }) {
+function hasClearanceConflict({ center, definition, placedObjects }) {
+  const thisClearance = sanitizeClearanceRadius(definition);
+  if (!Array.isArray(placedObjects) || placedObjects.length === 0) return false;
+
+  for (const placed of placedObjects) {
+    if (!placed || placed.destroyed) continue;
+    const otherClearance = sanitizeClearanceRadius(placed);
+    const minDistance = thisClearance + otherClearance;
+    if (minDistance <= 0) continue;
+    if (Math.hypot(center.x - placed.x, center.y - placed.y) < minDistance) return true;
+  }
+
+  return false;
+}
+
+function validatePlacement({ tiles, center, definition, footprint = definition.footprint, occupiedTiles, blockedMask, safetyConfig, densityField, placedObjects = [] }) {
+  if (hasClearanceConflict({ center, definition, placedObjects })) return false;
   return isFootprintValid({
     tiles,
     footprint,
@@ -308,7 +328,7 @@ function weightedCenterScore({ tiles, center, definition, densityField, pathTile
 function spawnPlacedObject(params) {
   const {
     tiles, rng, occupiedTiles, blockedMask, roomId, idPrefix, definition, center,
-    idIndex, safetyConfig, densityField, categoryRule,
+    idIndex, safetyConfig, densityField, categoryRule, placedObjects,
   } = params;
 
   const previewRotation = definition.rotations ? Math.floor(rng() * 4) : 0;
@@ -322,6 +342,7 @@ function spawnPlacedObject(params) {
     blockedMask,
     safetyConfig,
     densityField,
+    placedObjects,
   })) return null;
 
   const placed = spawnObject(
@@ -339,6 +360,7 @@ function spawnPlacedObject(params) {
 
   const cells = collectObjectTiles(center, placed.footprint);
   reservePlacement({ occupiedTiles, blockedMask, cells, padding: categoryRule.basePadding });
+  placedObjects.push(placed);
   stampObjectTiles(tiles, placed);
   return placed;
 }
@@ -349,23 +371,23 @@ function placeCluster(definition, center, options) {
 
   const {
     tiles, rng, occupiedTiles, blockedMask, roomId, idPrefix,
-    startIndex, safetyConfig, densityField, categoryRule,
+    startIndex, safetyConfig, densityField, categoryRule, placedObjects,
   } = options;
 
   const clusterRadius = Math.max(1, Math.floor((definition.clusterRadius ?? 4) * (safetyConfig.clusterRadiusMultiplier ?? 1)));
   const clusterSize = randomInt(rng, limits.min, limits.max);
-  const placedObjects = [];
+  const clusterPlacedObjects = [];
 
   const seedObject = spawnPlacedObject({
     tiles, rng, occupiedTiles, blockedMask, roomId, idPrefix, definition, center,
-    idIndex: startIndex, safetyConfig, densityField, categoryRule,
+    idIndex: startIndex, safetyConfig, densityField, categoryRule, placedObjects,
   });
   if (!seedObject) return [];
-  placedObjects.push(seedObject);
+  clusterPlacedObjects.push(seedObject);
 
   const maxAttempts = Math.max(clusterSize * 16, 24);
   let attempts = 0;
-  while (placedObjects.length < clusterSize && attempts < maxAttempts) {
+  while (clusterPlacedObjects.length < clusterSize && attempts < maxAttempts) {
     attempts += 1;
     const angle = rng() * Math.PI * 2;
     const distance = rng() * clusterRadius;
@@ -376,23 +398,23 @@ function placeCluster(definition, center, options) {
 
     const placed = spawnPlacedObject({
       tiles, rng, occupiedTiles, blockedMask, roomId, idPrefix, definition, center: candidate,
-      idIndex: startIndex + placedObjects.length, safetyConfig, densityField, categoryRule,
+      idIndex: startIndex + clusterPlacedObjects.length, safetyConfig, densityField, categoryRule, placedObjects,
     });
 
-    if (placed) placedObjects.push(placed);
+    if (placed) clusterPlacedObjects.push(placed);
   }
 
   const majorityRequired = Math.max(1, Math.ceil(clusterSize * 0.6));
-  return placedObjects.length >= majorityRequired ? placedObjects : [placedObjects[0]];
+  return clusterPlacedObjects.length >= majorityRequired ? clusterPlacedObjects : [clusterPlacedObjects[0]];
 }
 
-function selectBestCenter({ tiles, rng, occupiedTiles, blockedMask, definition, safetyConfig, densityField, categoryRule, attempts }) {
+function selectBestCenter({ tiles, rng, occupiedTiles, blockedMask, definition, safetyConfig, densityField, categoryRule, attempts, placedObjects }) {
   let bestCenter = null;
   let bestScore = -Infinity;
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const center = samplePlacementCenter(tiles, rng, safetyConfig.minDistanceFromMapEdge ?? 2);
-    if (!validatePlacement({ tiles, center, definition, occupiedTiles, blockedMask, safetyConfig, densityField })) continue;
+    if (!validatePlacement({ tiles, center, definition, occupiedTiles, blockedMask, safetyConfig, densityField, placedObjects })) continue;
 
     const score = weightedCenterScore({
       tiles,
@@ -428,6 +450,7 @@ function placeFromPool(params) {
     safetyConfig = {},
     densityField,
     debugInfo,
+    placedObjects,
   } = params;
 
   const categoryRule = OBJECT_RULES[category] ?? OBJECT_RULES[OBJECT_CATEGORY.ENVIRONMENT];
@@ -454,6 +477,7 @@ function placeFromPool(params) {
       densityField,
       categoryRule,
       attempts: safetyConfig.maxAttemptsPerObjectType ?? 100,
+      placedObjects,
     });
     if (!center) continue;
 
@@ -473,6 +497,7 @@ function placeFromPool(params) {
         safetyConfig: { ...safetyConfig, clusterRadiusMultiplier: safetyConfig.clusterRadiusMultiplier * (safetyConfig.clusterDensity ?? 1) },
         densityField,
         categoryRule,
+        placedObjects,
       });
       objects.push(...cluster);
       if (cluster.length > 0) debugInfo.clusterCenters.push(center);
@@ -492,6 +517,7 @@ function placeFromPool(params) {
       safetyConfig,
       densityField,
       categoryRule,
+      placedObjects,
     });
 
     if (placed) objects.push(placed);
@@ -502,12 +528,14 @@ function placeFromPool(params) {
 
 export class ObjectPlacementSystem {
   constructor() {
+    this.placedObjectsBuffer = [];
     this.lastDebugInfo = {
       clusterCenters: [],
       blockedPlacementTiles: [],
       pathSafetyTiles: [],
       exitSafetyTiles: [],
       occupiedFootprintTiles: [],
+      objectClearanceZones: [],
     };
   }
 
@@ -523,7 +551,9 @@ export class ObjectPlacementSystem {
       pathSafetyTiles: [],
       exitSafetyTiles: [],
       occupiedFootprintTiles: [],
+      objectClearanceZones: [],
     };
+    const placedObjects = [...this.placedObjectsBuffer];
 
     const categories = [OBJECT_CATEGORY.ENVIRONMENT, OBJECT_CATEGORY.DESTRUCTIBLE, OBJECT_CATEGORY.INTERACTABLE, OBJECT_CATEGORY.PROP];
     const objects = [];
@@ -544,6 +574,7 @@ export class ObjectPlacementSystem {
         safetyConfig,
         densityField,
         debugInfo,
+        placedObjects,
       });
       objects.push(...placed);
     }
@@ -552,14 +583,19 @@ export class ObjectPlacementSystem {
       const [x, y] = key.split(',').map(Number);
       return { x, y };
     });
+    debugInfo.objectClearanceZones = placedObjects
+      .filter((object) => sanitizeClearanceRadius(object) > 0)
+      .map((object) => ({ x: object.x, y: object.y, radius: sanitizeClearanceRadius(object), type: object.type }));
     this.lastDebugInfo = debugInfo;
+    this.placedObjectsBuffer = placedObjects;
     return objects;
   }
 
   placeLandmarks({ tiles, rng, blockedMask, roomId, biomeType = 'forest', safetyConfig = {}, occupiedTiles = null }) {
     const localOccupied = occupiedTiles ?? new Set();
     const densityField = createObjectDensityField({ tiles, pathTiles: safetyConfig.pathTiles });
-    return placeFromPool({
+    const placedObjects = [];
+    const placed = placeFromPool({
       tiles,
       rng,
       occupiedTiles: localOccupied,
@@ -574,7 +610,10 @@ export class ObjectPlacementSystem {
       safetyConfig,
       densityField,
       debugInfo: this.lastDebugInfo,
+      placedObjects,
     });
+    this.placedObjectsBuffer = placedObjects;
+    return placed;
   }
 
   getDebugInfo() {
