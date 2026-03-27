@@ -6,9 +6,8 @@ import {
   ensureRequiredAnimations,
   isOccupiedSpriteCell,
   normalizeSpriteAsset,
+  resizeSprite,
   validateSpriteAsset,
-  resizeFrame,
-  resizeAnimationFrames,
   resizeSpriteAsset,
 } from '../data/SpriteAssetSchema.js';
 import { getAllSpriteAssets, getSpriteAsset, registerSpriteAsset, reloadSpriteAssets, saveSpriteAsset } from '../data/SpriteAssetLoader.js';
@@ -145,6 +144,7 @@ export class SpriteEditorScreen {
 
   #loadAsset(asset, animation = null) {
     this.asset = ensureRequiredAnimations(normalizeSpriteAsset(clone(asset)));
+    console.log('[SPRITE] loaded dimensions', this.asset.defaultGrid.width, this.asset.defaultGrid.height);
     this.currentAnimation = this.asset.animations[animation] ? animation : (this.currentAnimation in this.asset.animations ? this.currentAnimation : 'idle');
     this.currentFrameIndex = Math.min(this.currentFrameIndex, Math.max(0, this.getCurrentAnimationFrames().length - 1));
     this.previewFrameIndex = this.currentFrameIndex;
@@ -232,14 +232,19 @@ export class SpriteEditorScreen {
     if (scope === 'current frame') {
       const frame = this.getCurrentFrame();
       if (!frame) return;
-      this.asset.animations[this.currentAnimation][this.currentFrameIndex] = resizeFrame(frame, width, height, { pin: 'top-left' });
+      this.asset.animations[this.currentAnimation][this.currentFrameIndex] = resizeSprite(frame, width, height, { pin: 'top-left' });
       this.asset.defaultGrid = { width, height };
     } else if (scope === 'current animation') {
-      this.asset.animations[this.currentAnimation] = resizeAnimationFrames(this.getCurrentAnimationFrames(), width, height, { pin: 'top-left' });
+      this.asset.animations[this.currentAnimation] = this.getCurrentAnimationFrames().map((frame) => resizeSprite(frame, width, height, { pin: 'top-left' }));
       this.asset.defaultGrid = { width, height };
     } else {
-      this.asset = resizeSpriteAsset(this.asset, width, height, 'whole sprite asset', { pin: 'top-left' });
+      const resizedAsset = resizeSpriteAsset(this.asset, width, height, 'whole sprite asset', { pin: 'top-left' });
+      for (const key of Object.keys(this.asset)) delete this.asset[key];
+      Object.assign(this.asset, resizedAsset);
     }
+    this.currentFrameIndex = Math.max(0, Math.min(this.currentFrameIndex, this.getCurrentAnimationFrames().length - 1));
+    this.previewFrameIndex = this.currentFrameIndex;
+    console.log('[SPRITE] resized to', width, height);
     this.#syncUiFromAsset();
     this.#renderEditor();
   }
