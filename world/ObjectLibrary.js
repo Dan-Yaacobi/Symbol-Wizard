@@ -406,8 +406,9 @@ export const objectLibrary = {
       o: { fg: '#2f251a' },
     },
     antSpawner: {
-      triggerRadius: 7,
-      spawnInterval: 0.5,
+      triggerRadius: 10,
+      spawnIntervalMin: 0.8,
+      spawnIntervalMax: 1.5,
       spawnCountMin: 5,
       spawnCountMax: 10,
       spawnRadius: 3.5,

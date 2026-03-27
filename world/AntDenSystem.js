@@ -6,17 +6,29 @@ export const ANT_DEN_PHASE = Object.freeze({
   DEPLETED: 'depleted',
 });
 
+const SPAWN_ATTEMPTS = 30;
+
 function randomInt(rng, min, max) {
   const lo = Math.min(min, max);
   const hi = Math.max(min, max);
   return lo + Math.floor(rng() * ((hi - lo) + 1));
 }
 
+function randomInRange(rng, min, max) {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return 1;
+  if (max <= min) return min;
+  return min + (rng() * (max - min));
+}
+
 function getDenConfig(den) {
   const source = den?.antSpawner ?? den?.spawnController ?? {};
+  const fallbackInterval = Math.max(0.05, Number(source.spawnInterval) || 1.1);
+  const spawnIntervalMin = Math.max(0.05, Number(source.spawnIntervalMin) || Math.min(0.8, fallbackInterval));
+  const spawnIntervalMax = Math.max(spawnIntervalMin, Number(source.spawnIntervalMax) || Math.max(1.5, fallbackInterval));
   return {
-    triggerRadius: Math.max(1, Number(source.triggerRadius) || 7),
-    spawnInterval: Math.max(0.05, Number(source.spawnInterval) || 0.5),
+    triggerRadius: Math.max(1, Number(source.triggerRadius) || 10),
+    spawnIntervalMin,
+    spawnIntervalMax,
     spawnCountMin: Math.max(1, Math.floor(Number(source.spawnCountMin) || 5)),
     spawnCountMax: Math.max(1, Math.floor(Number(source.spawnCountMax) || 10)),
     spawnRadius: Math.max(1, Number(source.spawnRadius) || 3.2),
@@ -33,6 +45,7 @@ function ensureDenState(den, rng = Math.random) {
   den.state.spawnedCount ??= 0;
   den.state.spawnTimer ??= 0;
   den.state.targetSpawnCount ??= randomInt(rng, config.spawnCountMin, config.spawnCountMax);
+  den.state.nextSpawnInterval ??= randomInRange(rng, config.spawnIntervalMin, config.spawnIntervalMax);
   return { config, state: den.state };
 }
 
@@ -61,25 +74,46 @@ function collectEnemyTiles(enemies = []) {
   return occupied;
 }
 
-function isSpawnTileWalkable(room, x, y, blockedObjectTiles, enemyTiles) {
+function isSpawnTileWalkable(room, x, y, blockedObjectTiles, enemyTiles, denTiles) {
   const tile = room?.tiles?.[y]?.[x];
   if (!tile?.walkable) return false;
   if (room?.collisionMap?.[y]?.[x]) return false;
   if (blockedObjectTiles.has(tileKey(x, y))) return false;
   if (enemyTiles.has(tileKey(x, y))) return false;
+  if (denTiles.has(tileKey(x, y))) return false;
   return true;
 }
 
+function collectDenFootprintTiles(den) {
+  const tiles = new Set();
+  for (const node of den?.footprint ?? den?.logicalShape?.tiles ?? [[0, 0]]) {
+    const [dx, dy] = Array.isArray(node) ? node : [node?.x ?? 0, node?.y ?? 0];
+    tiles.add(tileKey(Math.round(den.x + dx), Math.round(den.y + dy)));
+  }
+  return tiles;
+}
+
+function estimateDenRadius(den) {
+  let furthest = 1;
+  for (const node of den?.footprint ?? den?.logicalShape?.tiles ?? [[0, 0]]) {
+    const [dx, dy] = Array.isArray(node) ? node : [node?.x ?? 0, node?.y ?? 0];
+    furthest = Math.max(furthest, Math.hypot(dx, dy));
+  }
+  return furthest;
+}
+
 function findSpawnPosition(den, room, worldObjects, enemies, rng = Math.random) {
-  const { spawnRadius } = getDenConfig(den);
   const blockedObjectTiles = collectBlockedObjectTiles(worldObjects, den);
   const enemyTiles = collectEnemyTiles(enemies);
-  for (let attempt = 0; attempt < 28; attempt += 1) {
+  const denTiles = collectDenFootprintTiles(den);
+  const denRadius = estimateDenRadius(den);
+
+  for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt += 1) {
     const angle = rng() * Math.PI * 2;
-    const radius = (0.75 + (rng() * 0.8)) * spawnRadius;
+    const radius = randomInRange(rng, denRadius + 1, denRadius + 2);
     const x = Math.round(den.x + Math.cos(angle) * radius);
     const y = Math.round(den.y + Math.sin(angle) * radius);
-    if (isSpawnTileWalkable(room, x, y, blockedObjectTiles, enemyTiles)) return { x, y };
+    if (isSpawnTileWalkable(room, x, y, blockedObjectTiles, enemyTiles, denTiles)) return { x, y };
   }
   return null;
 }
@@ -99,6 +133,52 @@ function isPlayerInsideTrigger(den, player, triggerRadius) {
   const dx = player.x - den.x;
   const dy = player.y - den.y;
   return ((dx * dx) + (dy * dy)) <= (triggerRadius * triggerRadius);
+}
+
+function queueNextSpawn(state, config, rng) {
+  state.nextSpawnInterval = randomInRange(rng, config.spawnIntervalMin, config.spawnIntervalMax);
+  state.spawnTimer += state.nextSpawnInterval;
+}
+
+function spawnAntFromDen({ den, config, state, room, worldObjects, enemies, player, spawnEnemy, onSpawn, debug, effectSystem, rng }) {
+  const spawnPoint = findSpawnPosition(den, room, worldObjects, enemies, rng);
+  if (!spawnPoint) {
+    queueNextSpawn(state, config, rng);
+    return false;
+  }
+
+  const ant = spawnEnemy(config.enemyType, spawnPoint, { den, room });
+  if (!ant) {
+    queueNextSpawn(state, config, rng);
+    return false;
+  }
+
+  ant.sourceDenId = den.id;
+  ant.sourceDenType = den.type;
+  activateEnemyAggro(ant, player, effectSystem);
+
+  state.spawnedCount += 1;
+  if (typeof onSpawn === 'function') onSpawn({ den, enemy: ant, spawnedCount: state.spawnedCount, targetSpawnCount: state.targetSpawnCount });
+  if (debug?.logSpawnCount) {
+    console.debug('[AntDen] Spawned fire ant.', {
+      denId: den.id,
+      spawnedCount: state.spawnedCount,
+      targetSpawnCount: state.targetSpawnCount,
+      phase: state.phase,
+    });
+  }
+
+  den.state.lastSpawnPulse = 0.3;
+  return true;
+}
+
+function spawnActivationBurst({ den, config, state, room, worldObjects, enemies, player, spawnEnemy, onSpawn, debug, effectSystem, rng }) {
+  const burstTarget = randomInt(rng, 1, 2);
+  for (let i = 0; i < burstTarget; i += 1) {
+    if (state.spawnedCount >= state.targetSpawnCount) break;
+    if (countActiveDenAnts(enemies, den.id) >= config.maxActiveAnts) break;
+    spawnAntFromDen({ den, config, state, room, worldObjects, enemies, player, spawnEnemy, onSpawn, debug, effectSystem, rng });
+  }
 }
 
 export function updateAntDens({
@@ -122,10 +202,15 @@ export function updateAntDens({
 
     if (state.phase === ANT_DEN_PHASE.DEPLETED) continue;
 
+    den.state.heatPulse = (den.state.heatPulse ?? 0) + dt;
+    den.state.lastSpawnPulse = Math.max(0, (den.state.lastSpawnPulse ?? 0) - dt * 0.7);
+
     if (state.phase === ANT_DEN_PHASE.IDLE) {
       if (!isPlayerInsideTrigger(den, player, config.triggerRadius)) continue;
       state.phase = ANT_DEN_PHASE.ACTIVE;
-      state.spawnTimer = config.spawnInterval;
+      state.spawnTimer = 0;
+      spawnActivationBurst({ den, config, state, room, worldObjects, enemies, player, spawnEnemy, onSpawn, debug, effectSystem, rng });
+      queueNextSpawn(state, config, rng);
     }
 
     if (state.phase !== ANT_DEN_PHASE.ACTIVE) continue;
@@ -148,38 +233,14 @@ export function updateAntDens({
         break;
       }
 
-      const spawnPoint = findSpawnPosition(den, room, worldObjects, enemies, rng);
-      if (!spawnPoint) {
-        state.spawnTimer += config.spawnInterval;
-        break;
-      }
-
-      const ant = spawnEnemy(config.enemyType, spawnPoint, { den, room });
-      if (!ant) {
-        state.spawnTimer += config.spawnInterval;
-        break;
-      }
-
-      ant.sourceDenId = den.id;
-      ant.sourceDenType = den.type;
-      activateEnemyAggro(ant, player, effectSystem);
-
-      state.spawnedCount += 1;
-      if (typeof onSpawn === 'function') onSpawn({ den, enemy: ant, spawnedCount: state.spawnedCount, targetSpawnCount: state.targetSpawnCount });
-      if (debug?.logSpawnCount) {
-        console.debug('[AntDen] Spawned fire ant.', {
-          denId: den.id,
-          spawnedCount: state.spawnedCount,
-          targetSpawnCount: state.targetSpawnCount,
-          phase: state.phase,
-        });
-      }
+      const spawned = spawnAntFromDen({ den, config, state, room, worldObjects, enemies, player, spawnEnemy, onSpawn, debug, effectSystem, rng });
+      if (!spawned) break;
 
       if (state.spawnedCount >= state.targetSpawnCount) {
         state.phase = ANT_DEN_PHASE.DEPLETED;
         break;
       }
-      state.spawnTimer += config.spawnInterval;
+      queueNextSpawn(state, config, rng);
     }
   }
 }
