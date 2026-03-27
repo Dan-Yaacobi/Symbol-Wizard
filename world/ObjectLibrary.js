@@ -141,6 +141,7 @@ function createDefinition(definition) {
     maxClusterSize: 1,
     allowOverlap: false,
     biomeRarity: 'common',
+    clearanceRadius: 0,
     ...definition,
     category: definition.category === OBJECT_CATEGORY.LANDMARK ? SPAWN_CATEGORY.ENVIRONMENT : definition.category,
     placementCategory,
@@ -387,7 +388,8 @@ export const objectLibrary = {
     rotations: false,
     spawnWeight: 0.42,
     minClusterSize: 1,
-    maxClusterSize: 2,
+    maxClusterSize: 1,
+    clearanceRadius: 5,
     biomeRarity: 'uncommon',
     blueprint: [
       '   ..o..   ',
@@ -414,6 +416,7 @@ export const objectLibrary = {
       spawnRadius: 3.5,
       maxActiveAnts: 10,
       enemyType: 'fire_ant',
+      spawnBiasToPlayer: 0.7,
     },
   }),
   cook_station: createDefinition({
@@ -624,6 +627,7 @@ export function spawnObject(type, position, overrides = {}, rng = Math.random) {
     material: definition.material ?? 'wood',
     breakFrames: Array.isArray(definition.breakFrames) ? definition.breakFrames : null,
     antSpawner: definition.antSpawner ? { ...definition.antSpawner } : null,
+    clearanceRadius: Math.max(0, Number(definition.clearanceRadius) || 0),
     state: { ...(overrides.state ?? {}) },
     destroyed: false,
     radius,

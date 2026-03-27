@@ -77,11 +77,55 @@ function installTestObjects() {
     drops: [],
     preferredZones: ['denseForest'],
   };
+
+  objectLibrary.test_clearance_a = {
+    id: 'test_clearance_a',
+    category: OBJECT_CATEGORY.INTERACTABLE,
+    biomeTags: ['placement-test'],
+    footprint: [[0, 0]],
+    tiles: [{ x: 0, y: 0, char: 'C', fg: '#ffffff', bg: null }],
+    rotations: false,
+    blocksMovement: true,
+    interactable: true,
+    destructible: false,
+    spawnWeight: 2,
+    clusterMin: 1,
+    clusterMax: 1,
+    clusterRadius: 1,
+    clearanceRadius: 5,
+    variants: [],
+    centerOffset: { x: 0, y: 0 },
+    drops: [],
+    preferredZones: ['clearing'],
+  };
+
+  objectLibrary.test_clearance_b = {
+    id: 'test_clearance_b',
+    category: OBJECT_CATEGORY.INTERACTABLE,
+    biomeTags: ['placement-test'],
+    footprint: [[0, 0]],
+    tiles: [{ x: 0, y: 0, char: 'D', fg: '#ffffff', bg: null }],
+    rotations: false,
+    blocksMovement: true,
+    interactable: true,
+    destructible: false,
+    spawnWeight: 2,
+    clusterMin: 1,
+    clusterMax: 1,
+    clusterRadius: 1,
+    clearanceRadius: 4,
+    variants: [],
+    centerOffset: { x: 0, y: 0 },
+    drops: [],
+    preferredZones: ['clearing'],
+  };
 }
 
 function removeTestObjects() {
   delete objectLibrary.test_exported_array;
   delete objectLibrary.test_exported_object;
+  delete objectLibrary.test_clearance_a;
+  delete objectLibrary.test_clearance_b;
 }
 
 function testNoOverlapAndBoundaryProtection() {
@@ -132,7 +176,49 @@ function testNoOverlapAndBoundaryProtection() {
 
 function run() {
   testNoOverlapAndBoundaryProtection();
+  testClearanceSpacing();
   console.log('Object placement footprint tests passed.');
+}
+
+function testClearanceSpacing() {
+  installTestObjects();
+  try {
+    const width = 54;
+    const height = 54;
+    const tiles = makeTiles(width, height);
+    const system = new ObjectPlacementSystem();
+    const occupiedTiles = new Set();
+    const objects = system.placeObjects({
+      tiles,
+      rng: createRng(1337),
+      blockedMask: new Set(),
+      occupiedTiles,
+      roomId: 'room-clearance',
+      biomeType: 'placement-test',
+      safetyConfig: {
+        minDistanceFromMapEdge: 0,
+        objectDensity: 1,
+        clusterDensity: 1,
+        clusterRadiusMultiplier: 1,
+        maxAttemptsPerObjectType: 180,
+      },
+    });
+
+    const clearanceObjects = objects.filter((object) => Number(object.clearanceRadius) > 0);
+    assert.ok(clearanceObjects.length >= 2, 'Expected at least two clearance objects to validate spacing.');
+
+    for (let i = 0; i < clearanceObjects.length; i += 1) {
+      for (let j = i + 1; j < clearanceObjects.length; j += 1) {
+        const a = clearanceObjects[i];
+        const b = clearanceObjects[j];
+        const minDistance = Number(a.clearanceRadius) + Number(b.clearanceRadius);
+        const distance = Math.hypot(a.x - b.x, a.y - b.y);
+        assert.ok(distance >= minDistance, `Clearance collision between ${a.id} and ${b.id}.`);
+      }
+    }
+  } finally {
+    removeTestObjects();
+  }
 }
 
 run();

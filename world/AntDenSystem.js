@@ -32,6 +32,9 @@ function getDenConfig(den) {
     spawnCountMin: Math.max(1, Math.floor(Number(source.spawnCountMin) || 5)),
     spawnCountMax: Math.max(1, Math.floor(Number(source.spawnCountMax) || 10)),
     spawnRadius: Math.max(1, Number(source.spawnRadius) || 3.2),
+    spawnRingMinOffset: Math.max(1, Number(source.spawnRingMinOffset) || 1),
+    spawnRingMaxOffset: Math.max(1, Number(source.spawnRingMaxOffset) || Math.max(3, Number(source.spawnRadius) || 3.2)),
+    spawnBiasToPlayer: Math.min(1, Math.max(0, Number(source.spawnBiasToPlayer) || 0)),
     maxActiveAnts: Math.max(1, Math.floor(Number(source.maxActiveAnts) || 10)),
     enemyType: typeof source.enemyType === 'string' ? source.enemyType : 'fire_ant',
   };
@@ -84,6 +87,16 @@ function isSpawnTileWalkable(room, x, y, blockedObjectTiles, enemyTiles, denTile
   return true;
 }
 
+function isTileInsideBlockingClearance(worldObjects = [], ignoredObject, x, y) {
+  for (const object of worldObjects) {
+    if (!object || object === ignoredObject || object.destroyed || !object.collision) continue;
+    const clearance = Math.max(0, Number(object.clearanceRadius) || 0);
+    if (clearance <= 0) continue;
+    if (Math.hypot(x - object.x, y - object.y) < clearance) return true;
+  }
+  return false;
+}
+
 function collectDenFootprintTiles(den) {
   const tiles = new Set();
   for (const node of den?.footprint ?? den?.logicalShape?.tiles ?? [[0, 0]]) {
@@ -102,17 +115,26 @@ function estimateDenRadius(den) {
   return furthest;
 }
 
-function findSpawnPosition(den, room, worldObjects, enemies, rng = Math.random) {
+function findSpawnPosition(den, config, room, worldObjects, enemies, player, rng = Math.random) {
   const blockedObjectTiles = collectBlockedObjectTiles(worldObjects, den);
   const enemyTiles = collectEnemyTiles(enemies);
   const denTiles = collectDenFootprintTiles(den);
   const denRadius = estimateDenRadius(den);
+  const minRadius = denRadius + Math.max(1, config.spawnRingMinOffset);
+  const maxRadius = denRadius + Math.max(config.spawnRingMinOffset, config.spawnRingMaxOffset);
+  const playerAngle = player ? Math.atan2(player.y - den.y, player.x - den.x) : null;
 
   for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt += 1) {
-    const angle = rng() * Math.PI * 2;
-    const radius = randomInRange(rng, denRadius + 1, denRadius + 2);
+    const shouldBiasToPlayer = playerAngle !== null
+      && config.spawnBiasToPlayer > 0
+      && rng() < config.spawnBiasToPlayer;
+    const angle = shouldBiasToPlayer
+      ? playerAngle + randomInRange(rng, -Math.PI / 6, Math.PI / 6)
+      : rng() * Math.PI * 2;
+    const radius = randomInRange(rng, minRadius, maxRadius);
     const x = Math.round(den.x + Math.cos(angle) * radius);
     const y = Math.round(den.y + Math.sin(angle) * radius);
+    if (isTileInsideBlockingClearance(worldObjects, den, x, y)) continue;
     if (isSpawnTileWalkable(room, x, y, blockedObjectTiles, enemyTiles, denTiles)) return { x, y };
   }
   return null;
@@ -141,7 +163,7 @@ function queueNextSpawn(state, config, rng) {
 }
 
 function spawnAntFromDen({ den, config, state, room, worldObjects, enemies, player, spawnEnemy, onSpawn, debug, effectSystem, rng }) {
-  const spawnPoint = findSpawnPosition(den, room, worldObjects, enemies, rng);
+  const spawnPoint = findSpawnPosition(den, config, room, worldObjects, enemies, player, rng);
   if (!spawnPoint) {
     queueNextSpawn(state, config, rng);
     return false;

@@ -25,6 +25,7 @@ function createDen(overrides = {}) {
       spawnCountMin: 5,
       spawnCountMax: 5,
       spawnRadius: 3,
+      spawnBiasToPlayer: 0,
       maxActiveAnts: 10,
       enemyType: 'fire_ant',
     },
@@ -180,11 +181,59 @@ function testDoesNotActivateWhenPlayerOutsideTrigger() {
   assert.equal(den.state.phase, 'idle');
 }
 
+function testAvoidsBlockingObjectClearance() {
+  const room = createRoom();
+  const den = createDen({
+    antSpawner: {
+      ...createDen().antSpawner,
+      spawnCountMin: 1,
+      spawnCountMax: 1,
+      spawnBiasToPlayer: 0,
+    },
+  });
+  const player = { x: 12, y: 15 };
+  const enemies = [];
+  const spawns = [];
+  const worldObjects = [
+    den,
+    {
+      id: 'blocking-rock',
+      type: 'rock',
+      x: 15,
+      y: 12,
+      collision: true,
+      clearanceRadius: 4,
+      footprint: [[0, 0]],
+      destroyed: false,
+    },
+  ];
+
+  updateAntDens({
+    room,
+    worldObjects,
+    enemies,
+    player,
+    dt: 0.1,
+    rng: createSequenceRng([0.2, 0.0, 0.0, 0.0, 0.5, 0.5, 0.5]),
+    spawnEnemy: (_enemyType, spawnPoint) => {
+      spawns.push(spawnPoint);
+      const enemy = { alive: true, x: spawnPoint.x, y: spawnPoint.y };
+      enemies.push(enemy);
+      return enemy;
+    },
+  });
+
+  assert.equal(spawns.length, 1, 'Expected a single activation spawn.');
+  const distanceToBlocker = Math.hypot(spawns[0].x - 15, spawns[0].y - 12);
+  assert.ok(distanceToBlocker >= 4, 'Ant spawn should stay outside blocking object clearance.');
+}
+
 function run() {
   testActivationAndImmediateBurst();
   testSpawnIntervalRangeAndRandomization();
   testTotalCountAndDepletion();
   testDoesNotActivateWhenPlayerOutsideTrigger();
+  testAvoidsBlockingObjectClearance();
   console.log('Ant den spawner tests passed.');
 }
 

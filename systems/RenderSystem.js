@@ -702,6 +702,14 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, world
       drawCircle(object.x, object.y, triggerRadius, '·', color);
     }
   }
+
+  if (debugOptions.showObjectClearanceRadius) {
+    const overlayZones = activeRoom?.debugOverlay?.objectClearanceZones ?? [];
+    for (const zone of overlayZones) {
+      const radius = Math.max(1, Number(zone.radius) || 0);
+      drawCircle(zone.x, zone.y, radius, '·', '#7ec7ff');
+    }
+  }
 }
 
 
