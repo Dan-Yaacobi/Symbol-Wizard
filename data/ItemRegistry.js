@@ -23,6 +23,7 @@ const ITEM_DEFINITIONS = [
   { id: 'lightning_core', name: 'Lightning Core', type: ITEM_TYPES.BOSS, tier: 3, stackable: true, maxStack: 99, icon: '⚡' },
   { id: 'poison_gland', name: 'Poison Gland', type: ITEM_TYPES.RARE, tier: 2, stackable: true, maxStack: 99, icon: '☣' },
   { id: 'storm_shard', name: 'Storm Shard', type: ITEM_TYPES.RARE, tier: 2, stackable: true, maxStack: 99, icon: '⚡' },
+  { id: 'chitin_fragment', name: 'Chitin Fragment', type: ITEM_TYPES.RESOURCE, tier: 1, stackable: true, maxStack: 99, icon: '⌬' },
 ];
 
 const ITEM_DEFINITION_MAP = new Map(ITEM_DEFINITIONS.map((item) => [item.id, item]));

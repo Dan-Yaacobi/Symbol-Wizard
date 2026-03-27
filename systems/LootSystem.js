@@ -38,6 +38,13 @@ export const ENEMY_DROP_TABLES = Object.freeze({
       { itemId: 'storm_shard', chance: 0.1, min: 1, max: 1 },
     ],
   },
+  fire_ant: {
+    drops: [
+      { itemId: 'ember_dust', chance: 0.85, min: 1, max: 2 },
+      { itemId: 'chitin_fragment', chance: 0.45, min: 1, max: 1 },
+      { itemId: 'fire_core', chance: 0.08, min: 1, max: 1 },
+    ],
+  },
 });
 
 function randomInt(min, max) {

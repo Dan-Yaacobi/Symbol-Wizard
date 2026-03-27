@@ -113,6 +113,8 @@ export const DEFAULT_CONFIG = {
     showReservedCorridors: false,
     showLandingTiles: false,
     showEnemySpawnZones: false,
+    showAntDenTriggerRadius: false,
+    logAntDenSpawns: false,
   },
   pathGeneration: {
     baseTrailRadius: 2,
@@ -232,6 +234,8 @@ export const CONFIG_FIELDS = [
   { path: 'debug.showExitAnchors', label: 'Show Exit Anchors', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.showReservedCorridors', label: 'Show Reserved Corridors', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.showLandingTiles', label: 'Show Landing Tiles', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.showAntDenTriggerRadius', label: 'Show Ant Den Trigger Radius', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.logAntDenSpawns', label: 'Log Ant Den Spawn Count', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.overlaysEnabled', label: 'Master Overlay Toggle', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.showStatsHud', label: 'Compact Stats HUD', section: 'Performance', type: 'boolean' },
   { path: 'pathGeneration.baseTrailRadius', label: 'Base Trail Radius', section: 'Path Generation', type: 'number', min: 1, max: 8, step: 1 },

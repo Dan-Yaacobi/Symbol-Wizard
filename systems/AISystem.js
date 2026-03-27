@@ -344,7 +344,9 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
             const targetY = targetPlayerY + Math.sin(orbitAngle) * flankerOffsetDistance;
             move(enemy, targetX - enemy.targetX, targetY - enemy.targetY, dt, speedMult);
           } else {
-            const jitter = enemy.enemyType === 'spider' ? Math.sin(performance.now() * 0.01 + enemy.targetX) * 0.3 : 0;
+            const jitter = (enemy.enemyType === 'spider' || enemy.enemyType === 'fire_ant')
+              ? Math.sin((performance.now() * 0.01) + (enemy.targetX * 0.75) + (enemy.targetY * 0.5)) * 0.3
+              : 0;
             move(enemy, dx, dy, dt, speedMult, jitter);
           }
           syncEntityMovementState(enemy);

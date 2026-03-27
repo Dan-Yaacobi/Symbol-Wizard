@@ -34,6 +34,7 @@
     "slime": "enemies/slime.json",
     "spider": "enemies/spider.json",
     "forest_beetle": "enemies/forest_beetle.json",
-    "forest_mantis": "enemies/forest_mantis.json"
+    "forest_mantis": "enemies/forest_mantis.json",
+    "fire_ant": "enemies/fire_ant.json"
   }
 }

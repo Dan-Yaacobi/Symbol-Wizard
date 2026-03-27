@@ -542,7 +542,7 @@ function drawWorldDrop(renderer, camera, drop) {
   drawCell(renderer, { glyph, fg, layer: renderLayers.entities }, screenX, screenY);
 }
 
-function drawDebugOverlays(renderer, camera, player, enemies, projectiles, activeRoom, debugOptions = {}) {
+function drawDebugOverlays(renderer, camera, player, enemies, projectiles, worldObjects, activeRoom, debugOptions = {}) {
   if (!debugOptions?.overlaysEnabled) return;
 
   if (debugOptions.grid) {
@@ -660,6 +660,16 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, activ
     const pathDist = Math.max(1, Number(safety.minDistanceFromPath) || 1);
     for (const tile of enemyOverlay?.pathSafetyTiles ?? []) {
       drawCircle(tile.x, tile.y, pathDist, '·', '#7effb4');
+    }
+  }
+
+  if (debugOptions.showAntDenTriggerRadius) {
+    for (const object of worldObjects ?? []) {
+      if (!object || object.type !== 'ant_den' || object.destroyed) continue;
+      const triggerRadius = Math.max(1, Number(object.antSpawner?.triggerRadius) || 7);
+      const phase = object.state?.phase ?? 'idle';
+      const color = phase === 'depleted' ? '#808080' : (phase === 'active' ? '#ff9a4d' : '#ffaa66');
+      drawCircle(object.x, object.y, triggerRadius, '·', color);
     }
   }
 }
@@ -840,7 +850,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   const py = worldToScreenCell(player.y, camera.y);
   drawCell(renderer, { glyph: '!', fg: palette.playerAccent }, px, py - 2);
 
-  drawDebugOverlays(renderer, camera, player, enemies, projectiles, activeRoom, debugOptions);
+  drawDebugOverlays(renderer, camera, player, enemies, projectiles, worldObjects, activeRoom, debugOptions);
   drawDebugCursorOverlay(renderer, mouse);
   traceCoordinateRoundTrip(renderer, camera, mouse, player);
   if (typeof combatTextSystem?.render === 'function') combatTextSystem.render(renderer, camera);
