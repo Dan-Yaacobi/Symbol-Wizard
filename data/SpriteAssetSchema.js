@@ -209,6 +209,18 @@ export function resizeAnimationFrames(frames, newWidth, newHeight, options = {})
   return (Array.isArray(frames) ? frames : []).map((frame) => resizeFrame(frame, newWidth, newHeight, options));
 }
 
+export function resizeSprite(sprite, newWidth, newHeight, options = {}) {
+  const normalizedSprite = normalizeSpriteFrame(sprite);
+  const resizedSprite = resizeFrame(normalizedSprite, newWidth, newHeight, options);
+  if (!sprite || typeof sprite !== 'object') return resizedSprite;
+
+  sprite.width = resizedSprite.width;
+  sprite.height = resizedSprite.height;
+  sprite.offsetY = resizedSprite.offsetY ?? 0;
+  sprite.cells = resizedSprite.cells.map((row) => row.map((cell) => ({ ...cell })));
+  return sprite;
+}
+
 export function resizeSpriteAsset(asset, newWidth, newHeight, scope = 'whole sprite asset', options = {}) {
   const normalized = normalizeSpriteAsset(asset);
   const width = clampPositiveInt(newWidth, normalized.defaultGrid.width);

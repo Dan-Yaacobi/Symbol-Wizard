@@ -4,6 +4,7 @@ import {
   createEmptySpriteAsset,
   ensureRequiredAnimations,
   normalizeSpriteAsset,
+  resizeSprite,
   resizeSpriteAsset,
   validateSpriteAsset,
   getSpriteCollisionOffsets,
@@ -47,6 +48,28 @@ assert.deepEqual(Object.keys(ensured.animations).sort(), ['attack', 'idle', 'wal
 
 const resizedAsset = resizeSpriteAsset(emptyAsset, 5, 4, 'whole sprite asset', { pin: 'top-left' });
 assert.equal(resizedAsset.animations.idle[0].width, 5);
+
+const spriteFrame = {
+  width: 2,
+  height: 2,
+  offsetY: 0,
+  cells: [
+    [{ ch: 'A', fg: '#ffffff', bg: null }, { ch: 'B', fg: '#ffffff', bg: null }],
+    [{ ch: 'C', fg: '#ffffff', bg: null }, { ch: 'D', fg: '#ffffff', bg: null }],
+  ],
+};
+const resizedBigger = resizeSprite(spriteFrame, 4, 3, { pin: 'top-left' });
+assert.equal(resizedBigger, spriteFrame);
+assert.equal(spriteFrame.width, 4);
+assert.equal(spriteFrame.height, 3);
+assert.equal(spriteFrame.cells[0][0].ch, 'A');
+assert.equal(spriteFrame.cells[1][1].ch, 'D');
+assert.equal(spriteFrame.cells[2][3].ch, ' ');
+
+resizeSprite(spriteFrame, 1, 1, { pin: 'top-left' });
+assert.equal(spriteFrame.width, 1);
+assert.equal(spriteFrame.height, 1);
+assert.equal(spriteFrame.cells[0][0].ch, 'A');
 
 const asset = normalizeSpriteAsset({ id: 'sample', animations: { idle: [{ width: 2, height: 1, cells: [[{ ch: 'A', fg: '#fff', bg: '#000' }, { ch: ' ', fg: null, bg: null }]] }], walk: [], attack: [] } });
 assert.equal(validateSpriteAsset(asset).valid, true);
