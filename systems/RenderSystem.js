@@ -439,6 +439,36 @@ function drawWorldObject(renderer, camera, object, spriteId = object.spriteId) {
   }
 }
 
+function drawAntDenEffects(renderer, camera, worldObjects = [], nowSeconds = performance.now() / 1000) {
+  for (const object of worldObjects) {
+    if (!object || object.destroyed || object.type !== 'ant_den') continue;
+    const heatPulse = Number.isFinite(object.state?.heatPulse) ? object.state.heatPulse : nowSeconds;
+    const spawnPulse = Math.max(0, Number(object.state?.lastSpawnPulse) || 0);
+    const phase = object.state?.phase ?? 'idle';
+    const activeBoost = phase === 'active' ? 0.22 : 0.08;
+    const pulse = (Math.sin((heatPulse * 2.8) + (object.x * 0.37) + (object.y * 0.21)) + 1) * 0.5;
+    const emberColor = pulse > 0.54 ? '#ff9b52' : '#ff6f3a';
+    const coreColor = pulse > 0.55 ? '#ffb274' : '#de6f3f';
+    const ringGlyph = pulse > 0.5 ? '·' : '.';
+    const ringRadius = 3.2 + pulse * 0.35 + spawnPulse + activeBoost;
+
+    const points = 9;
+    for (let i = 0; i < points; i += 1) {
+      const angle = (Math.PI * 2 * i) / points + heatPulse * 0.45;
+      const x = object.x + Math.cos(angle) * ringRadius;
+      const y = object.y + Math.sin(angle) * ringRadius;
+      drawCell(renderer, { glyph: ringGlyph, fg: emberColor, layer: renderLayers.effects }, worldToScreenCell(x, camera.x), worldToScreenCell(y, camera.y));
+    }
+
+    drawCell(
+      renderer,
+      { glyph: pulse > 0.45 ? '•' : '·', fg: coreColor, layer: renderLayers.effects },
+      worldToScreenCell(object.x, camera.x),
+      worldToScreenCell(object.y - 1, camera.y),
+    );
+  }
+}
+
 
 
 function drawWorldObjectToContext(renderer, ctx, object, overrideSpriteId = null) {
@@ -781,6 +811,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     if (object.destroyed) continue;
     drawWorldObject(renderer, camera, object);
   }
+  drawAntDenEffects(renderer, camera, worldObjects);
 
   for (const npc of npcs) {
     const npcBaseColor = npc.dialogueEngaged ? '#f5df9a' : colorForEntity(npc);
