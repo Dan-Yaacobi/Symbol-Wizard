@@ -1,6 +1,7 @@
 {
   "sprites": [
     "enemies/forest_beetle.json",
+    "enemies/fire_ant.json",
     "enemies/forest_mantis.json",
     "enemies/skeleton.json",
     "enemies/slime.json",

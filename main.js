@@ -4,6 +4,7 @@ import { Camera } from './engine/Camera.js';
 import { Input } from './engine/Input.js';
 import { Viewport } from './engine/Viewport.js';
 import { Player } from './entities/Player.js';
+import { Enemy } from './entities/Enemy.js';
 import { BiomeGenerator } from './world/BiomeGenerator.js';
 import { WorldMapManager } from './world/WorldMapManager.js';
 import { RoomTransitionSystem } from './world/RoomTransitionSystem.js';
@@ -52,6 +53,7 @@ import {
 import { resolveWallOverlap } from './systems/EnemyCollisionSystem.js';
 import { attemptSlideMove } from './systems/CollisionSystem.js';
 import { populateInventoryWithMaxStacks } from './systems/InventorySystem.js';
+import { updateAntDens } from './world/AntDenSystem.js';
 
 const VIEW_W = 104;
 const VIEW_H = 58;
@@ -138,6 +140,19 @@ function syncActiveRoomCollections(room) {
   worldObjects = room?.objects ?? [];
   npcs.length = 0;
   for (const npc of room?.npcs ?? []) npcs.push(npc);
+}
+
+function spawnEnemyInActiveRoom(enemyType, position) {
+  const x = Math.round(position?.x ?? 0);
+  const y = Math.round(position?.y ?? 0);
+  if (!map?.[y]?.[x]?.walkable) return null;
+  if (activeRoom?.collisionMap?.[y]?.[x]) return null;
+  const enemy = new Enemy(enemyType, x, y);
+  if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToEnemy(enemy);
+  resolveWallOverlap(enemy, activeRoom?.tiles);
+  enemies.push(enemy);
+  activeRoom.entities = [...enemies];
+  return enemy;
 }
 
 function applyEnemyTuningToAllCurrentEnemies() {
@@ -1377,6 +1392,20 @@ function tick(now) {
 
   if (!dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
     timed('player', framePerf, () => handlePlayer(dt));
+    timed('world', framePerf, () => {
+      updateAntDens({
+        room: activeRoom,
+        worldObjects,
+        enemies,
+        player,
+        dt,
+        spawnEnemy: (enemyType, spawnPoint) => spawnEnemyInActiveRoom(enemyType, spawnPoint),
+        effectSystem: abilitySystem,
+        debug: {
+          logSpawnCount: runtimeConfig.get('debug.logAntDenSpawns'),
+        },
+      });
+    });
     if (enemyAiEnabled) {
       timed('enemy', framePerf, () => {
         updateEnemies(enemies, player, dt, projectiles, runtimeConfig, { map, tileSize: 1, system: abilitySystem });

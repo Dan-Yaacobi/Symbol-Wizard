@@ -5,6 +5,7 @@ export const BIOME_SPAWN_TABLES = {
     { enemyId: 'swarm_bug', weight: 3 },
     { enemyId: 'forest_beetle', weight: 1 },
     { enemyId: 'forest_mantis', weight: 2 },
+    { enemyId: 'fire_ant', weight: 1 },
   ],
   cave: [
     { enemyId: 'spider', weight: 3 },

@@ -51,6 +51,13 @@ export const ENEMY_REGISTRY = {
     combat: { attackRange: 3.2, attackWindup: 0.34, attackDuration: 0.32, attackHitTime: 0.1, hitKnockback: 8, radius: 1.6, flankOrbitSpeed: 1.6, aggroRadius: 22 },
     animationTimings: { idle: 0.4, walk: 0.2, attack: 0.15 },
   }),
+  fire_ant: createDefinition({
+    id: 'fire_ant', category: SPAWN_CATEGORY.ENEMY, assetId: 'fire_ant', spriteId: 'fire_ant', biomeTags: ['forest'], spawnWeight: 0.45,
+    role: 'swarm', behavior: 'chaser',
+    stats: { hp: 9, speed: 13.5, damage: 2, attackCooldown: 0.45 },
+    combat: { attackRange: 2.4, attackWindup: 0.12, attackDuration: 0.2, attackHitTime: 0.05, hitKnockback: 4, radius: 1.3, aggroRadius: 28 },
+    animationTimings: { idle: 0.36, walk: 0.14, attack: 0.1 },
+  }),
 };
 
 export function getEnemyDefinition(enemyId) {

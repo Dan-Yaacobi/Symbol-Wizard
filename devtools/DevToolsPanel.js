@@ -91,6 +91,23 @@ const ENEMY_TUNING_LAYOUT = [
       { key: 'flankOrbitSpeed', label: 'Flank Orbit Speed', min: 0.1, max: 10, step: 0.05 },
     ],
   },
+  {
+    type: 'fire_ant',
+    label: 'Fire Ant',
+    fields: [
+      { key: 'aggroRadius', label: 'Aggro Radius', min: 2, max: 60, step: 0.1 },
+      { key: 'hp', label: 'HP', min: 1, max: 200, step: 1 },
+      { key: 'speed', label: 'Speed', min: 1, max: 30, step: 0.1 },
+      { key: 'attackRange', label: 'Attack Range', min: 1, max: 20, step: 0.1 },
+      { key: 'attackDamage', label: 'Attack Damage', min: 0, max: 20, step: 0.1 },
+      { key: 'attackCooldown', label: 'Attack Cooldown', min: 0.1, max: 5, step: 0.05 },
+      { key: 'attackWindup', label: 'Attack Windup', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackDuration', label: 'Attack Duration', min: 0.05, max: 5, step: 0.05 },
+      { key: 'attackHitTime', label: 'Attack Hit Time', min: 0.01, max: 5, step: 0.01 },
+      { key: 'hitKnockback', label: 'Hit Knockback', min: 0, max: 30, step: 0.1 },
+      { key: 'radius', label: 'Radius', min: 0.5, max: 5, step: 0.05 },
+    ],
+  },
 ];
 
 const SECTION_ORDER = [
@@ -257,6 +274,7 @@ export class DevToolsPanel {
       showReservedCorridors: enabled('debug.showReservedCorridors'),
       showLandingTiles: enabled('debug.showLandingTiles'),
       showEnemySpawnZones: enabled('debug.showEnemySpawnZones'),
+      showAntDenTriggerRadius: enabled('debug.showAntDenTriggerRadius'),
       selectedEntityRef: this.selectedEntity,
       selectedTileRef: this.selectedTile,
       aggroRange: this.config.get('enemies.aggroRange'),
