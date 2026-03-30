@@ -54,6 +54,7 @@ import {
 import { resolveWallOverlap } from './systems/EnemyCollisionSystem.js';
 import { attemptSlideMove } from './systems/CollisionSystem.js';
 import { populateInventoryWithMaxStacks } from './systems/InventorySystem.js';
+import { getItemDefinition } from './data/ItemRegistry.js';
 import { updateAntDens } from './world/AntDenSystem.js';
 import { tryFindSpawnPosition } from './world/SpawnValidator.js';
 
@@ -243,19 +244,40 @@ function randomRange(min, max) {
   return min + Math.random() * (max - min);
 }
 
+const DROP_COLLISION_PROBE = { radius: 0.35 };
+
+function isValidDropLandingPosition(x, y) {
+  const tx = Math.round(x);
+  const ty = Math.round(y);
+  const tile = getTileSafe(tx, ty);
+  if (!tile?.walkable) return false;
+  return !collidesWithBlockingObjectAt(DROP_COLLISION_PROBE, x, y, worldObjects);
+}
+
 function createWorldDrop(drop) {
+  const originX = drop?.x ?? 0;
+  const originY = drop?.y ?? 0;
   const angle = randomRange(0, Math.PI * 2);
-  const speed = randomRange(2, 4);
-  const duration = randomRange(0.15, 0.25);
+  const speed = randomRange(6.5, 9.5);
+  const duration = randomRange(0.38, 0.6);
+  const item = getItemDefinition(drop?.itemId);
 
   return {
     ...drop,
-    x: drop?.x ?? 0,
-    y: drop?.y ?? 0,
+    x: originX,
+    y: originY,
+    baseX: originX,
+    baseY: originY,
     vx: Math.cos(angle) * speed,
     vy: Math.sin(angle) * speed,
     life: 0,
     duration,
+    spriteId: drop?.spriteId ?? item?.spriteId ?? 'drop-resource',
+    dropTint: drop?.dropTint ?? item?.dropTint,
+    animationTimer: 0,
+    animationPhase: randomRange(0, Math.PI * 2),
+    bobAmplitude: item?.dropAnimation?.bobAmplitude ?? 0.35,
+    bobSpeed: item?.dropAnimation?.bobSpeed ?? 3.6,
   };
 }
 
@@ -264,17 +286,30 @@ function updateWorldDrops(dt) {
 
   for (const drop of worldDrops) {
     drop.life = (drop.life ?? 0) + dt;
+    drop.animationTimer = (drop.animationTimer ?? 0) + dt;
     const duration = Math.max(0.0001, drop.duration ?? 0.2);
     const t = drop.life / duration;
 
     if (t < 1) {
-      drop.x += (drop.vx ?? 0) * dt;
-      drop.y += (drop.vy ?? 0) * dt;
+      const prevX = drop.baseX ?? drop.x;
+      const prevY = drop.baseY ?? drop.y;
+      const nextX = prevX + (drop.vx ?? 0) * dt;
+      const nextY = prevY + (drop.vy ?? 0) * dt;
+
+      if (isValidDropLandingPosition(nextX, nextY)) {
+        drop.baseX = nextX;
+        drop.baseY = nextY;
+      } else {
+        drop.vx = 0;
+        drop.vy = 0;
+      }
     } else {
       drop.vx = 0;
       drop.vy = 0;
     }
 
+    drop.x = drop.baseX ?? drop.x;
+    drop.y = drop.baseY ?? drop.y;
     kept.push(drop);
   }
 
