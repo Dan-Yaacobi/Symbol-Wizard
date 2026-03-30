@@ -136,6 +136,7 @@ export class RoomGenerator {
       blockedMask: objectBlockedMask,
       roomId: roomNode.id,
       biomeType,
+      mapType: biomeType,
       safetyConfig,
     });
 
@@ -152,6 +153,7 @@ export class RoomGenerator {
       blockedMask: objectBlockedMask,
       roomId: roomNode.id,
       biomeType,
+      mapType: biomeType,
       safetyConfig,
     });
 

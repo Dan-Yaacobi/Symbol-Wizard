@@ -63,6 +63,7 @@ export const ENEMY_REGISTRY = {
   }),
   fire_ant: createDefinition({
     id: 'fire_ant', category: SPAWN_CATEGORY.ENEMY, assetId: 'fire_ant', spriteId: 'fire_ant', biomeTags: ['forest'], spawnWeight: 0.45,
+    spawnSource: 'structure',
     role: 'swarm', behavior: 'chaser',
     spawnStyle: ENEMY_SPAWN_STYLE.SWARM,
     stats: { hp: 9, speed: 13.5, damage: 2, attackCooldown: 0.45 },

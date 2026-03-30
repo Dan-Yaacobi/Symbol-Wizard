@@ -573,6 +573,7 @@ export class TownGenerator {
       blockedMask: objectBlockedMask,
       roomId: `town-${seed}`,
       biomeType: 'forest',
+      mapType: 'town',
       safetyConfig: {
         pathTiles: Array.from(roadMask).map((key) => {
           const [x, y] = key.split(',').map(Number);
