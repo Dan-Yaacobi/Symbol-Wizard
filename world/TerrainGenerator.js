@@ -1,7 +1,17 @@
 import { tiles } from './TilePalette.js';
+import { biomeToneBias, colorVariation } from './ColorVariation.js';
 
 function cloneTile(tile) {
   return { ...tile };
+}
+
+function varyTileColor(tile, seed, biomeType) {
+  const tone = biomeToneBias(biomeType);
+  return {
+    ...tile,
+    fg: colorVariation(tile.fg, { hue: 0.04, lightness: 0.08, saturation: 0.03 }, seed, tone),
+    bg: tile.bg ? colorVariation(tile.bg, { hue: 0.03, lightness: 0.06, saturation: 0.02 }, seed + 0.73, tone) : tile.bg,
+  };
 }
 
 function tileFrom(baseTile, overrides = {}) {
@@ -38,7 +48,8 @@ function pickBoundaryTileVariant(boundaryTiles, x, y, rng) {
   if (boundaryTiles.length === 1) return boundaryTiles[0];
   const band = (Math.floor(x / 2) + Math.floor(y / 2)) % boundaryTiles.length;
   const jitter = rng() < 0.18 ? 1 : 0;
-  return boundaryTiles[(band + jitter) % boundaryTiles.length];
+  const pick = boundaryTiles[(band + jitter) % boundaryTiles.length];
+  return varyTileColor(pick, (x * 0.23) + (y * 0.17), 'forest');
 }
 
 function carveFloor(tileMap, x, y, tile = tiles.floor, metadata = null, marker = null) {
@@ -541,9 +552,8 @@ export class TerrainGenerator {
       for (let x = 0; x < this.roomWidth; x += 1) {
         const noise = rng();
         const patchBand = ((Math.floor(x / 11) + Math.floor(y / 9)) % 10) / 10;
-        grid[y][x] = patchBand + noise * 0.35 > 0.94
-          ? tileFrom(tiles.grassDark, { type: 'ground' })
-          : tileFrom(tiles.grass, { type: 'ground' });
+        const base = patchBand + noise * 0.35 > 0.94 ? tiles.grassDark : tiles.grass;
+        grid[y][x] = tileFrom(varyTileColor(base, (x * 0.11) + (y * 0.07), biomeType), { type: 'ground' });
       }
     }
 
@@ -650,7 +660,7 @@ export class TerrainGenerator {
           const y = cy + oy;
           if (!tileMap[y]?.[x]) continue;
           if (roadMask.has(`${x},${y}`)) continue;
-          tileMap[y][x] = tileFrom(tiles.grass, { type: 'ground' });
+          tileMap[y][x] = tileFrom(varyTileColor(tiles.grass, (x * 0.13) + (y * 0.19), biomeType), { type: 'ground' });
           clearingMask.add(`${x},${y}`);
         }
       }
@@ -691,9 +701,9 @@ export class TerrainGenerator {
 
   decorate(tileMap, rng, blockedMask) {
     const decorativeTiles = [
-      () => tileFrom(tiles.grassDark, { char: '"', type: 'decorative', walkable: true }),
-      () => tileFrom(tiles.pathPebble, { char: '*', fg: '#d86464', bg: '#3b2f20', type: 'decorative', walkable: true }),
-      () => tileFrom(tiles.pathPebble, { char: '·', fg: '#a4adb8', bg: '#373838', type: 'decorative', walkable: true }),
+      () => tileFrom(varyTileColor(tiles.grassDark, rng() * 97, 'forest'), { char: '"', type: 'decorative', walkable: true }),
+      () => tileFrom(varyTileColor(tiles.pathPebble, rng() * 83, 'forest'), { char: '*', fg: '#d86464', bg: '#3b2f20', type: 'decorative', walkable: true }),
+      () => tileFrom(varyTileColor(tiles.pathPebble, rng() * 61, 'forest'), { char: '·', fg: '#a4adb8', bg: '#373838', type: 'decorative', walkable: true }),
     ];
 
     const attempts = Math.floor((this.roomWidth * this.roomHeight) / 85);
