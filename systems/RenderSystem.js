@@ -571,6 +571,10 @@ function ensureBackgroundCache(renderer, map, worldObjects = []) {
   renderer.setBackgroundCache({ ...cache, key });
 }
 
+export function prewarmBackgroundCache(renderer, map, worldObjects = []) {
+  ensureBackgroundCache(renderer, map, worldObjects);
+}
+
 
 function drawWorldDrop(renderer, camera, drop) {
   const item = getItemDefinition(drop?.itemId);

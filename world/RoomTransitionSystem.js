@@ -1,6 +1,14 @@
 import { getBestInteractableAt } from '../systems/InteractionSystem.js';
 import { buildCollidableMask, floodFillWalkable, nearestReachablePoint } from './PathConnectivity.js';
 
+function nowMs() {
+  return globalThis?.performance?.now?.() ?? Date.now();
+}
+
+function wallClockIso() {
+  return new Date().toISOString();
+}
+
 function isWalkableTile(room, x, y) {
   const row = room?.tiles?.[y];
   const tile = row?.[x];
@@ -96,7 +104,9 @@ export class RoomTransitionSystem {
     this.phase = 'idle';
     this.phaseTimer = 0;
     this.fadeAlpha = 0;
+    this.maxFadeAlpha = 0.78;
     this.pendingExit = null;
+    this.preparedTransition = null;
     this.exitTriggerLockTimer = 0;
   }
 
@@ -105,6 +115,7 @@ export class RoomTransitionSystem {
     this.phaseTimer = 0;
     this.fadeAlpha = 0;
     this.pendingExit = null;
+    this.preparedTransition = null;
     this.exitTriggerLockTimer = 0;
   }
 
@@ -132,6 +143,96 @@ export class RoomTransitionSystem {
     this.phaseTimer = 0;
   }
 
+  logPhase(phase, startMs, endMs, details = {}) {
+    const payload = {
+      phase,
+      startTimestamp: wallClockIso(),
+      startMs: Number(startMs.toFixed(3)),
+      endMs: Number(endMs.toFixed(3)),
+      durationMs: Number((endMs - startMs).toFixed(3)),
+      ...details,
+    };
+    console.info('[TransitionTiming]', payload);
+  }
+
+  normalizeExit(activeRoom, exit) {
+    const data = exit?.interactionData ?? {};
+    const normalizedExit = {
+      ...exit,
+      targetMapType: exit?.targetMapType ?? exit?.targetMap ?? data.targetMap ?? null,
+      targetMap: exit?.targetMap ?? exit?.targetMapType ?? data.targetMap ?? null,
+      targetRoomId: exit?.targetRoomId ?? exit?.targetBiome ?? data.targetBiome ?? null,
+      targetBiome: exit?.targetBiome ?? exit?.targetRoomId ?? data.targetBiome ?? null,
+      targetEntryId: exit?.targetEntryId ?? exit?.targetEntranceId ?? data.targetEntryId ?? data.targetExitId ?? null,
+      targetEntranceId: exit?.targetEntranceId ?? data.targetEntryId ?? data.targetExitId ?? null,
+      targetSeed: exit?.targetSeed ?? data.targetSeed ?? null,
+      meta: exit?.meta ?? data.meta ?? null,
+    };
+
+    if (normalizedExit.targetMapType === 'house_interior') {
+      normalizedExit.meta = {
+        ...(normalizedExit.meta ?? {}),
+        houseId: normalizedExit.meta?.houseId ?? exit?.id,
+        parentTownSeed: normalizedExit.meta?.parentTownSeed ?? activeRoom?.seed,
+        houseIndex: normalizedExit.meta?.houseIndex ?? (Number.parseInt(String(exit?.id).split('-').pop(), 10) || 0),
+        returnPosition: normalizedExit.meta?.returnPosition ?? (exit?.door ? { x: exit.door.x, y: exit.door.y + 2 } : null),
+        returnMapId: normalizedExit.meta?.returnMapId ?? activeRoom?.id,
+        returnEntryId: normalizedExit.meta?.returnEntryId ?? `return-${exit?.id}`,
+      };
+    }
+
+    return normalizedExit;
+  }
+
+  prepareTransitionTarget(context, exitRef) {
+    const startMs = nowMs();
+    const exit = this.resolveExit(context.activeRoom, exitRef);
+    if (!exit) return null;
+    const normalizedExit = this.normalizeExit(context.activeRoom, exit);
+
+    let targetRoom = null;
+    let targetEntrance = null;
+    if (normalizedExit.targetMapType && this.worldMapManager) {
+      targetRoom = this.worldMapManager.resolveMapByExit(context.activeRoom, normalizedExit);
+      targetEntrance = this.worldMapManager.getEntrance(targetRoom, normalizedExit.targetEntryId);
+    } else if (normalizedExit.targetRoomId && normalizedExit.targetEntranceId) {
+      targetRoom = this.biomeGenerator.loadRoom(normalizedExit.targetRoomId);
+      targetEntrance = targetRoom?.entrances?.[normalizedExit.targetEntranceId];
+    }
+
+    const endMs = nowMs();
+    this.logPhase('transition_target_resolve', startMs, endMs, {
+      exitId: normalizedExit.id ?? null,
+      fromRoomId: context.activeRoom?.id ?? null,
+      targetMapType: normalizedExit.targetMapType ?? null,
+      targetRoomResolved: Boolean(targetRoom),
+      targetEntranceResolved: Boolean(targetEntrance),
+      mapCacheHit: Boolean(targetRoom && this.worldMapManager?.mapCache?.has?.(targetRoom.id)),
+    });
+
+    if (!targetRoom || !targetEntrance) {
+      return {
+        exit,
+        normalizedExit,
+        targetRoom: null,
+        targetEntrance: null,
+      };
+    }
+
+    return {
+      exit,
+      normalizedExit,
+      targetRoom,
+      targetEntrance,
+      fromRoomId: context.activeRoom?.id ?? null,
+    };
+  }
+
+  prewarmExitTarget(activeRoom, exitRef) {
+    if (!activeRoom || !exitRef) return null;
+    return this.prepareTransitionTarget({ activeRoom, player: null }, exitRef);
+  }
+
   update(dt, context) {
     this.exitTriggerLockTimer = Math.max(0, this.exitTriggerLockTimer - dt);
 
@@ -140,27 +241,34 @@ export class RoomTransitionSystem {
       if (!hitExitId) return null;
 
       this.pendingExit = hitExitId;
+      this.preparedTransition = this.prepareTransitionTarget(context, hitExitId);
       this.phase = 'fadeOut';
       this.phaseTimer = 0;
       return null;
     }
 
+    if (this.phase === 'fadeOut' && !this.preparedTransition && this.pendingExit) {
+      this.preparedTransition = this.prepareTransitionTarget(context, this.pendingExit);
+    }
+
     this.phaseTimer += dt;
     const progress = Math.min(1, this.phaseTimer / this.fadeDuration);
+    const easedProgress = progress * progress * (3 - (2 * progress));
 
     if (this.phase === 'fadeOut') {
-      this.fadeAlpha = progress;
+      this.fadeAlpha = easedProgress * this.maxFadeAlpha;
       if (progress < 1) return null;
 
       const transitionResult = this.switchRoom(context, this.pendingExit);
       this.phase = 'fadeIn';
       this.phaseTimer = 0;
       this.pendingExit = null;
+      this.preparedTransition = null;
       return transitionResult;
     }
 
     if (this.phase === 'fadeIn') {
-      this.fadeAlpha = 1 - progress;
+      this.fadeAlpha = (1 - easedProgress) * this.maxFadeAlpha;
       if (progress < 1) return null;
       this.phase = 'idle';
       this.phaseTimer = 0;
@@ -217,41 +325,13 @@ export class RoomTransitionSystem {
       return null;
     }
 
-    const data = exit.interactionData ?? {};
-    const normalizedExit = {
-      ...exit,
-      targetMapType: exit.targetMapType ?? exit.targetMap ?? data.targetMap ?? null,
-      targetMap: exit.targetMap ?? exit.targetMapType ?? data.targetMap ?? null,
-      targetRoomId: exit.targetRoomId ?? exit.targetBiome ?? data.targetBiome ?? null,
-      targetBiome: exit.targetBiome ?? exit.targetRoomId ?? data.targetBiome ?? null,
-      targetEntryId: exit.targetEntryId ?? exit.targetEntranceId ?? data.targetEntryId ?? data.targetExitId ?? null,
-      targetEntranceId: exit.targetEntranceId ?? data.targetEntryId ?? data.targetExitId ?? null,
-      targetSeed: exit.targetSeed ?? data.targetSeed ?? null,
-      meta: exit.meta ?? data.meta ?? null,
-    };
-
-    if (normalizedExit.targetMapType === 'house_interior') {
-      normalizedExit.meta = {
-        ...(normalizedExit.meta ?? {}),
-        houseId: normalizedExit.meta?.houseId ?? exit.id,
-        parentTownSeed: normalizedExit.meta?.parentTownSeed ?? context.activeRoom?.seed,
-        houseIndex: normalizedExit.meta?.houseIndex ?? (Number.parseInt(String(exit.id).split('-').pop(), 10) || 0),
-        returnPosition: normalizedExit.meta?.returnPosition ?? (exit.door ? { x: exit.door.x, y: exit.door.y + 2 } : null),
-        returnMapId: normalizedExit.meta?.returnMapId ?? context.activeRoom?.id,
-        returnEntryId: normalizedExit.meta?.returnEntryId ?? `return-${exit.id}`,
-      };
-    }
-
-    let targetRoom = null;
-    let targetEntrance = null;
-
-    if (normalizedExit.targetMapType && this.worldMapManager) {
-      targetRoom = this.worldMapManager.resolveMapByExit(context.activeRoom, normalizedExit);
-      targetEntrance = this.worldMapManager.getEntrance(targetRoom, normalizedExit.targetEntryId);
-    } else if (normalizedExit.targetRoomId && normalizedExit.targetEntranceId) {
-      targetRoom = this.biomeGenerator.loadRoom(normalizedExit.targetRoomId);
-      targetEntrance = targetRoom?.entrances?.[normalizedExit.targetEntranceId];
-    }
+    const prepared = this.preparedTransition?.fromRoomId === context.activeRoom?.id
+      && (this.preparedTransition?.exit?.id ?? null) === (exit?.id ?? null)
+      ? this.preparedTransition
+      : this.prepareTransitionTarget(context, exit);
+    const normalizedExit = prepared?.normalizedExit ?? this.normalizeExit(context.activeRoom, exit);
+    const targetRoom = prepared?.targetRoom ?? null;
+    const targetEntrance = prepared?.targetEntrance ?? null;
 
     if (!targetRoom || !targetEntrance) {
       this.log('FAIL: transition called but failed — target room or entrance missing', {
