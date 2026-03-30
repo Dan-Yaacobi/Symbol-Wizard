@@ -1,4 +1,4 @@
-import { getAssetPath, loadAssetRegistry } from './AssetRegistry.js';
+import { getAllAssetPaths, loadAssetRegistry } from './AssetRegistry.js';
 import { normalizeSpriteAsset, validateSpriteAsset } from './SpriteAssetSchema.js';
 
 const DEFAULT_SPRITE_ASSET_FOLDER = './assets';
@@ -27,15 +27,14 @@ async function resolveFolder(folder) {
 
 async function listSpriteAssetFiles(folder) {
   await loadAssetRegistry();
-  const assetEntries = [...spriteAssetStore.keys()];
-  if (assetEntries.length > 0) return assetEntries.map((assetId) => getAssetPath(assetId)).filter(Boolean);
-
-  const resolvedFolder = await resolveFolder(folder);
-  const registry = await readJson(canUseNodeFs() ? `${resolvedFolder}/registry.json` : './assets/registry.json');
-  return Object.values(registry?.assets ?? {})
-    .filter((file) => typeof file === 'string' && file.endsWith('.json') && !file.startsWith('objects/'))
-    .map((file) => `${folder.replace(/\/$/, '')}/${file}`)
-    .sort();
+  const normalizedFolder = folder.replace(/\/$/, '');
+  return [...new Set(
+    getAllAssetPaths()
+      .filter((file) => typeof file === 'string' && file.endsWith('.json'))
+      .map((file) => file.replace(/^\.?\//, ''))
+      .map((file) => file.startsWith('assets/') ? file.slice('assets/'.length) : file)
+      .map((file) => `${normalizedFolder}/${file}`),
+  )].sort();
 }
 
 export function registerSpriteAsset(asset) {
