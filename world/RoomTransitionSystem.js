@@ -113,6 +113,7 @@ export class RoomTransitionSystem {
     this.activeTimeline = null;
     this.lastTransitionTimeline = null;
     this.lastBlockingSummary = null;
+    this.newRoomActivatedAtMs = null;
   }
 
   reset() {
@@ -124,6 +125,15 @@ export class RoomTransitionSystem {
     this.preparedTransitionTask = null;
     this.exitTriggerLockTimer = 0;
     this.activeTimeline = null;
+    this.newRoomActivatedAtMs = null;
+  }
+
+  isTransitionActive() {
+    return this.phase !== 'idle';
+  }
+
+  noteExternalTimeline(label, details = {}) {
+    this.markTimeline(label, { details });
   }
 
   log(message, details = undefined) {
@@ -152,8 +162,15 @@ export class RoomTransitionSystem {
     this.pendingExit = exit;
     this.preparedTransition = null;
     this.preparedTransitionTask = null;
-    this.phase = 'fadeOut';
+    this.markTimeline('input_lock_start');
+    this.setPhase('fadeOut');
     this.phaseTimer = 0;
+  }
+
+  setPhase(nextPhase) {
+    if (this.phase === nextPhase) return;
+    this.phase = nextPhase;
+    this.markTimeline('transition_state_changed', { details: { phase: nextPhase } });
   }
 
   beginTimeline(exit, source = 'unknown') {
@@ -194,6 +211,19 @@ export class RoomTransitionSystem {
         sincePreviousMs: Number((entry.ms - (ordered[index - 1]?.ms ?? start)).toFixed(3)),
       })),
     };
+    const countLabel = (label) => timeline.checkpoints.filter((entry) => entry.label === label).length;
+    timeline.eventCounts = {
+      exitTriggerDetected: countLabel('exit_trigger_detected') + countLabel('on_exit_trigger'),
+      transitionStart: countLabel('transition_start_requested'),
+      mapLookup: countLabel('map_lookup_start'),
+      mapGeneration: countLabel('map_generation_start'),
+      roomActivation: countLabel('room_activation_start'),
+      fadeStart: countLabel('fade_black_screen_start'),
+      fadeEnd: countLabel('fade_end_map_visible'),
+      rendererSwap: countLabel('renderer_swap_start'),
+      cameraViewportUpdate: countLabel('camera_viewport_update_start'),
+      firstFrameRendered: countLabel('first_frame_new_room_rendered'),
+    };
     this.lastTransitionTimeline = timeline;
 
     const ranked = timeline.checkpoints
@@ -215,6 +245,7 @@ export class RoomTransitionSystem {
         details: entry.details ?? null,
       })),
       blockingHotspots: this.lastBlockingSummary,
+      eventCounts: timeline.eventCounts,
     });
     this.activeTimeline = null;
   }
@@ -262,6 +293,7 @@ export class RoomTransitionSystem {
 
   prepareTransitionTarget(context, exitRef) {
     const startMs = nowMs();
+    this.markTimeline('map_lookup_start');
     const exit = this.resolveExit(context.activeRoom, exitRef);
     if (!exit) return null;
     const normalizedExit = this.normalizeExit(context.activeRoom, exit);
@@ -277,6 +309,12 @@ export class RoomTransitionSystem {
     }
 
     const endMs = nowMs();
+    this.markTimeline('map_lookup_end', {
+      details: {
+        targetRoomResolved: Boolean(targetRoom),
+        targetEntranceResolved: Boolean(targetEntrance),
+      },
+    });
     this.logPhase('transition_target_resolve', startMs, endMs, {
       exitId: normalizedExit.id ?? null,
       fromRoomId: context.activeRoom?.id ?? null,
@@ -326,6 +364,7 @@ export class RoomTransitionSystem {
     if (this.phase === 'idle') {
       const hitExitId = this.exitTriggerLockTimer > 0 ? null : this.detectExit(context.activeRoom, context.player);
       if (!hitExitId) return null;
+      this.markTimeline('exit_trigger_detected');
       this.requestTransition(hitExitId);
       return null;
     }
@@ -338,7 +377,7 @@ export class RoomTransitionSystem {
       this.fadeAlpha = easedProgress * this.maxFadeAlpha;
       if (this.fadeAlpha > 0 && !this.hasTimelineCheckpoint('fade_black_screen_start')) this.markTimeline('fade_black_screen_start');
       if (progress < 1) return null;
-      this.phase = 'loading';
+      this.setPhase('loading');
       this.phaseTimer = 0;
       this.fadeAlpha = this.maxFadeAlpha;
       this.startAsyncPrepareTask(context);
@@ -350,7 +389,7 @@ export class RoomTransitionSystem {
       if (!this.preparedTransitionTask?.done) return null;
       if (!this.preparedTransitionTask.success) {
         this.log('FAIL: async transition preparation failed', { error: this.preparedTransitionTask.error });
-        this.phase = 'fadeIn';
+        this.setPhase('fadeIn');
         this.phaseTimer = 0;
         this.pendingExit = null;
         this.preparedTransition = null;
@@ -362,7 +401,7 @@ export class RoomTransitionSystem {
       this.markTimeline('renderer_swap_start');
       const transitionResult = this.switchRoom(context, this.pendingExit);
       this.markTimeline('renderer_swap_end');
-      this.phase = 'fadeIn';
+      this.setPhase('fadeIn');
       this.phaseTimer = 0;
       this.pendingExit = null;
       this.preparedTransitionTask = null;
@@ -375,10 +414,12 @@ export class RoomTransitionSystem {
     if (this.phase === 'fadeIn') {
       this.fadeAlpha = (1 - easedProgress) * this.maxFadeAlpha;
       if (progress < 1) return null;
-      this.phase = 'idle';
+      this.setPhase('idle');
       this.phaseTimer = 0;
       this.fadeAlpha = 0;
       this.markTimeline('fade_end_map_visible');
+      this.markTimeline('input_lock_end');
+      this.markTimeline('player_control_restored');
       this.finalizeTimeline();
     }
 
@@ -453,6 +494,7 @@ export class RoomTransitionSystem {
       return null;
     }
 
+    this.markTimeline('room_activation_start');
     context.activeRoom.state.visited = true;
     targetRoom.state = targetRoom.state ?? {};
     targetRoom.state.visited = true;
@@ -463,6 +505,13 @@ export class RoomTransitionSystem {
     const spawn = findSpawnPosition(targetRoom, preferredSpawnX, preferredSpawnY);
     context.player.x = spawn.x;
     context.player.y = spawn.y;
+    this.newRoomActivatedAtMs = nowMs();
+    this.markTimeline('room_activation_end', {
+      details: {
+        fromRoomId: context.activeRoom?.id ?? null,
+        toRoomId: targetRoom?.id ?? null,
+      },
+    });
 
     this.log('Transition succeeded', { fromRoomId: context.activeRoom?.id ?? null, toRoomId: targetRoom?.id ?? null, spawn });
     this.exitTriggerLockTimer = 0.2;
