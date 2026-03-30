@@ -1,4 +1,5 @@
 import { Enemy } from '../entities/Enemy.js';
+import { evaluateSpawnPosition, tryFindSpawnPosition } from './SpawnValidator.js';
 
 function randomInt(rng, min, max) {
   const lo = Math.min(min, max);
@@ -38,16 +39,21 @@ export class EnemySpawner {
   }
 
   resolveRejectionReason(room, x, y, definition, context) {
-    if (!room?.tiles?.[y]?.[x]?.walkable) return 'blocked_tile';
-    if (room.collisionMap?.[y]?.[x]) return 'blocked_tile';
     if (context.occupiedTiles.has(tileKey(x, y))) return 'blocked_object';
     if (!context.allowedTileSet.has(tileKey(x, y))) return 'invalid_zone';
     if (isNearAnchors(x, y, context.entranceAnchors, context.settings.minDistanceFromEntrance)) return 'near_entrance';
     if (isNearAnchors(x, y, context.exitAnchors, context.settings.minDistanceFromExit)) return 'near_exit';
     if (isNearAnchors(x, y, context.spawnAnchors, context.settings.minDistanceFromSpawn)) return 'near_spawn';
 
-    const style = resolveSpawnStyle(definition);
     const candidateRadius = definition?.combat?.radius ?? definition?.radius ?? 1.3;
+    const terrainAndObjectValidation = evaluateSpawnPosition(
+      { x, y },
+      { radius: candidateRadius },
+      { room, worldObjects: room?.objects ?? [], enemies: [] },
+    );
+    if (!terrainAndObjectValidation.valid) return terrainAndObjectValidation.reason;
+
+    const style = resolveSpawnStyle(definition);
     for (const enemy of context.placedEnemies) {
       const distance = Math.hypot(enemy.x - x, enemy.y - y);
       const minDistance = this.minSpawnSeparation(candidateRadius, enemy.radius, style);
@@ -82,16 +88,33 @@ export class EnemySpawner {
 
   findValidPoint(room, candidateTiles, definition, context, around = null, radius = 0) {
     if (!candidateTiles.length) return null;
+    const localAttempts = Math.max(10, Math.min(24, Math.floor(context.settings.maxSpawnAttempts * 0.12)));
+    const searchRadius = Math.max(2, radius || (context.settings.spawnRetryRadius ?? 5));
+
     for (let attempt = 0; attempt < context.settings.maxSpawnAttempts; attempt += 1) {
-      const tile = around
+      const seed = around
         ? {
           x: Math.round(around.x + Math.cos(context.rng() * Math.PI * 2) * (context.rng() * radius)),
           y: Math.round(around.y + Math.sin(context.rng() * Math.PI * 2) * (context.rng() * radius)),
         }
         : candidateTiles[randomInt(context.rng, 0, candidateTiles.length - 1)];
-      const rejection = this.resolveRejectionReason(room, tile.x, tile.y, definition, context);
-      if (!rejection) return { x: tile.x, y: tile.y };
-      context.rejections.push({ x: tile.x, y: tile.y, reason: rejection, zoneId: context.zoneId });
+
+      const trial = tryFindSpawnPosition(seed, {
+        entity: { radius: definition?.combat?.radius ?? definition?.radius ?? 1.3 },
+        maxAttempts: localAttempts,
+        searchRadius,
+        rng: context.rng,
+        context: { room, worldObjects: room?.objects ?? [], enemies: [] },
+        onAttempt: (result) => {
+          if (result.valid) return;
+          context.rejections.push({ x: result.position.x, y: result.position.y, reason: result.reason, zoneId: context.zoneId });
+        },
+      });
+
+      if (!trial.position) continue;
+      const rejection = this.resolveRejectionReason(room, trial.position.x, trial.position.y, definition, context);
+      if (!rejection) return { x: trial.position.x, y: trial.position.y };
+      context.rejections.push({ x: trial.position.x, y: trial.position.y, reason: rejection, zoneId: context.zoneId });
     }
     return null;
   }

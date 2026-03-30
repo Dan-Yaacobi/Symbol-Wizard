@@ -190,6 +190,8 @@ export class Enemy extends Entity {
       flankAngleOffset: Math.random() * Math.PI * 2,
       flankDirection: Math.random() < 0.5 ? -1 : 1,
       flankOrbitSpeed: def.flankOrbitSpeed ?? 1.2,
+      collisionGroup: 'enemy',
+      ignoreCollisionWith: [],
       animationTimings: {
         idle: 0.32,
         walk: 0.14,

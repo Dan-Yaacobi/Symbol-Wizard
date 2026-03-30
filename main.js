@@ -55,6 +55,7 @@ import { resolveWallOverlap } from './systems/EnemyCollisionSystem.js';
 import { attemptSlideMove } from './systems/CollisionSystem.js';
 import { populateInventoryWithMaxStacks } from './systems/InventorySystem.js';
 import { updateAntDens } from './world/AntDenSystem.js';
+import { tryFindSpawnPosition } from './world/SpawnValidator.js';
 
 const VIEW_W = 104;
 const VIEW_H = 58;
@@ -144,11 +145,20 @@ function syncActiveRoomCollections(room) {
 }
 
 function spawnEnemyInActiveRoom(enemyType, position) {
-  const x = Math.round(position?.x ?? 0);
-  const y = Math.round(position?.y ?? 0);
-  if (!map?.[y]?.[x]?.walkable) return null;
-  if (activeRoom?.collisionMap?.[y]?.[x]) return null;
-  const enemy = new Enemy(enemyType, x, y);
+  const previewEnemy = new Enemy(enemyType, Math.round(position?.x ?? 0), Math.round(position?.y ?? 0));
+  const spawnSearch = tryFindSpawnPosition(position ?? { x: 0, y: 0 }, {
+    entity: previewEnemy,
+    maxAttempts: 16,
+    searchRadius: 5,
+    context: {
+      room: activeRoom,
+      worldObjects,
+      enemies,
+    },
+  });
+  if (!spawnSearch.position) return null;
+
+  const enemy = new Enemy(enemyType, spawnSearch.position.x, spawnSearch.position.y);
   if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToEnemy(enemy);
   resolveWallOverlap(enemy, activeRoom?.tiles);
   enemies.push(enemy);
