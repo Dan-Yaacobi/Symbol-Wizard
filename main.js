@@ -44,7 +44,7 @@ import { visualTheme } from './data/VisualTheme.js';
 import { rollObjectLoot } from './systems/ObjectInteractionSystem.js';
 import { tryInteract } from './systems/InteractionSystem.js';
 import { loadObjectsFromFolder } from './world/ObjectLibrary.js';
-import { loadAllSpriteAssets } from './data/SpriteAssetLoader.js';
+import { getSpriteAsset, loadAllSpriteAssets } from './data/SpriteAssetLoader.js';
 import {
   collidesWithBlockingObjectAt,
   cleanupDestroyedObjects,
@@ -54,7 +54,7 @@ import {
 import { resolveWallOverlap } from './systems/EnemyCollisionSystem.js';
 import { attemptSlideMove } from './systems/CollisionSystem.js';
 import { populateInventoryWithMaxStacks } from './systems/InventorySystem.js';
-import { getItemDefinition } from './data/ItemRegistry.js';
+import { assertItemDefinition } from './data/ItemRegistry.js';
 import { updateAntDens } from './world/AntDenSystem.js';
 import { tryFindSpawnPosition } from './world/SpawnValidator.js';
 
@@ -261,7 +261,12 @@ function createWorldDrop(drop) {
   const angle = randomRange(0, Math.PI * 2);
   const speed = randomRange(6.5, 9.5);
   const duration = randomRange(0.38, 0.6);
-  const item = getItemDefinition(drop?.itemId);
+  const item = assertItemDefinition(drop?.itemId);
+  const spriteId = String(item.spriteId ?? '').trim();
+  if (!getSpriteAsset(spriteId)) {
+    console.warn(`[Drops] Missing sprite asset for item "${item.id}": ${spriteId}`);
+  }
+  console.debug('[Drops] spawn', { itemId: item.id, spriteId });
 
   return {
     ...drop,
@@ -275,7 +280,7 @@ function createWorldDrop(drop) {
     vy: Math.sin(angle) * speed,
     life: 0,
     duration,
-    spriteId: drop?.spriteId ?? item?.spriteId ?? 'drop-resource',
+    spriteId,
     dropTint: drop?.dropTint ?? item?.dropTint,
     animationTimer: 0,
     animationPhase: randomRange(0, Math.PI * 2),

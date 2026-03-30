@@ -24,10 +24,10 @@ function testItemRegistryContainsCraftingFeeders() {
   assert.equal(ItemRegistry.poison_gland?.tier, 2);
   assert.equal(ItemRegistry.ember_dust?.icon, '•');
   assert.equal(ItemRegistry.storm_shard?.icon, '⚡');
-  assert.equal(ItemRegistry.storm_shard?.spriteId, 'drop-rare');
-  assert.equal(ItemRegistry.essence?.spriteId, 'drop-currency');
+  assert.equal(ItemRegistry.storm_shard?.spriteId, 'item_storm_shard');
+  assert.equal(ItemRegistry.essence?.spriteId, 'item_essence');
   assert.equal(ItemRegistry.moss?.maxStack, 999);
-  assert.equal(ItemRegistry.moss?.spriteId, 'drop-resource');
+  assert.equal(ItemRegistry.moss?.spriteId, 'item_moss');
   assert.equal(ItemRegistry.crystal_dust?.maxStack, 999);
   assert.equal(ItemRegistry.arcane_shard?.maxStack, 999);
 }

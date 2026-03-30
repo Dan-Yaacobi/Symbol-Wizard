@@ -91,7 +91,7 @@ await loadAllSpriteAssets('./assets');
 assert.ok(getSpriteAsset('player'));
 assert.ok(getSpriteAsset('tree-dark'));
 assert.ok(getSpriteAsset('barrel'));
-assert.ok(getSpriteAsset('drop-resource'));
+assert.ok(getSpriteAsset('item_wood'));
 assert.equal(getSpriteAnimation('wasp', 'walk').length > 0, true);
 const playerFrame = getSpriteFrame('player', 'walk', 1);
 assert.equal(playerFrame.width, 5);

@@ -294,7 +294,22 @@ export class SpriteEditorScreen {
   #refreshSpriteList() {
     const current = this.elements.spriteSelect.value;
     const assets = getAllSpriteAssets().sort((a, b) => a.id.localeCompare(b.id));
-    this.elements.spriteSelect.innerHTML = '<option value="">Load sprite…</option>' + assets.map((asset) => `<option value="${asset.id}">${asset.id}</option>`).join('');
+    const groupByCategory = new Map([
+      ['items', []],
+      ['other', []],
+    ]);
+    for (const asset of assets) {
+      const category = asset?.id?.startsWith('item_') || asset?.meta?.category === 'items' ? 'items' : 'other';
+      groupByCategory.get(category).push(asset);
+    }
+
+    const optionMarkup = ['<option value="">Load sprite…</option>'];
+    if (groupByCategory.get('items').length) {
+      optionMarkup.push(`<optgroup label="items">${groupByCategory.get('items').map((asset) => `<option value="${asset.id}">${asset.id}</option>`).join('')}</optgroup>`);
+    }
+    optionMarkup.push(...groupByCategory.get('other').map((asset) => `<option value="${asset.id}">${asset.id}</option>`));
+
+    this.elements.spriteSelect.innerHTML = optionMarkup.join('');
     this.elements.spriteSelect.value = current;
   }
 
