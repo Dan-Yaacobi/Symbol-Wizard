@@ -594,12 +594,28 @@ function drawWorldDrop(renderer, camera, drop) {
   const renderDrop = {
     ...drop,
     y: (drop.y ?? 0) + bobOffset,
+    isDropped: drop.isDropped ?? true,
     animationState: 'idle',
     currentFrame: drop.currentFrame ?? drop.frameIndex ?? 0,
     frameIndex: drop.frameIndex ?? 0,
   };
 
+  drawDroppedShadow(renderer, camera, drop);
   drawSprite(renderer, camera, renderDrop, drop.dropTint ?? '#f5f1de');
+}
+
+function isDroppedEntity(entity) {
+  return entity?.type === 'drop' || entity?.isDropped === true;
+}
+
+function drawDroppedShadow(renderer, camera, entity) {
+  if (!isDroppedEntity(entity)) return;
+  const shadowX = worldToScreenCell(entity.x ?? 0, camera.x);
+  const shadowY = worldToScreenCell((entity.y ?? 0) + 1, camera.y);
+  const shadowColor = '#243142';
+  drawCell(renderer, { glyph: '.', fg: shadowColor }, shadowX - 1, shadowY);
+  drawCell(renderer, { glyph: '·', fg: c.shadow }, shadowX, shadowY);
+  drawCell(renderer, { glyph: '.', fg: shadowColor }, shadowX + 1, shadowY);
 }
 
 function drawDebugOverlays(renderer, camera, player, enemies, projectiles, worldObjects, activeRoom, debugOptions = {}) {

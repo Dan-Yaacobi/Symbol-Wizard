@@ -264,6 +264,8 @@ function createWorldDrop(drop) {
 
   return {
     ...drop,
+    type: drop?.type ?? 'drop',
+    isDropped: true,
     x: originX,
     y: originY,
     baseX: originX,
