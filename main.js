@@ -55,6 +55,7 @@ import { resolveWallOverlap } from './systems/EnemyCollisionSystem.js';
 import { attemptSlideMove } from './systems/CollisionSystem.js';
 import { populateInventoryWithMaxStacks } from './systems/InventorySystem.js';
 import { updateAntDens } from './world/AntDenSystem.js';
+import { trySpawnPosition } from './world/SpawnValidator.js';
 
 const VIEW_W = 104;
 const VIEW_H = 58;
@@ -146,9 +147,19 @@ function syncActiveRoomCollections(room) {
 function spawnEnemyInActiveRoom(enemyType, position) {
   const x = Math.round(position?.x ?? 0);
   const y = Math.round(position?.y ?? 0);
-  if (!map?.[y]?.[x]?.walkable) return null;
-  if (activeRoom?.collisionMap?.[y]?.[x]) return null;
   const enemy = new Enemy(enemyType, x, y);
+  const spawn = trySpawnPosition({ x, y }, enemy, {
+    room: activeRoom,
+    worldObjects: worldObjects ?? [],
+    entities: enemies,
+    maxAttempts: 16,
+    searchRadius: 4,
+  });
+  if (!spawn.position) return null;
+  enemy.x = spawn.position.x;
+  enemy.y = spawn.position.y;
+  enemy.targetX = enemy.x;
+  enemy.targetY = enemy.y;
   if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToEnemy(enemy);
   resolveWallOverlap(enemy, activeRoom?.tiles);
   enemies.push(enemy);
@@ -1393,6 +1404,10 @@ function tick(now) {
   if (!dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
     timed('player', framePerf, () => handlePlayer(dt));
     timed('world', framePerf, () => {
+      if (activeRoom?.debugOverlay) {
+        activeRoom.debugOverlay.antDenSpawnAttempts = [];
+        activeRoom.debugOverlay.antDenSpawns = [];
+      }
       updateAntDens({
         room: activeRoom,
         worldObjects,
@@ -1403,6 +1418,8 @@ function tick(now) {
         effectSystem: abilitySystem,
         debug: {
           logSpawnCount: runtimeConfig.get('debug.logAntDenSpawns'),
+          antDenSpawnAttempts: activeRoom?.debugOverlay?.antDenSpawnAttempts ?? [],
+          antDenSpawns: activeRoom?.debugOverlay?.antDenSpawns ?? [],
         },
       });
     });

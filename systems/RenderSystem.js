@@ -748,12 +748,29 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, world
   }
 
   if (debugOptions.showAntDenTriggerRadius) {
+    const antOverlay = activeRoom?.debugOverlay ?? {};
+    for (const accepted of antOverlay.antDenSpawns ?? []) {
+      drawCell(renderer, { glyph: '●', fg: '#73ff9a' }, accepted.x - camera.x, accepted.y - camera.y);
+    }
+    for (const attempt of antOverlay.antDenSpawnAttempts ?? []) {
+      const glyph = attempt.valid ? '·' : '×';
+      const color = attempt.valid ? '#59e388' : '#ff6f6f';
+      drawCell(renderer, { glyph, fg: color }, attempt.x - camera.x, attempt.y - camera.y);
+    }
+
     for (const object of worldObjects ?? []) {
       if (!object || object.type !== 'ant_den' || object.destroyed) continue;
       const triggerRadius = Math.max(1, Number(object.antSpawner?.triggerRadius) || 7);
+      const spawnPoints = Array.isArray(object.antSpawner?.spawnPoints) ? object.antSpawner.spawnPoints : [];
       const phase = object.state?.phase ?? 'idle';
       const color = phase === 'depleted' ? '#808080' : (phase === 'active' ? '#ff9a4d' : '#ffaa66');
       drawCircle(object.x, object.y, triggerRadius, '·', color);
+      for (const point of spawnPoints) {
+        const offsetX = Array.isArray(point) ? point[0] : point?.x;
+        const offsetY = Array.isArray(point) ? point[1] : point?.y;
+        if (!Number.isFinite(offsetX) || !Number.isFinite(offsetY)) continue;
+        drawCell(renderer, { glyph: '◇', fg: '#f7cf6e' }, Math.round(object.x + offsetX) - camera.x, Math.round(object.y + offsetY) - camera.y);
+      }
     }
   }
 
@@ -762,6 +779,10 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, world
     for (const zone of overlayZones) {
       const radius = Math.max(1, Number(zone.radius) || 0);
       drawCircle(zone.x, zone.y, radius, '·', '#7ec7ff');
+    }
+    for (const object of worldObjects ?? []) {
+      if (!object?.collision || object.destroyed) continue;
+      drawBounds(object, '#7ec7ff');
     }
   }
 }

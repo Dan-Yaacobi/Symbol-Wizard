@@ -1,4 +1,5 @@
 import { activateEnemyAggro } from '../systems/AISystem.js';
+import { trySpawnPosition } from './SpawnValidator.js';
 
 export const ANT_DEN_PHASE = Object.freeze({
   IDLE: 'idle',
@@ -35,6 +36,7 @@ function getDenConfig(den) {
     spawnRingMinOffset: Math.max(1, Number(source.spawnRingMinOffset) || 1),
     spawnRingMaxOffset: Math.max(1, Number(source.spawnRingMaxOffset) || Math.max(3, Number(source.spawnRadius) || 3.2)),
     spawnBiasToPlayer: Math.min(1, Math.max(0, Number(source.spawnBiasToPlayer) || 0)),
+    spawnPoints: Array.isArray(source.spawnPoints) ? source.spawnPoints : [],
     maxActiveAnts: Math.max(1, Math.floor(Number(source.maxActiveAnts) || 10)),
     enemyType: typeof source.enemyType === 'string' ? source.enemyType : 'fire_ant',
   };
@@ -115,7 +117,24 @@ function estimateDenRadius(den) {
   return furthest;
 }
 
-function findSpawnPosition(den, config, room, worldObjects, enemies, player, rng = Math.random) {
+function normalizeSpawnPoints(spawnPoints) {
+  return spawnPoints
+    .map((node) => (Array.isArray(node) ? { x: node[0], y: node[1] } : node))
+    .filter((node) => Number.isFinite(node?.x) && Number.isFinite(node?.y))
+    .map((node) => ({ x: Math.round(node.x), y: Math.round(node.y) }));
+}
+
+function buildAntSpawnProbe(config) {
+  return {
+    radius: 1.3,
+    ignoreCollisionWith: ['ant_den'],
+    collisionGroup: 'enemy',
+    spawnStyle: 'swarm',
+    antConfig: config,
+  };
+}
+
+function findSpawnPosition(den, config, room, worldObjects, enemies, player, rng = Math.random, debug = null) {
   const blockedObjectTiles = collectBlockedObjectTiles(worldObjects, den);
   const enemyTiles = collectEnemyTiles(enemies);
   const denTiles = collectDenFootprintTiles(den);
@@ -123,20 +142,57 @@ function findSpawnPosition(den, config, room, worldObjects, enemies, player, rng
   const minRadius = denRadius + Math.max(1, config.spawnRingMinOffset);
   const maxRadius = denRadius + Math.max(config.spawnRingMinOffset, config.spawnRingMaxOffset);
   const playerAngle = player ? Math.atan2(player.y - den.y, player.x - den.x) : null;
+  const candidateMarkers = [];
+  const probe = buildAntSpawnProbe(config);
+
+  const extraValidation = ({ x, y }) => {
+    if (isTileInsideBlockingClearance(worldObjects, den, x, y)) return { valid: false, reason: 'clearance_blocked' };
+    if (!isSpawnTileWalkable(room, x, y, blockedObjectTiles, enemyTiles, denTiles)) return { valid: false, reason: 'blocked_tile' };
+    return { valid: true };
+  };
+
+  const spawnOffsets = normalizeSpawnPoints(config.spawnPoints);
+  for (const offset of spawnOffsets) {
+    const target = { x: den.x + offset.x, y: den.y + offset.y };
+    const result = trySpawnPosition(target, probe, {
+      room,
+      worldObjects,
+      entities: enemies,
+      rng,
+      maxAttempts: 1,
+      searchRadius: 1,
+      extraValidation,
+      debugAttempts: candidateMarkers,
+    });
+    if (result.position) {
+      debug?.antDenSpawns?.push?.({ denId: den.id, x: result.position.x, y: result.position.y, valid: true });
+      debug?.antDenSpawnAttempts?.push?.(...candidateMarkers.map((attempt) => ({ denId: den.id, ...attempt })));
+      return result.position;
+    }
+  }
 
   for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt += 1) {
-    const shouldBiasToPlayer = playerAngle !== null
-      && config.spawnBiasToPlayer > 0
-      && rng() < config.spawnBiasToPlayer;
-    const angle = shouldBiasToPlayer
-      ? playerAngle + randomInRange(rng, -Math.PI / 6, Math.PI / 6)
-      : rng() * Math.PI * 2;
-    const radius = randomInRange(rng, minRadius, maxRadius);
-    const x = Math.round(den.x + Math.cos(angle) * radius);
-    const y = Math.round(den.y + Math.sin(angle) * radius);
-    if (isTileInsideBlockingClearance(worldObjects, den, x, y)) continue;
-    if (isSpawnTileWalkable(room, x, y, blockedObjectTiles, enemyTiles, denTiles)) return { x, y };
+    const shouldBiasToPlayer = playerAngle !== null && config.spawnBiasToPlayer > 0 && rng() < config.spawnBiasToPlayer;
+    const angle = shouldBiasToPlayer ? playerAngle + randomInRange(rng, -Math.PI / 6, Math.PI / 6) : rng() * Math.PI * 2;
+    const distance = randomInRange(rng, minRadius, maxRadius);
+    const target = { x: Math.round(den.x + Math.cos(angle) * distance), y: Math.round(den.y + Math.sin(angle) * distance) };
+    const result = trySpawnPosition(target, probe, {
+      room,
+      worldObjects,
+      entities: enemies,
+      rng,
+      maxAttempts: 1,
+      searchRadius: 1,
+      extraValidation,
+      debugAttempts: candidateMarkers,
+    });
+    if (result.position) {
+      debug?.antDenSpawns?.push?.({ denId: den.id, x: result.position.x, y: result.position.y, valid: true });
+      debug?.antDenSpawnAttempts?.push?.(...candidateMarkers.map((attempt) => ({ denId: den.id, ...attempt })));
+      return result.position;
+    }
   }
+  debug?.antDenSpawnAttempts?.push?.(...candidateMarkers.map((attempt) => ({ denId: den.id, ...attempt })));
   return null;
 }
 
@@ -163,13 +219,18 @@ function queueNextSpawn(state, config, rng) {
 }
 
 function spawnAntFromDen({ den, config, state, room, worldObjects, enemies, player, spawnEnemy, onSpawn, debug, effectSystem, rng }) {
-  const spawnPoint = findSpawnPosition(den, config, room, worldObjects, enemies, player, rng);
+  const spawnPoint = findSpawnPosition(den, config, room, worldObjects, enemies, player, rng, debug);
   if (!spawnPoint) {
     queueNextSpawn(state, config, rng);
     return false;
   }
 
-  const ant = spawnEnemy(config.enemyType, spawnPoint, { den, room });
+  const ant = spawnEnemy(config.enemyType, spawnPoint, {
+    den,
+    room,
+    collisionGroup: 'enemy',
+    ignoreCollisionWith: ['ant_den'],
+  });
   if (!ant) {
     queueNextSpawn(state, config, rng);
     return false;

@@ -73,6 +73,8 @@ export const ENEMY_REGISTRY = {
     facingGlyphs: { N: '^', E: '>', S: 'v', W: '<' },
     stats: { hp: 9, speed: 13.5, damage: 2, attackCooldown: 0.45 },
     combat: { attackRange: 2.4, attackWindup: 0.12, attackDuration: 0.2, attackHitTime: 0.05, hitKnockback: 4, radius: 1.3, aggroRadius: 28 },
+    collisionGroup: 'enemy',
+    ignoreCollisionWith: ['ant_den'],
     animationTimings: { idle: 0.36, walk: 0.14, attack: 0.1 },
   }),
 };

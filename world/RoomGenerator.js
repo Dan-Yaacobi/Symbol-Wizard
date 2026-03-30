@@ -242,6 +242,8 @@ export class RoomGenerator {
         exitSafetyAnchors: spawnedEnemies.debug.exitSafetyAnchors,
         pathSafetyTiles: spawnedEnemies.debug.pathSafetyTiles,
         enemySafetySettings: spawnedEnemies.debug.safetySettings,
+        antDenSpawnAttempts: [],
+        antDenSpawns: [],
       },
       generationDebug: {
         roomGraph: roomGraph?.[roomNode.id] ?? {},

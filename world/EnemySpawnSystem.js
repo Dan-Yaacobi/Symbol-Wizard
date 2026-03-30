@@ -22,6 +22,7 @@ export function spawnEnemyGroup(type, centerX, centerY, options = {}) {
     rng: options.rng ?? Math.random,
     settings,
     occupiedTiles: options.occupiedTiles ?? new Set(),
+    worldObjects: room?.objects ?? [],
     allowedTileSet: options.allowedTileSet ?? new Set(allowedTiles.map((tile) => `${tile.x},${tile.y}`)),
     allowedTiles,
     placedEnemies: [],

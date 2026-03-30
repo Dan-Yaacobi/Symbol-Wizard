@@ -1,4 +1,5 @@
 import { Enemy } from '../entities/Enemy.js';
+import { validateSpawnPosition, trySpawnPosition } from './SpawnValidator.js';
 
 function randomInt(rng, min, max) {
   const lo = Math.min(min, max);
@@ -38,22 +39,33 @@ export class EnemySpawner {
   }
 
   resolveRejectionReason(room, x, y, definition, context) {
-    if (!room?.tiles?.[y]?.[x]?.walkable) return 'blocked_tile';
-    if (room.collisionMap?.[y]?.[x]) return 'blocked_tile';
-    if (context.occupiedTiles.has(tileKey(x, y))) return 'blocked_object';
-    if (!context.allowedTileSet.has(tileKey(x, y))) return 'invalid_zone';
-    if (isNearAnchors(x, y, context.entranceAnchors, context.settings.minDistanceFromEntrance)) return 'near_entrance';
-    if (isNearAnchors(x, y, context.exitAnchors, context.settings.minDistanceFromExit)) return 'near_exit';
-    if (isNearAnchors(x, y, context.spawnAnchors, context.settings.minDistanceFromSpawn)) return 'near_spawn';
+    const candidate = {
+      x,
+      y,
+      radius: definition?.combat?.radius ?? definition?.radius ?? 1.3,
+      ignoreCollisionWith: [],
+    };
+    const validation = validateSpawnPosition(candidate, candidate, {
+      room,
+      worldObjects: context.worldObjects,
+      entities: context.placedEnemies,
+      extraValidation: ({ tileKey: candidateTileKey }) => {
+        if (context.occupiedTiles.has(candidateTileKey)) return { valid: false, reason: 'blocked_object' };
+        if (!context.allowedTileSet.has(candidateTileKey)) return { valid: false, reason: 'invalid_zone' };
+        if (isNearAnchors(x, y, context.entranceAnchors, context.settings.minDistanceFromEntrance)) return { valid: false, reason: 'near_entrance' };
+        if (isNearAnchors(x, y, context.exitAnchors, context.settings.minDistanceFromExit)) return { valid: false, reason: 'near_exit' };
+        if (isNearAnchors(x, y, context.spawnAnchors, context.settings.minDistanceFromSpawn)) return { valid: false, reason: 'near_spawn' };
+        return { valid: true };
+      },
+    });
+    if (!validation.valid) return validation.reason;
 
     const style = resolveSpawnStyle(definition);
-    const candidateRadius = definition?.combat?.radius ?? definition?.radius ?? 1.3;
+    const candidateRadius = candidate.radius;
     for (const enemy of context.placedEnemies) {
-      const distance = Math.hypot(enemy.x - x, enemy.y - y);
       const minDistance = this.minSpawnSeparation(candidateRadius, enemy.radius, style);
-      if (distance < minDistance) return 'enemy_overlap';
+      if (Math.hypot(enemy.x - x, enemy.y - y) < minDistance) return 'enemy_overlap';
     }
-
     return null;
   }
 
@@ -83,15 +95,27 @@ export class EnemySpawner {
   findValidPoint(room, candidateTiles, definition, context, around = null, radius = 0) {
     if (!candidateTiles.length) return null;
     for (let attempt = 0; attempt < context.settings.maxSpawnAttempts; attempt += 1) {
-      const tile = around
-        ? {
-          x: Math.round(around.x + Math.cos(context.rng() * Math.PI * 2) * (context.rng() * radius)),
-          y: Math.round(around.y + Math.sin(context.rng() * Math.PI * 2) * (context.rng() * radius)),
-        }
+      const baseTile = around
+        ? { x: around.x, y: around.y }
         : candidateTiles[randomInt(context.rng, 0, candidateTiles.length - 1)];
-      const rejection = this.resolveRejectionReason(room, tile.x, tile.y, definition, context);
-      if (!rejection) return { x: tile.x, y: tile.y };
-      context.rejections.push({ x: tile.x, y: tile.y, reason: rejection, zoneId: context.zoneId });
+
+      const result = trySpawnPosition(baseTile, { radius: definition?.combat?.radius ?? definition?.radius ?? 1.3 }, {
+        room,
+        worldObjects: context.worldObjects,
+        entities: context.placedEnemies,
+        rng: context.rng,
+        maxAttempts: around ? Math.min(16, context.settings.maxSpawnAttempts) : 1,
+        searchRadius: around ? Math.max(1, radius) : 1,
+      });
+      if (result.position) {
+        const rejection = this.resolveRejectionReason(room, result.position.x, result.position.y, definition, context);
+        if (!rejection) return { x: result.position.x, y: result.position.y };
+        context.rejections.push({ x: result.position.x, y: result.position.y, reason: rejection, zoneId: context.zoneId });
+        continue;
+      }
+      if (result.validation?.reason) {
+        context.rejections.push({ x: baseTile.x, y: baseTile.y, reason: result.validation.reason, zoneId: context.zoneId });
+      }
     }
     return null;
   }

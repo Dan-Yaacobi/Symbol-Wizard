@@ -228,12 +228,54 @@ function testAvoidsBlockingObjectClearance() {
   assert.ok(distanceToBlocker >= 4, 'Ant spawn should stay outside blocking object clearance.');
 }
 
+function testSpawnPointsPreferredOverDenCenter() {
+  const room = createRoom();
+  const den = createDen({
+    antSpawner: {
+      ...createDen().antSpawner,
+      spawnCountMin: 1,
+      spawnCountMax: 1,
+      spawnBiasToPlayer: 0,
+      spawnPoints: [
+        { x: 0, y: 0 },
+        { x: 0, y: 4 },
+      ],
+    },
+  });
+  const enemies = [];
+  const spawns = [];
+  const debug = { antDenSpawnAttempts: [], antDenSpawns: [] };
+
+  updateAntDens({
+    room,
+    worldObjects: [den],
+    enemies,
+    player: { x: 12, y: 14 },
+    dt: 0.2,
+    debug,
+    spawnEnemy: (_enemyType, spawnPoint) => {
+      spawns.push(spawnPoint);
+      const enemy = { alive: true, x: spawnPoint.x, y: spawnPoint.y };
+      enemies.push(enemy);
+      return enemy;
+    },
+  });
+
+  assert.equal(spawns.length, 1, 'Expected one ant from activation burst.');
+  assert.notDeepEqual(spawns[0], { x: den.x, y: den.y }, 'Ant should not spawn at den center.');
+  assert.equal(spawns[0].x, den.x);
+  assert.equal(spawns[0].y, den.y + 4);
+  assert.ok(debug.antDenSpawnAttempts.some((attempt) => attempt.valid === false), 'Debug should record rejected spawn attempts.');
+  assert.ok(debug.antDenSpawns.some((attempt) => attempt.valid === true), 'Debug should record accepted spawn positions.');
+}
+
 function run() {
   testActivationAndImmediateBurst();
   testSpawnIntervalRangeAndRandomization();
   testTotalCountAndDepletion();
   testDoesNotActivateWhenPlayerOutsideTrigger();
   testAvoidsBlockingObjectClearance();
+  testSpawnPointsPreferredOverDenCenter();
   console.log('Ant den spawner tests passed.');
 }
 

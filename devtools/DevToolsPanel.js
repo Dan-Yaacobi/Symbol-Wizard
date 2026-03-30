@@ -274,6 +274,7 @@ export class DevToolsPanel {
       showReservedCorridors: enabled('debug.showReservedCorridors'),
       showLandingTiles: enabled('debug.showLandingTiles'),
       showEnemySpawnZones: enabled('debug.showEnemySpawnZones'),
+      showEnemySpawnRejections: enabled('debug.showEnemySpawnRejections'),
       showAntDenTriggerRadius: enabled('debug.showAntDenTriggerRadius'),
       showObjectClearanceRadius: enabled('debug.showObjectClearanceRadius'),
       selectedEntityRef: this.selectedEntity,

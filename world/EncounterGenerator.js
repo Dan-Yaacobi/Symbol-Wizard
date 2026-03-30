@@ -110,6 +110,7 @@ export class EncounterGenerator {
         rng,
         settings: this.settings,
         occupiedTiles,
+        worldObjects: room?.objects ?? [],
         allowedTileSet: zone.tileSet,
         allowedTiles: zone.tiles,
         placedEnemies,
