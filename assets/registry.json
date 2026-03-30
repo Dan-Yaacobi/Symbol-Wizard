@@ -35,6 +35,10 @@
     "spider": "enemies/spider.json",
     "forest_beetle": "enemies/forest_beetle.json",
     "forest_mantis": "enemies/forest_mantis.json",
-    "fire_ant": "enemies/fire_ant.json"
+    "fire_ant": "enemies/fire_ant.json",
+    "drop-resource": "props/drop-resource.json",
+    "drop-rare": "props/drop-rare.json",
+    "drop-boss": "props/drop-boss.json",
+    "drop-currency": "props/drop-currency.json"
   }
 }

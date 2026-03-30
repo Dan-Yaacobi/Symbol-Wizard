@@ -1,7 +1,6 @@
 import { getSpriteFrame } from '../data/SpriteAssetLoader.js';
 import { isEntityAttacking } from './EntityStateSystem.js';
 import { palette } from '../data/SpritePalette.js';
-import { getItemDefinition } from '../data/ItemRegistry.js';
 import { renderLayers, toRenderCell, toSafeGlyph, visualPalette, visualTheme } from '../data/VisualTheme.js';
 import { ensureEntityFacing, toCardinalDirection } from './FacingSystem.js';
 import { resolveProjectileDirection, resolveProjectileGlyph } from './ProjectileGlyphSystem.js';
@@ -584,12 +583,23 @@ export function prewarmBackgroundCache(renderer, map, worldObjects = []) {
 
 
 function drawWorldDrop(renderer, camera, drop) {
-  const item = getItemDefinition(drop?.itemId);
-  const glyph = item?.icon ?? '*';
-  const fg = item?.type === 'rare' ? '#ffe07d' : '#f5f1de';
-  const screenX = worldToScreenCell(drop.x, camera.x);
-  const screenY = worldToScreenCell(drop.y ?? 0, camera.y);
-  drawCell(renderer, { glyph, fg, layer: renderLayers.entities }, screenX, screenY);
+  if (!drop?.spriteId) return;
+
+  const bobAmplitude = Math.max(0, Number(drop.bobAmplitude) || 0);
+  const bobSpeed = Math.max(0, Number(drop.bobSpeed) || 0);
+  const animationTimer = Number(drop.animationTimer) || 0;
+  const animationPhase = Number(drop.animationPhase) || 0;
+  const bobOffset = Math.sin(animationTimer * bobSpeed + animationPhase) * bobAmplitude;
+
+  const renderDrop = {
+    ...drop,
+    y: (drop.y ?? 0) + bobOffset,
+    animationState: 'idle',
+    currentFrame: drop.currentFrame ?? drop.frameIndex ?? 0,
+    frameIndex: drop.frameIndex ?? 0,
+  };
+
+  drawSprite(renderer, camera, renderDrop, drop.dropTint ?? '#f5f1de');
 }
 
 function drawDebugOverlays(renderer, camera, player, enemies, projectiles, worldObjects, activeRoom, debugOptions = {}) {

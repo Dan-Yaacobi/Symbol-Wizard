@@ -36,6 +36,10 @@
     "props/flower-red.json",
     "props/flower-yellow.json",
     "props/grass-patch.json",
-    "sprites/registry.json"
+    "sprites/registry.json",
+    "props/drop-resource.json",
+    "props/drop-rare.json",
+    "props/drop-boss.json",
+    "props/drop-currency.json"
   ]
 }
