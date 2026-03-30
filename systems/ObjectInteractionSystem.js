@@ -1,3 +1,4 @@
+import { ensureEntityFacing } from './FacingSystem.js';
 import { tryInteract } from './InteractionSystem.js';
 
 function objectCollisionNodes(object) {
@@ -33,7 +34,7 @@ export function applyAttackToObject(object, damage = 1) {
 }
 
 export function tryInteractInFront(player, worldObjects, context = {}) {
-  const facing = player.facingVector ?? { x: 0, y: 1 };
+  const facing = ensureEntityFacing(player);
   const positions = [
     { x: Math.round(player.x), y: Math.round(player.y) },
     { x: Math.round(player.x + facing.x), y: Math.round(player.y + facing.y) },

@@ -1,3 +1,5 @@
+import { ensureEntityFacing } from '../../FacingSystem.js';
+
 function resolveAreaOrigin(context = {}) {
   const origin = context?.origin ?? context?.player;
   if (origin && Number.isFinite(origin.x) && Number.isFinite(origin.y)) return origin;
@@ -15,8 +17,9 @@ export function executeBehavior(instance, context) {
     ? instance.parameters.tickInterval
     : (Number.isFinite(instance.parameters?.tickRate) ? instance.parameters.tickRate : 0.2);
   const damage = Number.isFinite(instance.parameters?.damage) ? instance.parameters.damage : 1;
-  const dirX = Number.isFinite(origin.facingX) ? origin.facingX : 1;
-  const dirY = Number.isFinite(origin.facingY) ? origin.facingY : 0;
+  const facing = ensureEntityFacing(origin);
+  const dirX = Number.isFinite(origin.facingX) ? origin.facingX : facing.x;
+  const dirY = Number.isFinite(origin.facingY) ? origin.facingY : facing.y;
 
   instance.state.cast = {
     originX: origin.x,

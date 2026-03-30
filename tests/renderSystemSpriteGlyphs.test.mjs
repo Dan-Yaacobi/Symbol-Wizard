@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { loadAllSpriteAssets, resetSpriteAssetStore, getSpriteFrame } from '../data/SpriteAssetLoader.js';
 import { resolveSpriteRenderGlyph, spriteUsesAuthoredGlyphs } from '../systems/RenderSystem.js';
-import { updateEntityFacingFromVelocity } from '../systems/EntityStateSystem.js';
+import { facingToDirection8, updateFacingFromVelocity, updateFacingTowardTarget } from '../systems/FacingSystem.js';
 
 function renderGlyphMatrix(entity, sprite) {
   return sprite.cells.map((row) => row.map((cell) => resolveSpriteRenderGlyph(entity, sprite, cell?.ch ?? ' ')).join('')).join('\n');
@@ -22,25 +22,18 @@ assert.equal(spriteUsesAuthoredGlyphs(plainFrame), false);
 assert.equal(spriteUsesAuthoredGlyphs(authoredFrameA), true);
 assert.notEqual(renderGlyphMatrix({ type: 'enemy', spriteId: 'spider' }, authoredFrameA), renderGlyphMatrix({ type: 'enemy', spriteId: 'spider' }, authoredFrameB));
 
-function renderGlyphMatrixWithFacing(entity, sprite) {
-  const width = sprite.width;
-  return sprite.cells.map((row) => Array.from({ length: width }, (_, sx) => {
-    const cellX = entity.facing === 'left' ? (width - 1) - sx : sx;
-    return resolveSpriteRenderGlyph(entity, sprite, row[cellX]?.ch ?? ' ');
-  }).join('')).join('\n');
-}
-
-const leftFacingEntity = { type: 'enemy', spriteId: 'spider', facing: 'left' };
-assert.equal(renderGlyphMatrixWithFacing(leftFacingEntity, authoredFrameA), renderGlyphMatrixWithFacing({ type: 'enemy', spriteId: 'spider', facing: 'right' }, authoredFrameA).split('\n').map((row) => [...row].reverse().join('')).join('\n'));
-
-const entityFacing = { facing: 'right', vx: 0 };
-updateEntityFacingFromVelocity(entityFacing);
-assert.equal(entityFacing.facing, 'right');
-entityFacing.vx = -0.2;
-updateEntityFacingFromVelocity(entityFacing);
-assert.equal(entityFacing.facing, 'left');
-entityFacing.vx = 0;
-updateEntityFacingFromVelocity(entityFacing);
-assert.equal(entityFacing.facing, 'left');
+const facingEntity = { type: 'enemy', spriteId: 'spider', x: 0, y: 0, facing: { x: 0, y: 1 }, direction: 'S', vx: 0, vy: 0 };
+updateFacingFromVelocity(facingEntity);
+assert.deepEqual(facingEntity.facing, { x: 0, y: 1 });
+assert.equal(facingEntity.direction, 'S');
+facingEntity.vx = -1;
+facingEntity.vy = 0;
+for (let i = 0; i < 8; i += 1) updateFacingFromVelocity(facingEntity);
+assert.ok(facingEntity.facing.x < 0);
+assert.ok(['SW', 'W', 'NW'].includes(facingEntity.direction));
+for (let i = 0; i < 12; i += 1) updateFacingTowardTarget(facingEntity, { x: facingEntity.x + 20, y: facingEntity.y });
+assert.ok(facingEntity.facing.x > 0);
+assert.ok(['SE', 'E', 'NE'].includes(facingEntity.direction));
+assert.equal(facingToDirection8({ x: 0, y: -1 }), 'N');
 
 console.log('renderSystemSpriteGlyphs.test.mjs passed');

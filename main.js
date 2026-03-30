@@ -15,7 +15,8 @@ import * as LootSystem from './systems/LootSystem.js';
 import { CombatTextSystem } from './systems/CombatTextSystem.js';
 import { renderWorld } from './systems/RenderSystem.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
-import { setEntityState, syncEntityMovementState, updateEntityFacingFromVelocity, updateEntityState } from './systems/EntityStateSystem.js';
+import { setEntityState, syncEntityMovementState, updateEntityState } from './systems/EntityStateSystem.js';
+import { ensureEntityFacing, updateFacingFromVelocity } from './systems/FacingSystem.js';
 import { ChatBox } from './ui/ChatBox.js';
 import { drawHUD } from './ui/HUD.js';
 import {
@@ -81,7 +82,7 @@ let pendingDevSeed = String(currentBiomeSeed);
 let activeRoom = worldMapManager.enterStartingWorld(currentBiomeSeed);
 let map = activeRoom.tiles;
 const player = new Player(Math.floor(ROOM_W / 2), Math.floor(ROOM_H / 2));
-player.facingVector = { x: 0, y: 1 };
+ensureEntityFacing(player);
 getCraftableRecipeIds().forEach((recipeId) => player.unlockRecipe(recipeId));
 populateInventoryWithMaxStacks(player.inventory);
 const enemies = [];
@@ -509,7 +510,8 @@ devToolsPanel.setMapTools({
     regenerateWorld(parsedSeed);
   },
   spawnEnemyGroup: () => {
-    const center = { x: Math.round(player.x + player.facingVector.x * 5), y: Math.round(player.y + player.facingVector.y * 5) };
+    const facing = ensureEntityFacing(player);
+    const center = { x: Math.round(player.x + facing.x * 5), y: Math.round(player.y + facing.y * 5) };
     const group = spawnEnemyGroup('swarm_bug', center.x, center.y, {
       room: activeRoom,
       groupSize: 4,
@@ -895,10 +897,6 @@ function handlePlayer(dt) {
   const blend = Math.min(1, ((Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01) ? accel : decel) * dt);
   player.vx += (targetVx - player.vx) * blend;
   player.vy += (targetVy - player.vy) * blend;
-  if (Math.abs(moveX) > 0.01 || Math.abs(moveY) > 0.01) {
-    player.facingVector = { x: Math.sign(moveX), y: Math.sign(moveY) };
-  }
-
   movePlayer((player.vx + damageImpulse.x) * dt, (player.vy + damageImpulse.y) * dt);
 
   const { width, height } = getMapDimensions();
@@ -913,7 +911,9 @@ function handlePlayer(dt) {
   abilitySystem.tick(dt, { targetPosition: input.getMouseWorldPosition() });
   combatHud.updateOrbs();
   updateEntityState(player, dt);
-  updateEntityFacingFromVelocity(player);
+  updateFacingFromVelocity(player);
+  player.facingX = player.facing.x;
+  player.facingY = player.facing.y;
   syncEntityMovementState(player);
   player.castCooldown = runtimeConfig.get('player.castDuration');
 
@@ -923,7 +923,7 @@ function handlePlayer(dt) {
       if (dialogueManager.isOpen) {
         dialogueManager.closeDialogue();
       } else {
-        const facing = player.facingVector ?? { x: 0, y: 1 };
+        const facing = ensureEntityFacing(player);
         tryInteract({
           actor: player,
           room: activeRoom,
@@ -1382,7 +1382,7 @@ function tick(now) {
       updateTownNpcs(npcs, map, dt);
     for (const npc of npcs) {
       updateEntityAnimation(npc, dt, Math.hypot(npc.vx, npc.vy) > 0.1, runtimeConfig);
-      updateEntityFacingFromVelocity(npc);
+      updateFacingFromVelocity(npc);
     }
     }
   });
@@ -1477,7 +1477,7 @@ function tick(now) {
     updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1, runtimeConfig);
     for (const enemy of enemies) {
       updateEntityAnimation(enemy, dt, Math.hypot(enemy.vx, enemy.vy) > 0.1, runtimeConfig);
-      updateEntityFacingFromVelocity(enemy);
+      updateFacingFromVelocity(enemy);
     }
   });
 
