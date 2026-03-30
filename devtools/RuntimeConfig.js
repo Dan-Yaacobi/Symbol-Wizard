@@ -109,10 +109,13 @@ export const DEFAULT_CONFIG = {
     selectedTile: false,
     layerLabels: false,
     facingMarker: false,
+    facingLabels: false,
+    logEnemyFacing: false,
     showExitAnchors: false,
     showReservedCorridors: false,
     showLandingTiles: false,
     showEnemySpawnZones: false,
+    showEnemySpawnRejections: false,
     showAntDenTriggerRadius: false,
     showObjectClearanceRadius: false,
     logAntDenSpawns: false,
@@ -150,6 +153,7 @@ export const DEFAULT_CONFIG = {
     minDistanceFromExit: 5,
     minDistanceFromPath: 2,
     minDistanceBetweenEnemyGroups: 10,
+    minDistanceBetweenEnemies: 2,
     maxSpawnAttempts: 100,
   },
 };
@@ -232,6 +236,8 @@ export const CONFIG_FIELDS = [
   { path: 'debug.selectedTile', label: 'Selected Tile Highlight', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.layerLabels', label: 'Render Layer Labels', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.facingMarker', label: 'Facing Marker', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.facingLabels', label: 'Facing Labels', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.logEnemyFacing', label: 'Log Enemy Facing', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.showExitAnchors', label: 'Show Exit Anchors', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.showReservedCorridors', label: 'Show Reserved Corridors', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.showLandingTiles', label: 'Show Landing Tiles', section: 'Debug / Overlays', type: 'boolean' },
@@ -264,8 +270,10 @@ export const CONFIG_FIELDS = [
   { path: 'enemyGeneration.minDistanceFromExit', label: 'Min Distance From Exit', section: 'Enemy Generation', type: 'number', min: 0, max: 24, step: 1 },
   { path: 'enemyGeneration.minDistanceFromPath', label: 'Min Distance From Path', section: 'Enemy Generation', type: 'number', min: 0, max: 16, step: 1 },
   { path: 'enemyGeneration.minDistanceBetweenEnemyGroups', label: 'Min Distance Between Groups', section: 'Enemy Generation', type: 'number', min: 0, max: 40, step: 1 },
+  { path: 'enemyGeneration.minDistanceBetweenEnemies', label: 'Min Distance Between Enemies', section: 'Enemy Generation', type: 'number', min: 0, max: 12, step: 1 },
   { path: 'enemyGeneration.maxSpawnAttempts', label: 'Max Spawn Attempts', section: 'Enemy Generation', type: 'number', min: 10, max: 500, step: 5 },
   { path: 'debug.showEnemySpawnZones', label: 'Show Enemy Spawn Zones', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.showEnemySpawnRejections', label: 'Show Enemy Spawn Rejections', section: 'Debug / Overlays', type: 'boolean' },
 ];
 
 function deepClone(v) { return JSON.parse(JSON.stringify(v)); }

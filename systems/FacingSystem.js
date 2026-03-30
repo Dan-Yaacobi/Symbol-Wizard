@@ -108,3 +108,22 @@ export function directionToArrow(direction) {
     default: return '•';
   }
 }
+
+export function toCardinalDirection(direction, fallback = 'S') {
+  switch (direction) {
+    case 'N':
+    case 'NE':
+    case 'NW':
+      return 'N';
+    case 'S':
+    case 'SE':
+    case 'SW':
+      return 'S';
+    case 'E':
+      return 'E';
+    case 'W':
+      return 'W';
+    default:
+      return fallback;
+  }
+}

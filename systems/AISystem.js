@@ -10,6 +10,7 @@ const ENEMY_SEPARATION_RADIUS = 1.8;
 const ENEMY_SEPARATION_STRENGTH = 0.6;
 const ENEMY_PERSONAL_SPACE_PUSH = 0.2;
 const ENEMY_COLLISION_MIN_DISTANCE = 1;
+const FACING_LOG_MAX_ENEMIES = 5;
 
 function ensureTargetPosition(enemy) {
   if (!Number.isFinite(enemy.targetX)) enemy.targetX = enemy.x;
@@ -179,6 +180,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
   const tileSize = collisionContext?.tileSize ?? 1;
   const system = collisionContext?.system ?? effectSystemOverride ?? null;
   const aggroEffectSystem = effectSystemOverride ?? null;
+  const facingDebugEnabled = Boolean(config?.get?.('debug.logEnemyFacing'));
 
   const aliveEnemies = [];
   const newlyAggroed = [];
@@ -227,8 +229,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       newlyAggroed.push(enemy);
     }
 
-    if (enemy.isAggroed) updateFacingTowardTarget(enemy, player);
-    else updateFacingFromVelocity(enemy);
+    updateFacingFromVelocity(enemy);
   }
 
   for (let i = 0; i < newlyAggroed.length; i += 1) {
@@ -369,10 +370,26 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     applyEnemySeparation(enemy, aliveEnemies);
     applyPlayerPersonalSpace(enemy, player);
     commitEnemyVelocity(enemy, dt, collisionMap, tileSize);
-    updateFacingFromVelocity(enemy);
+    const isTargetLocked = enemy.isAggroed && Boolean(enemy.target ?? player);
+    const isMoving = Math.hypot(enemy.vx ?? 0, enemy.vy ?? 0) > 0.01;
+    if (hasAttackState(enemy) || isTargetLocked) updateFacingTowardTarget(enemy, enemy.target ?? player);
+    else if (isMoving) updateFacingFromVelocity(enemy);
     interpolateEnemyPosition(enemy);
     syncEntityMovementState(enemy);
   }
 
   resolveEnemyCollisions(aliveEnemies, collisionMap);
+
+  if (facingDebugEnabled) {
+    const rows = aliveEnemies.slice(0, FACING_LOG_MAX_ENEMIES).map((enemy) => ({
+      id: enemy.id?.slice(0, 8),
+      type: enemy.enemyType,
+      state: enemy.state?.type ?? 'idle',
+      velocity: `${(enemy.vx ?? 0).toFixed(2)},${(enemy.vy ?? 0).toFixed(2)}`,
+      facing: `${(enemy.facing?.x ?? 0).toFixed(2)},${(enemy.facing?.y ?? 0).toFixed(2)}`,
+      direction: enemy.direction,
+      sprite: enemy.lastRenderSpriteKey ?? enemy.spriteId,
+    }));
+    if (rows.length) console.debug('[EnemyFacing]', rows);
+  }
 }

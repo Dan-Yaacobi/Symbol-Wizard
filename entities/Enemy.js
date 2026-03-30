@@ -13,6 +13,8 @@ export const ENEMY_BEHAVIOR = {
 export const ENEMY_TYPE_DEFS = Object.fromEntries(
   getAllEnemyDefinitions().map((definition) => [definition.id, {
     spriteId: definition.spriteId,
+    spawnStyle: definition.spawnStyle ?? 'scattered',
+    facingGlyphs: definition.facingGlyphs ?? null,
     behavior: definition.behavior ?? ENEMY_BEHAVIOR.CHASER,
     hp: definition.stats?.hp ?? 10,
     speed: definition.stats?.speed ?? 1,
@@ -164,6 +166,8 @@ export class Enemy extends Entity {
       postAttackSlowTimer: 0,
       hitKnockback: def.hitKnockback ?? 8,
       spriteId: def.spriteId,
+      spawnStyle: def.spawnStyle ?? 'scattered',
+      facingGlyphs: def.facingGlyphs ?? null,
       frozen: false,
       freezeTint: null,
       freezeGlow: null,
