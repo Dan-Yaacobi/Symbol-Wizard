@@ -1,5 +1,6 @@
 import { spawnObject, OBJECT_CATEGORY } from './ObjectLibrary.js';
 import { getSpawnDefinitionsByCategory, spawnByCategory } from '../data/SpawnDefinitionRegistry.js';
+import { biomeToneBias, colorVariation } from './ColorVariation.js';
 
 function randomInt(rng, min, max) {
   return Math.floor(rng() * (max - min + 1)) + min;
@@ -142,9 +143,10 @@ function samplePlacementCenter(tiles, rng, minDistanceFromMapEdge) {
   };
 }
 
-function stampObjectTiles(tiles, object) {
+function stampObjectTiles(tiles, object, biomeType = 'forest') {
   const objectTiles = Array.isArray(object.tiles) && object.tiles.length > 0 ? object.tiles : object.tileVariants ?? [];
   if (objectTiles.length === 0) return;
+  const tone = biomeToneBias(biomeType);
 
   for (const tile of objectTiles) {
     const dx = Number.isInteger(tile.x) ? tile.x : 0;
@@ -155,8 +157,8 @@ function stampObjectTiles(tiles, object) {
     tiles[y][x] = {
       ...tiles[y][x],
       char: tile.char,
-      fg: tile.fg,
-      bg: tile.bg ?? null,
+      fg: colorVariation(tile.fg ?? tiles[y][x].fg, { hue: 0.035, lightness: 0.08, saturation: 0.03 }, (x * 0.31) + (y * 0.27), tone),
+      bg: tile.bg ? colorVariation(tile.bg, { hue: 0.02, lightness: 0.06, saturation: 0.02 }, (x * 0.17) + (y * 0.29), tone) : null,
       type: `object-${object.type}`,
       walkable: object.collision ? false : tiles[y][x].walkable,
     };
@@ -328,7 +330,7 @@ function weightedCenterScore({ tiles, center, definition, densityField, pathTile
 function spawnPlacedObject(params) {
   const {
     tiles, rng, occupiedTiles, blockedMask, roomId, idPrefix, definition, center,
-    idIndex, safetyConfig, densityField, categoryRule, placedObjects,
+    idIndex, safetyConfig, densityField, categoryRule, placedObjects, biomeType,
   } = params;
 
   const previewRotation = definition.rotations ? Math.floor(rng() * 4) : 0;
@@ -361,7 +363,7 @@ function spawnPlacedObject(params) {
   const cells = collectObjectTiles(center, placed.footprint);
   reservePlacement({ occupiedTiles, blockedMask, cells, padding: categoryRule.basePadding });
   placedObjects.push(placed);
-  stampObjectTiles(tiles, placed);
+  stampObjectTiles(tiles, placed, biomeType);
   return placed;
 }
 
@@ -380,7 +382,8 @@ function placeCluster(definition, center, options) {
 
   const seedObject = spawnPlacedObject({
     tiles, rng, occupiedTiles, blockedMask, roomId, idPrefix, definition, center,
-    idIndex: startIndex, safetyConfig, densityField, categoryRule, placedObjects,
+      idIndex: startIndex, safetyConfig, densityField, categoryRule, placedObjects,
+      biomeType: options.biomeType,
   });
   if (!seedObject) return [];
   clusterPlacedObjects.push(seedObject);
@@ -399,6 +402,7 @@ function placeCluster(definition, center, options) {
     const placed = spawnPlacedObject({
       tiles, rng, occupiedTiles, blockedMask, roomId, idPrefix, definition, center: candidate,
       idIndex: startIndex + clusterPlacedObjects.length, safetyConfig, densityField, categoryRule, placedObjects,
+      biomeType: options.biomeType,
     });
 
     if (placed) clusterPlacedObjects.push(placed);
@@ -498,6 +502,7 @@ function placeFromPool(params) {
         densityField,
         categoryRule,
         placedObjects,
+        biomeType,
       });
       objects.push(...cluster);
       if (cluster.length > 0) debugInfo.clusterCenters.push(center);
@@ -518,6 +523,7 @@ function placeFromPool(params) {
       densityField,
       categoryRule,
       placedObjects,
+      biomeType,
     });
 
     if (placed) objects.push(placed);

@@ -1,11 +1,11 @@
 export const DEFAULT_PATH_GENERATION_CONFIG = {
-  baseTrailRadius: 2,
-  turnTrailRadius: 3,
-  exitTrailRadius: 3,
+  baseTrailRadius: 3,
+  turnTrailRadius: 4,
+  exitTrailRadius: 4,
   wanderChance: 0.25,
-  exitClearingRadius: 3,
-  minDistanceFromPath: 2,
-  minDistanceFromExit: 3,
+  exitClearingRadius: 4,
+  minDistanceFromPath: 3,
+  minDistanceFromExit: 5,
 };
 
 function clamp(value, min, max) {

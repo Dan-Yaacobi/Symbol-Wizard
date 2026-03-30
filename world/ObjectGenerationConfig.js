@@ -1,13 +1,13 @@
 export const DEFAULT_OBJECT_GENERATION_CONFIG = {
   objectDensity: 1,
   clusterDensity: 1,
-  minDistanceFromPath: 2,
-  minDistanceFromExit: 3,
-  minDistanceFromMapEdge: 2,
+  minDistanceFromPath: 3,
+  minDistanceFromExit: 5,
+  minDistanceFromMapEdge: 3,
   clusterRadiusMultiplier: 1,
   maxAttemptsPerObjectType: 100,
-  landmarkClearingRadius: 6,
-  intersectionClearingRadius: 4,
+  landmarkClearingRadius: 8,
+  intersectionClearingRadius: 6,
 };
 
 function clamp(value, min, max) {

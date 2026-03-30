@@ -211,6 +211,8 @@ export class RoomGenerator {
       pathMask: roadMask,
       entranceAnchors: Object.values(plan.entranceAnchors),
       exitAnchors: Object.values(plan.exitAnchors),
+      spawnPoint: plan.spawnArea.center,
+      roomDepth: roomNode.depth ?? 0,
     });
 
     return {
@@ -232,6 +234,8 @@ export class RoomGenerator {
         objectClearanceZones: objectDebug.objectClearanceZones,
         enemySpawnPoints: spawnedEnemies.debug.enemySpawnPoints,
         enemyGroupCenters: spawnedEnemies.debug.enemyGroupCenters,
+        enemyEncounterZones: spawnedEnemies.debug.encounterZones ?? [],
+        enemyEncounterSummaries: spawnedEnemies.debug.encounterZoneSummaries ?? [],
         entranceSafetyAnchors: spawnedEnemies.debug.entranceSafetyAnchors,
         exitSafetyAnchors: spawnedEnemies.debug.exitSafetyAnchors,
         pathSafetyTiles: spawnedEnemies.debug.pathSafetyTiles,

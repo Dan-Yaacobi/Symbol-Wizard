@@ -1,6 +1,6 @@
 export const DEFAULT_WORLD_GENERATION_CONFIG = {
-  forestRoomWidth: 120,
-  forestRoomHeight: 120,
+  forestRoomWidth: 240,
+  forestRoomHeight: 240,
 };
 
 function clamp(value, min, max) {
@@ -9,8 +9,8 @@ function clamp(value, min, max) {
 
 export function normalizeWorldGenerationConfig(config = {}) {
   return {
-    forestRoomWidth: clamp(Math.round(config.forestRoomWidth ?? DEFAULT_WORLD_GENERATION_CONFIG.forestRoomWidth), 40, 320),
-    forestRoomHeight: clamp(Math.round(config.forestRoomHeight ?? DEFAULT_WORLD_GENERATION_CONFIG.forestRoomHeight), 40, 320),
+    forestRoomWidth: clamp(Math.round(config.forestRoomWidth ?? DEFAULT_WORLD_GENERATION_CONFIG.forestRoomWidth), 80, 420),
+    forestRoomHeight: clamp(Math.round(config.forestRoomHeight ?? DEFAULT_WORLD_GENERATION_CONFIG.forestRoomHeight), 80, 420),
   };
 }
 

@@ -24,7 +24,7 @@ function defaultSpawnArea(width, height) {
   const center = { x: Math.floor(width / 2), y: Math.floor(height / 2) };
   return {
     center,
-    radius: Math.max(4, Math.round(Math.min(width, height) * 0.05)),
+    radius: Math.max(8, Math.round(Math.min(width, height) * 0.08)),
   };
 }
 
