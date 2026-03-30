@@ -661,6 +661,10 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, world
     drawBounds(player, '#ffe08a');
     enemies.forEach((enemy) => enemy.alive && drawBounds(enemy, '#ff9e9e'));
     projectiles.forEach((projectile) => drawBounds(projectile, '#8fd8ff'));
+    for (const object of worldObjects ?? []) {
+      if (!object || object.destroyed || !object.collision) continue;
+      drawBounds(object, '#73c6ff');
+    }
   }
 
   if (debugOptions.chaseLines && player) {
@@ -737,6 +741,25 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, world
       const phase = object.state?.phase ?? 'idle';
       const color = phase === 'depleted' ? '#808080' : (phase === 'active' ? '#ff9a4d' : '#ffaa66');
       drawCircle(object.x, object.y, triggerRadius, '·', color);
+    }
+  }
+
+  if (debugOptions.showAntDenSpawnDebug) {
+    const antOverlay = activeRoom?.debugOverlay;
+    for (const attempt of antOverlay?.antDenSpawnAttempts ?? []) {
+      drawCell(
+        renderer,
+        { glyph: attempt.valid ? '●' : '×', fg: attempt.valid ? '#64f589' : '#ff5f5f' },
+        attempt.x - camera.x,
+        attempt.y - camera.y,
+      );
+    }
+    for (const point of antOverlay?.antDenSpawnPoints ?? []) {
+      drawCell(renderer, { glyph: '◇', fg: '#6be0ff' }, point.x - camera.x, point.y - camera.y);
+    }
+    for (const ring of antOverlay?.antDenSpawnRings ?? []) {
+      drawCircle(ring.x, ring.y, Math.max(1, ring.minRadius), '·', '#ffbb66');
+      drawCircle(ring.x, ring.y, Math.max(1, ring.maxRadius), '·', '#ffd28a');
     }
   }
 

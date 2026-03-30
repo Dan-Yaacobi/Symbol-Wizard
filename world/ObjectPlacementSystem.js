@@ -63,7 +63,7 @@ function collectObjectTiles(center, footprint) {
 }
 
 function sanitizeClearanceRadius(source) {
-  return Math.max(0, Number(source?.clearanceRadius) || 0);
+  return Math.max(0, Number(source?.clearanceRadius ?? source?.clearRadius) || 0);
 }
 
 function rotateFootprintCells(footprint, quarterTurns = 0) {
