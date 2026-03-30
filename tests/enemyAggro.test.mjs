@@ -113,6 +113,8 @@ function testRangedEnemiesChargeBeforeShooting() {
 
   updateEnemies([enemy], player, 0.36, projectiles, config, null, effectSystem);
   assert.equal(projectiles.length, 1);
+  assert.equal(projectiles[0].projectileType, 'stingerProjectile');
+  assert.ok(['|', '/', '\\', '─'].includes(projectiles[0].glyph));
   assert.notEqual(enemy.state.type, 'attack');
   assert.equal(enemy.orbitPhase, 'wait');
 }

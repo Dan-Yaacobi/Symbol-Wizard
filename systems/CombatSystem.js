@@ -3,6 +3,7 @@ import { isEntityAttacking } from './EntityStateSystem.js';
 import { collides } from './CollisionSystem.js';
 import { applyAttackToObject, objectIntersectsCircle } from './ObjectInteractionSystem.js';
 import { ensureEntityFacing } from './FacingSystem.js';
+import { assignDirectionalProjectileGlyph } from './ProjectileGlyphSystem.js';
 
 function spawnProjectileTrail(projectile) {
   const particleCount = 2 + Math.floor(Math.random() * 3);
@@ -90,6 +91,7 @@ export function updateProjectiles(
     p.ttl -= dt / Math.max(0.01, ttlMult);
     p.x += p.dx * p.speed * speedMult * dt;
     p.y += p.dy * p.speed * speedMult * dt;
+    assignDirectionalProjectileGlyph(p);
     p.radius = config?.get?.('combat.projectileCollisionRadius') ?? p.radius;
 
     if (p.ttl <= 0) {

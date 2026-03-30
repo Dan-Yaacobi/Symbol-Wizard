@@ -117,6 +117,7 @@ export function applyEnemyTuningToEnemy(enemy) {
   enemy.hitKnockback = def.hitKnockback ?? 8;
   enemy.flankOrbitSpeed = def.flankOrbitSpeed ?? 1.2;
   enemy.aggroRadius = def.aggroRadius ?? 8;
+  enemy.projectileType = def.projectileType ?? enemy.projectileType;
 
   if (Number.isFinite(def.hp)) {
     const previousHp = Number.isFinite(enemy.hp) ? enemy.hp : def.hp;
@@ -180,6 +181,7 @@ export class Enemy extends Entity {
       aggroFlashTimer: 0,
       target: null,
       aggroRadius: def.aggroRadius ?? 8,
+      projectileType: def.projectileType ?? 'enemyProjectile',
       minShootDistance: def.minShootDistance ?? 6,
       preferredDistance: def.preferredDistance ?? 8,
       personalSpaceDistance: def.personalSpaceDistance ?? (1.5 + Math.random()),
