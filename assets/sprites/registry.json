@@ -36,10 +36,21 @@
     "props/flower-red.json",
     "props/flower-yellow.json",
     "props/grass-patch.json",
-    "sprites/registry.json",
-    "props/drop-resource.json",
-    "props/drop-rare.json",
-    "props/drop-boss.json",
-    "props/drop-currency.json"
+    "items/item_wood.json",
+    "items/item_stone.json",
+    "items/item_essence.json",
+    "items/item_ember_dust.json",
+    "items/item_spider_eye.json",
+    "items/item_wasp_stinger.json",
+    "items/item_skull_fragment.json",
+    "items/item_fire_core.json",
+    "items/item_frost_core.json",
+    "items/item_lightning_core.json",
+    "items/item_poison_gland.json",
+    "items/item_storm_shard.json",
+    "items/item_chitin_fragment.json",
+    "items/item_moss.json",
+    "items/item_arcane_shard.json",
+    "items/item_crystal_dust.json"
   ]
 }

@@ -1,0 +1,38 @@
+{
+  "id": "item_arcane_shard",
+  "anchor": {
+    "x": 0,
+    "y": 0
+  },
+  "defaultGrid": {
+    "width": 1,
+    "height": 1
+  },
+  "animations": {
+    "idle": [
+      {
+        "width": 1,
+        "height": 1,
+        "offsetY": 0,
+        "cells": [
+          [
+            {
+              "ch": "◆",
+              "fg": null,
+              "bg": null
+            }
+          ]
+        ]
+      }
+    ],
+    "walk": [],
+    "attack": []
+  },
+  "meta": {
+    "isEnemy": false,
+    "enemyId": "item_arcane_shard",
+    "biomes": [],
+    "spawnWeight": 1,
+    "category": "items"
+  }
+}

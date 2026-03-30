@@ -36,9 +36,21 @@
     "forest_beetle": "enemies/forest_beetle.json",
     "forest_mantis": "enemies/forest_mantis.json",
     "fire_ant": "enemies/fire_ant.json",
-    "drop-resource": "props/drop-resource.json",
-    "drop-rare": "props/drop-rare.json",
-    "drop-boss": "props/drop-boss.json",
-    "drop-currency": "props/drop-currency.json"
+    "item_wood": "items/item_wood.json",
+    "item_stone": "items/item_stone.json",
+    "item_essence": "items/item_essence.json",
+    "item_ember_dust": "items/item_ember_dust.json",
+    "item_spider_eye": "items/item_spider_eye.json",
+    "item_wasp_stinger": "items/item_wasp_stinger.json",
+    "item_skull_fragment": "items/item_skull_fragment.json",
+    "item_fire_core": "items/item_fire_core.json",
+    "item_frost_core": "items/item_frost_core.json",
+    "item_lightning_core": "items/item_lightning_core.json",
+    "item_poison_gland": "items/item_poison_gland.json",
+    "item_storm_shard": "items/item_storm_shard.json",
+    "item_chitin_fragment": "items/item_chitin_fragment.json",
+    "item_moss": "items/item_moss.json",
+    "item_arcane_shard": "items/item_arcane_shard.json",
+    "item_crystal_dust": "items/item_crystal_dust.json"
   }
 }
