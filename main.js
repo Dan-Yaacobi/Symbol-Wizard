@@ -13,7 +13,7 @@ import { updateEnemies } from './systems/AISystem.js';
 import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/CombatSystem.js';
 import * as LootSystem from './systems/LootSystem.js';
 import { CombatTextSystem } from './systems/CombatTextSystem.js';
-import { renderWorld } from './systems/RenderSystem.js';
+import { prewarmBackgroundCache, renderWorld } from './systems/RenderSystem.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
 import { setEntityState, syncEntityMovementState, updateEntityState } from './systems/EntityStateSystem.js';
 import { ensureEntityFacing, updateFacingFromVelocity } from './systems/FacingSystem.js';
@@ -62,9 +62,29 @@ const VIEW_H = 58;
 const ROOM_W = 240;
 const ROOM_H = 160;
 
+function nowMs() {
+  return globalThis?.performance?.now?.() ?? Date.now();
+}
+
+function logTiming(phase, startMs, endMs, details = {}) {
+  console.info('[StartupTiming]', {
+    phase,
+    startTimestamp: new Date().toISOString(),
+    startMs: Number(startMs.toFixed(3)),
+    endMs: Number(endMs.toFixed(3)),
+    durationMs: Number((endMs - startMs).toFixed(3)),
+    ...details,
+  });
+}
+
 const canvas = document.getElementById('gameCanvas');
 const canvasFrame = canvas?.parentElement;
+const rendererInitStart = nowMs();
 const renderer = new Renderer(canvas, VIEW_W, VIEW_H, 8, 8);
+logTiming('renderer_initialization', rendererInitStart, nowMs(), {
+  viewWidth: VIEW_W,
+  viewHeight: VIEW_H,
+});
 const camera = new Camera(VIEW_W, VIEW_H, ROOM_W, ROOM_H);
 const viewport = new Viewport(canvas, renderer);
 const input = new Input(canvas, viewport, camera, renderer.cellW, renderer.cellH);
@@ -73,8 +93,12 @@ const runtimeConfig = new RuntimeConfigRegistry();
 const devToolsPanel = new DevToolsPanel(runtimeConfig);
 runtimeConfig.setLogger((message) => logDev(message));
 
+const objectAssetStart = nowMs();
 await loadObjectsFromFolder('./assets/objects');
+logTiming('asset_loading_objects', objectAssetStart, nowMs());
+const spriteAssetStart = nowMs();
 await loadAllSpriteAssets('./assets');
+logTiming('asset_loading_sprites', spriteAssetStart, nowMs());
 
 const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
 const worldMapManager = new WorldMapManager({ biomeGenerator, roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
@@ -97,6 +121,22 @@ const roomTransitionSystem = new RoomTransitionSystem({
   fadeDurationMs: 150,
   debug: false,
 });
+
+function prewarmLikelyFirstTransition(room) {
+  const exits = Array.isArray(room?.exits)
+    ? room.exits
+    : Object.entries(room?.exits ?? {}).map(([id, exit]) => ({ id, ...exit }));
+  const likelyExit = exits.find((exit) => (exit?.interactionType ?? 'exit') === 'exit'
+    && (exit?.targetMapType || exit?.targetMap || exit?.interactionData?.targetMap));
+  if (!likelyExit) return;
+
+  const prewarmStart = nowMs();
+  const result = roomTransitionSystem.prewarmExitTarget(room, likelyExit);
+  logTiming('lazy_system_prewarm_transition_target', prewarmStart, nowMs(), {
+    exitId: likelyExit.id ?? null,
+    targetResolved: Boolean(result?.targetRoom && result?.targetEntrance),
+  });
+}
 
 function randomSeed() {
   return Math.floor(Math.random() * 0x7fffffff);
@@ -181,6 +221,8 @@ function resolveInitialSpawn(room) {
 
 syncActiveRoomCollections(activeRoom);
 syncRoomEnemies(activeRoom);
+prewarmBackgroundCache(renderer, activeRoom.tiles, activeRoom.objects ?? []);
+prewarmLikelyFirstTransition(activeRoom);
 if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
 const initialSpawn = resolveInitialSpawn(activeRoom);
 player.x = initialSpawn.x;

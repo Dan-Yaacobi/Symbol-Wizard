@@ -12,6 +12,22 @@ import { resolveWorldGenerationConfig } from './WorldGenerationConfig.js';
 import { resolveObjectGenerationConfig } from './ObjectGenerationConfig.js';
 import { spawnEnemiesForRoom } from './EnemySpawnSystem.js';
 
+function nowMs() {
+  return globalThis?.performance?.now?.() ?? Date.now();
+}
+
+function logGenerationPhase(roomId, phase, startMs, endMs, details = {}) {
+  console.info('[GenerationTiming]', {
+    roomId,
+    phase,
+    startTimestamp: new Date().toISOString(),
+    startMs: Number(startMs.toFixed(3)),
+    endMs: Number(endMs.toFixed(3)),
+    durationMs: Number((endMs - startMs).toFixed(3)),
+    ...details,
+  });
+}
+
 function createRng(seed) {
   let state = seed >>> 0;
   return () => {
@@ -77,6 +93,7 @@ export class RoomGenerator {
   }
 
   generate(roomNode, { rooms, roomGraph } = {}) {
+    const generationStart = nowMs();
     const rng = createRng(roomNode.seed >>> 0);
     const biomeType = roomNode.biomeType ?? 'forest';
     const useForestSizing = biomeType === 'forest';
@@ -91,6 +108,7 @@ export class RoomGenerator {
     const pathConfig = resolvePathGenerationConfig(this.runtimeConfig);
     const objectConfig = resolveObjectGenerationConfig(this.runtimeConfig);
 
+    const mapGenerationStart = nowMs();
     const { grid } = terrainGenerator.initializeTiles(roomNode, rng, effectiveBiomeConfig);
 
     const { roadMask, debugEvents: pathEvents } = this.pathGenerator.carveRequiredPaths({
@@ -102,6 +120,12 @@ export class RoomGenerator {
     });
 
     const clearingMask = terrainGenerator.carveForestClearings(grid, rng, biomeType, roadMask);
+    logGenerationPhase(roomNode.id, 'map_generation', mapGenerationStart, nowMs(), {
+      width: roomWidth,
+      height: roomHeight,
+      pathTiles: roadMask.size,
+      clearingTiles: clearingMask.size,
+    });
 
     const protectedMask = new Set();
     mergeMask(protectedMask, roadMask);
@@ -129,6 +153,7 @@ export class RoomGenerator {
 
     const occupiedTiles = new Set();
     const objectBlockedMask = new Set(protectedMask);
+    const objectPlacementStart = nowMs();
     const landmarks = this.objectPlacementSystem.placeLandmarks({
       tiles: grid,
       rng,
@@ -158,6 +183,10 @@ export class RoomGenerator {
     });
 
     terrainGenerator.decorate(grid, rng, objectBlockedMask);
+    logGenerationPhase(roomNode.id, 'object_placement', objectPlacementStart, nowMs(), {
+      landmarkCount: landmarks.length,
+      objectCount: objects.length,
+    });
 
     const triggers = this.exitTriggerSystem.build({ plan });
 
@@ -206,6 +235,7 @@ export class RoomGenerator {
       exits: structuredClone(triggers.exits),
     };
 
+    const enemySpawnStart = nowMs();
     const spawnedEnemies = spawnEnemiesForRoom(roomBase, {
       biomeType,
       runtimeConfig: this.runtimeConfig,
@@ -216,6 +246,10 @@ export class RoomGenerator {
       spawnPoint: plan.spawnArea.center,
       roomDepth: roomNode.depth ?? 0,
     });
+    logGenerationPhase(roomNode.id, 'enemy_spawning', enemySpawnStart, nowMs(), {
+      enemyCount: spawnedEnemies.enemies?.length ?? 0,
+    });
+    logGenerationPhase(roomNode.id, 'room_generation_total', generationStart, nowMs());
 
     return {
       id: roomNode.id,
