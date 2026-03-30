@@ -122,6 +122,7 @@ const roomTransitionSystem = new RoomTransitionSystem({
   fadeDurationMs: 150,
   debug: false,
 });
+let pendingTransitionFirstRenderMark = false;
 
 function prewarmLikelyFirstTransition(room) {
   const exits = Array.isArray(room?.exits)
@@ -1479,8 +1480,41 @@ function tick(now) {
   const devCapturing = devToolsPanel.isCapturingInput();
   const spellbookOpen = spellbook.isOpen();
 
-  if (!dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
+  if (!roomTransitionSystem.isTransitionActive() && !dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
     timed('player', framePerf, () => handlePlayer(dt));
+  } else {
+    player.vx = 0;
+    player.vy = 0;
+    input.clearMouseButtonPresses();
+  }
+
+  const transitionResult = timed('transition', framePerf, () => roomTransitionSystem.update(dt, { activeRoom, player }));
+  if (transitionResult?.room) {
+    roomTransitionSystem.noteExternalTimeline('room_swap_commit_start', {
+      fromRoomId: activeRoom?.id ?? null,
+      toRoomId: transitionResult.room?.id ?? null,
+    });
+    activeRoom = transitionResult.room;
+    map = activeRoom.tiles;
+    syncActiveRoomCollections(activeRoom);
+    abilitySystem.map = map;
+    roomTransitionSystem.noteExternalTimeline('camera_viewport_update_start');
+    camera.worldW = map[0]?.length ?? ROOM_W;
+    camera.worldH = map.length ?? ROOM_H;
+    camera.hasFollowTarget = false;
+    renderer.lastCameraX = Number.NaN;
+    renderer.lastCameraY = Number.NaN;
+    roomTransitionSystem.noteExternalTimeline('camera_viewport_update_end');
+    syncRoomEnemies(activeRoom);
+    if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
+    roomTransitionSystem.noteExternalTimeline('renderer_related_work_start', { operation: 'background_cache_prewarm' });
+    prewarmBackgroundCache(renderer, activeRoom.tiles, activeRoom.objects ?? []);
+    roomTransitionSystem.noteExternalTimeline('renderer_related_work_end', { operation: 'background_cache_prewarm' });
+    pendingTransitionFirstRenderMark = true;
+    roomTransitionSystem.noteExternalTimeline('room_swap_commit_end');
+  }
+
+  if (!roomTransitionSystem.isTransitionActive() && !dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
     timed('world', framePerf, () => {
       updateAntDens({
         room: activeRoom,
@@ -1533,10 +1567,6 @@ function tick(now) {
     goldPiles = LootSystem.collectGold(player, goldPiles, combatTextSystem);
     updateWorldDrops(dt);
     collectWorldDrops();
-  } else {
-    player.vx = 0;
-    player.vy = 0;
-    input.clearMouseButtonPresses();
   }
 
   timed('world', framePerf, () => {
@@ -1546,21 +1576,6 @@ function tick(now) {
     }
   });
   timed('combatText', framePerf, () => combatTextSystem.update(dt));
-
-  const transitionResult = timed('transition', framePerf, () => roomTransitionSystem.update(dt, { activeRoom, player }));
-  if (transitionResult?.room) {
-    activeRoom = transitionResult.room;
-    map = activeRoom.tiles;
-    syncActiveRoomCollections(activeRoom);
-    abilitySystem.map = map;
-    camera.worldW = map[0]?.length ?? ROOM_W;
-    camera.worldH = map.length ?? ROOM_H;
-    camera.hasFollowTarget = false;
-    renderer.lastCameraX = Number.NaN;
-    renderer.lastCameraY = Number.NaN;
-    syncRoomEnemies(activeRoom);
-    if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
-  }
 
   timed('animation', framePerf, () => {
     updateEntityAnimation(player, dt, Math.hypot(player.vx, player.vy) > 0.1, runtimeConfig);
@@ -1626,6 +1641,12 @@ function tick(now) {
     renderer.ui.ctx.restore();
   }
     renderer.composite();
+    if (pendingTransitionFirstRenderMark) {
+      roomTransitionSystem.noteExternalTimeline('first_frame_new_room_rendered', {
+        roomId: activeRoom?.id ?? null,
+      });
+      pendingTransitionFirstRenderMark = false;
+    }
   });
 
   if (devToolsPanel.open && input.mouse.clicked) {
