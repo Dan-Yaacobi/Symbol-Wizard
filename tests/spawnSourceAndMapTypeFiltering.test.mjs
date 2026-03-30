@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { SPAWN_CATEGORY } from '../data/DefinitionUtils.js';
 import { getSpawnDefinitionsByCategory } from '../data/SpawnDefinitionRegistry.js';
 import { getEnemyDefinition } from '../data/EnemyRegistry.js';
-import { OBJECT_CATEGORY } from '../world/ObjectLibrary.js';
+import { OBJECT_CATEGORY, objectLibrary } from '../world/ObjectLibrary.js';
 import { buildBiomePool } from '../world/ObjectPlacementSystem.js';
 import { filterEncounterDefinitions } from '../world/EncounterGenerator.js';
 
@@ -24,11 +24,27 @@ function testEnemySpawnSourceFiltering() {
 }
 
 function testObjectMapTypeFiltering() {
-  const forestEnvironmentPool = buildBiomePool('forest', OBJECT_CATEGORY.ENVIRONMENT, 'forest');
-  assert.ok(forestEnvironmentPool.some((definition) => definition.id === 'ant_den'), 'ant_den should remain available in forest map generation.');
+  objectLibrary.test_maptype_restricted = {
+    id: 'test_maptype_restricted',
+    category: OBJECT_CATEGORY.ENVIRONMENT,
+    biomeTags: ['forest'],
+    footprint: [{ x: 0, y: 0 }],
+    tiles: [{ x: 0, y: 0, char: 'X', fg: '#ffffff', bg: null }],
+    spawnWeight: 1,
+    minClusterSize: 1,
+    maxClusterSize: 1,
+    allowedMapTypes: ['forest'],
+  };
 
-  const townEnvironmentPool = buildBiomePool('forest', OBJECT_CATEGORY.ENVIRONMENT, 'town');
-  assert.equal(townEnvironmentPool.some((definition) => definition.id === 'ant_den'), false, 'ant_den should be excluded from town map generation.');
+  try {
+    const forestEnvironmentPool = buildBiomePool('forest', OBJECT_CATEGORY.ENVIRONMENT, 'forest');
+    assert.ok(forestEnvironmentPool.some((definition) => definition.id === 'test_maptype_restricted'), 'Map-type restricted objects should be available for allowed map types.');
+
+    const townEnvironmentPool = buildBiomePool('forest', OBJECT_CATEGORY.ENVIRONMENT, 'town');
+    assert.equal(townEnvironmentPool.some((definition) => definition.id === 'test_maptype_restricted'), false, 'Map-type restricted objects should be excluded from disallowed map types.');
+  } finally {
+    delete objectLibrary.test_maptype_restricted;
+  }
 }
 
 function run() {

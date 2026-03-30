@@ -1,4 +1,5 @@
 import { createDefinition as createSpawnDefinition, SPAWN_CATEGORY } from '../data/DefinitionUtils.js';
+
 const OBJECT_CATEGORY = {
   ENVIRONMENT: SPAWN_CATEGORY.ENVIRONMENT,
   DESTRUCTIBLE: SPAWN_CATEGORY.LOOT,
@@ -18,7 +19,6 @@ function normalizeFootprint(footprint) {
     .filter(Boolean);
 }
 
-
 function normalizeColor(color, fallback) {
   const clamp = (value) => Math.max(0, Math.min(255, Number(value) || 0));
   const toHex = (r, g, b) => `#${clamp(r).toString(16).padStart(2, '0')}${clamp(g).toString(16).padStart(2, '0')}${clamp(b).toString(16).padStart(2, '0')}`;
@@ -35,12 +35,6 @@ function normalizeColor(color, fallback) {
   return typeof color === 'string' ? color : fallback;
 }
 
-function normalizeBreakFrames(breakFrames) {
-  if (!Array.isArray(breakFrames)) return null;
-  // Break frames come from prefab JSON too; normalize tile colors so renderer gets string colors.
-  return breakFrames.map((frame) => normalizeTiles(frame));
-}
-
 function normalizeTiles(tiles) {
   if (!Array.isArray(tiles)) return [];
   return tiles
@@ -50,7 +44,7 @@ function normalizeTiles(tiles) {
       const y = Number(tile.y);
       if (!Number.isInteger(x) || !Number.isInteger(y)) return null;
       const char = typeof tile.char === 'string' && tile.char.length > 0 ? tile.char[0] : null;
-      if (!char) return null;
+      if (!char || char === ' ') return null;
       return {
         x,
         y,
@@ -62,64 +56,47 @@ function normalizeTiles(tiles) {
     .filter(Boolean);
 }
 
-function visual(char, fg, bg = null) {
-  return { char, fg, bg };
+function normalizeBreakFrames(breakFrames) {
+  if (!Array.isArray(breakFrames)) return null;
+  return breakFrames.map((frame) => normalizeTiles(frame));
 }
 
-export function parseBlueprint(blueprint, glyphPalette = {}) {
-  if (!Array.isArray(blueprint) || blueprint.length === 0) {
-    return {
-        tileVariants: [{ x: 0, y: 0, char: '•', fg: '#d8d2c4', bg: null }],
-      centerOffset: { x: 0, y: 0 },
-    };
-  }
+function extractTilesFromSpriteAsset(asset) {
+  const idleFrame = asset?.animations?.idle?.[0];
+  const rows = Array.isArray(idleFrame?.cells) ? idleFrame.cells : [];
+  if (rows.length === 0) return [];
 
-  const rows = blueprint.map((row) => (typeof row === 'string' ? row : String(row ?? '')));
-  const width = rows.reduce((max, row) => Math.max(max, row.length), 0);
-  const centerOffset = { x: Math.floor(width / 2), y: Math.floor(rows.length / 2) };
-  const footprint = [];
-  const tileVariants = [];
+  const anchorX = Number.isInteger(asset?.anchor?.x) ? asset.anchor.x : Math.floor((rows[0]?.length ?? 1) / 2);
+  const anchorY = Number.isInteger(asset?.anchor?.y) ? asset.anchor.y : Math.floor(rows.length / 2);
 
+  const tiles = [];
   for (let y = 0; y < rows.length; y += 1) {
-    const row = rows[y].padEnd(width, ' ');
-    for (let x = 0; x < width; x += 1) {
-      const char = row[x];
-      if (char === ' ') continue;
-      const rx = x - centerOffset.x;
-      const ry = y - centerOffset.y;
-      const paletteEntry = glyphPalette[char] ?? {};
-      footprint.push({ x: rx, y: ry });
-      tileVariants.push({
-        x: rx,
-        y: ry,
-        char,
-        fg: paletteEntry.fg ?? '#d8d2c4',
-        bg: paletteEntry.bg ?? null,
+    const row = Array.isArray(rows[y]) ? rows[y] : [];
+    for (let x = 0; x < row.length; x += 1) {
+      const cell = row[x];
+      if (!cell || typeof cell.ch !== 'string' || cell.ch.length === 0 || cell.ch === ' ') continue;
+      tiles.push({
+        x: x - anchorX,
+        y: y - anchorY,
+        char: cell.ch[0],
+        fg: normalizeColor(cell.fg, '#d8d2c4'),
+        bg: normalizeColor(cell.bg, 'rgba(0, 0, 0, 0)'),
       });
     }
   }
+  return tiles;
+}
 
-  return {
-    footprint: footprint.length > 0 ? footprint : [{ x: 0, y: 0 }],
-    tileVariants: tileVariants.length > 0 ? tileVariants : [{ x: 0, y: 0, char: '•', fg: '#d8d2c4', bg: null }],
-    centerOffset,
-  };
+function inferCategoryFromFilePath(fileName, fallback = OBJECT_CATEGORY.ENVIRONMENT) {
+  if (typeof fileName !== 'string') return fallback;
+  if (fileName.includes('/loot/')) return OBJECT_CATEGORY.DESTRUCTIBLE;
+  if (fileName.includes('/environment/')) return OBJECT_CATEGORY.ENVIRONMENT;
+  return fallback;
 }
 
 function createDefinition(definition) {
-  const parsed = definition.blueprint
-    ? parseBlueprint(definition.blueprint, definition.glyphPalette)
-    : null;
-
-  const footprint = parsed
-    ? parsed.footprint
-    : normalizeFootprint(definition.footprint);
-
-  const blueprintTiles = parsed
-    ? parsed.tileVariants
-    : [];
-
   const explicitTiles = normalizeTiles(definition.tiles);
+  const footprint = normalizeFootprint(definition.footprint ?? explicitTiles.map((tile) => ({ x: tile.x, y: tile.y })));
   const variants = Array.isArray(definition.variants) ? definition.variants : [];
 
   const placementCategory = definition.category === OBJECT_CATEGORY.LANDMARK ? OBJECT_CATEGORY.LANDMARK : definition.category;
@@ -142,13 +119,14 @@ function createDefinition(definition) {
     allowOverlap: false,
     biomeRarity: 'common',
     clearanceRadius: 0,
+    source: 'code',
     ...definition,
     category: definition.category === OBJECT_CATEGORY.LANDMARK ? SPAWN_CATEGORY.ENVIRONMENT : definition.category,
     placementCategory,
-    centerOffset: parsed?.centerOffset ?? { x: 0, y: 0 },
+    centerOffset: definition.centerOffset ?? { x: 0, y: 0 },
     footprint,
     variants,
-    tiles: explicitTiles.length > 0 ? explicitTiles : blueprintTiles,
+    tiles: explicitTiles,
   });
 }
 
@@ -171,335 +149,21 @@ function rotateTiles(tiles, quarterTurns) {
   });
 }
 
-export const objectLibrary = {
-  pine_tree_large: createDefinition({
-    id: 'pine_tree_large', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'taiga'], blocksMovement: true,
-    rotations: true, spawnWeight: 1.35, minClusterSize: 1, maxClusterSize: 3, biomeRarity: 'common',
-    blueprint: ['  ▲  ', ' ▲▲▲ ', '▲♠♠▲', '  ║  ', '  ║  '],
-    glyphPalette: { '▲': { fg: '#2f7d32' }, '♠': { fg: '#256429' }, '║': { fg: '#6f5230' } },
-  }),
-  fallen_tree: createDefinition({
-    id: 'fallen_tree', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.85, minClusterSize: 1, maxClusterSize: 2, biomeRarity: 'common',
-    blueprint: ['        ', '═══════✶', '▒▒▒▒▒▒▒ ', '        '],
-    glyphPalette: { '═': { fg: '#7f5e3b' }, '▒': { fg: '#5f472d' }, '✶': { fg: '#9a7b4c' } },
-  }),
-  ancient_tree: createDefinition({
-    id: 'ancient_tree', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest'], blocksMovement: true,
-    spawnWeight: 0.25, minClusterSize: 1, maxClusterSize: 1, biomeRarity: 'rare',
-    blueprint: ['   ♣♣♣   ', ' ♣♣♣♣♣♣♣ ', '♣♣♣♧♣♧♣♣♣', ' ♣♣♣♣♣♣♣ ', '   ║▓║   ', '   ║▓║   ', '  ▓▓▓▓▓  '],
-    glyphPalette: { '♣': { fg: '#305f2a' }, '♧': { fg: '#3d6f35' }, '║': { fg: '#6b4f2a' }, '▓': { fg: '#5a3f25' } },
-  }),
-  tree_cluster: createDefinition({
-    id: 'tree_cluster', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest'], blocksMovement: true,
-    rotations: true, spawnWeight: 1.2, minClusterSize: 1, maxClusterSize: 4, biomeRarity: 'common',
-    blueprint: [' ♠ ♣ ', '♣♣♠♣♣', ' ♣║♠ ', '  ║  ', ' ♧ ║ '],
-    glyphPalette: { '♠': { fg: '#2d7f33' }, '♣': { fg: '#3b8f3d' }, '♧': { fg: '#2a6f31' }, '║': { fg: '#6b4f2a' } },
-  }),
-  stump: createDefinition({
-    id: 'stump', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.9, minClusterSize: 1, maxClusterSize: 3,
-    blueprint: [' ▒▒ ', '▒◎▒▒', ' ▒▒ '],
-    glyphPalette: { '▒': { fg: '#6f4e2f' }, '◎': { fg: '#a07b50' } },
-  }),
-  root_cluster: createDefinition({
-    id: 'root_cluster', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest'], blocksMovement: false,
-    rotations: true, spawnWeight: 0.95, minClusterSize: 2, maxClusterSize: 5,
-    blueprint: ['  ║  ', '═╬═╬═', '  ╬  ', '═╬═  '],
-    glyphPalette: { '║': { fg: '#6a4a2c' }, '═': { fg: '#6a4a2c' }, '╬': { fg: '#7a5734' } },
-  }),
-  cedar_grove: createDefinition({
-    id: 'cedar_grove', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'taiga'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.8, minClusterSize: 1, maxClusterSize: 2, biomeRarity: 'uncommon',
-    blueprint: [' ▲ ▲ ', '▲♠▲♠▲', ' ║ ║ ', ' ▲▲▲ ', '  ║  '],
-    glyphPalette: { '▲': { fg: '#3e7f42' }, '♠': { fg: '#2f6b33' }, '║': { fg: '#664b2d' } },
-  }),
-  bent_pine: createDefinition({
-    id: 'bent_pine', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'taiga'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.75, minClusterSize: 1, maxClusterSize: 2,
-    blueprint: ['   ▲▲ ', '  ▲♠▲', ' ▲▲▲ ', '  ║  ', ' ║   '],
-    glyphPalette: { '▲': { fg: '#2f7d32' }, '♠': { fg: '#245c28' }, '║': { fg: '#6d502f' } },
-  }),
-  hollow_trunk: createDefinition({
-    id: 'hollow_trunk', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.55, minClusterSize: 1, maxClusterSize: 2, biomeRarity: 'uncommon',
-    blueprint: [' ▓▓▓ ', '▓○▒▓', '▓▒▒▓', ' ▓▓▓ '],
-    glyphPalette: { '▓': { fg: '#65492b' }, '▒': { fg: '#5a3f25' }, '○': { fg: '#2d2014' } },
-  }),
-  sapling_ring: createDefinition({
-    id: 'sapling_ring', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'plains'], blocksMovement: false,
-    spawnWeight: 0.65, minClusterSize: 1, maxClusterSize: 3, biomeRarity: 'uncommon',
-    blueprint: [' ♠♠♠ ', '♠   ♠', '♠   ♠', ' ♠♠♠ '],
-    glyphPalette: { '♠': { fg: '#4b9950' } },
-  }),
+export const objectLibrary = {};
 
-  mushroom_ring: createDefinition({
-    id: 'mushroom_ring', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'swamp'], blocksMovement: false,
-    spawnWeight: 0.95, minClusterSize: 1, maxClusterSize: 4,
-    blueprint: [' ◎◎◎ ', '◎   ◎', '◎ ✸ ◎', '◎   ◎', ' ◎◎◎ '],
-    glyphPalette: { '◎': { fg: '#c8b08a' }, '✸': { fg: '#8e6f49' } },
-  }),
-  berry_patch: createDefinition({
-    id: 'berry_patch', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'plains'], blocksMovement: false,
-    rotations: true, spawnWeight: 1.1, minClusterSize: 2, maxClusterSize: 6,
-    blueprint: [' ✶✶  ', '✶♣✶✶ ', ' ✶✶♣ ', '  ✶✶ '],
-    glyphPalette: { '✶': { fg: '#b24767' }, '♣': { fg: '#4e8c46' } },
-  }),
-  grass_field: createDefinition({
-    id: 'grass_field', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'plains'], blocksMovement: false,
-    spawnWeight: 1.3, minClusterSize: 3, maxClusterSize: 7,
-    blueprint: ['▴▴▴▴▴', '▴△▴△▴', '▴▴▴▴▴', '△▴△▴△', '▴▴▴▴▴'],
-    glyphPalette: { '▴': { fg: '#5f9e4d' }, '△': { fg: '#73b85e' } },
-  }),
-  flower_field: createDefinition({
-    id: 'flower_field', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'plains'], blocksMovement: false,
-    spawnWeight: 1.15, minClusterSize: 2, maxClusterSize: 6,
-    blueprint: ['✶✦✶✦✶', '✦♣✦♣✦', '✶✦✸✦✶', '✦♣✦♣✦', '✶✦✶✦✶'],
-    glyphPalette: { '✶': { fg: '#d58cc2' }, '✦': { fg: '#e7d374' }, '✸': { fg: '#cf5f6d' }, '♣': { fg: '#4d8b46' } },
-  }),
-  mossy_boulder: createDefinition({
-    id: 'mossy_boulder', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'hills'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.9, minClusterSize: 1, maxClusterSize: 3,
-    blueprint: [' ▓█▓ ', '▓███▓', '▓█♣█▓', ' ▓█▓ '],
-    glyphPalette: { '▓': { fg: '#7d868f' }, '█': { fg: '#6c747d' }, '♣': { fg: '#497a45' } },
-  }),
-  rock_formation: createDefinition({
-    id: 'rock_formation', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'hills'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.82, minClusterSize: 1, maxClusterSize: 2,
-    blueprint: ['  ▲  ', ' ▲█▲ ', '▲███▲', '  ▲  '],
-    glyphPalette: { '▲': { fg: '#8e969e' }, '█': { fg: '#7b838b' } },
-  }),
-  fern_patch: createDefinition({
-    id: 'fern_patch', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'swamp'], blocksMovement: false,
-    rotations: true, spawnWeight: 1.0, minClusterSize: 2, maxClusterSize: 5,
-    blueprint: [' ♧♣  ', '♣♧♣♧ ', ' ♧♣♧ '],
-    glyphPalette: { '♧': { fg: '#4a914b' }, '♣': { fg: '#3b7f3f' } },
-  }),
-  reed_bed: createDefinition({
-    id: 'reed_bed', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['swamp', 'river'], blocksMovement: false,
-    spawnWeight: 0.7, minClusterSize: 2, maxClusterSize: 5, biomeRarity: 'uncommon',
-    blueprint: ['║║║║║', '║▴║▴║', '║║║║║'],
-    glyphPalette: { '║': { fg: '#7f9854' }, '▴': { fg: '#95ad63' } },
-  }),
-  crystal_lichen: createDefinition({
-    id: 'crystal_lichen', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'hills'], blocksMovement: false,
-    spawnWeight: 0.4, minClusterSize: 1, maxClusterSize: 3, biomeRarity: 'rare',
-    blueprint: [' ✦✦ ', '✦♣✸✦', ' ✦✦ '],
-    glyphPalette: { '✦': { fg: '#9fd3de' }, '✸': { fg: '#bcd7ef' }, '♣': { fg: '#5d9461' } },
-  }),
-  wildflower_arc: createDefinition({
-    id: 'wildflower_arc', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'plains'], blocksMovement: false,
-    rotations: true, spawnWeight: 0.75, minClusterSize: 1, maxClusterSize: 4,
-    blueprint: ['✶✦✶✦ ', ' ♣✶✦✶', '  ♣✶✦'],
-    glyphPalette: { '✶': { fg: '#d27ab3' }, '✦': { fg: '#f3dd6e' }, '♣': { fg: '#4a8a45' } },
-  }),
-
-  broken_statue: createDefinition({
-    id: 'broken_statue', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest', 'ruins'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.35, minClusterSize: 1, maxClusterSize: 2, biomeRarity: 'rare',
-    blueprint: ['  †  ', ' ▓█▓ ', '  █  ', ' ▒▓▒ '],
-    glyphPalette: { '†': { fg: '#b9b4a8' }, '▓': { fg: '#9a978e' }, '█': { fg: '#87847d' }, '▒': { fg: '#7b7872' } },
-  }),
-  altar_ruins: createDefinition({
-    id: 'altar_ruins', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest', 'ruins'], blocksMovement: true,
-    spawnWeight: 0.3, minClusterSize: 1, maxClusterSize: 1, biomeRarity: 'rare',
-    blueprint: [' ▓▓▓ ', '▓═○═▓', '▓═◉═▓', '▓═○═▓', ' ▓▓▓ '],
-    glyphPalette: { '▓': { fg: '#8f8a80' }, '═': { fg: '#7d786f' }, '○': { fg: '#b9b39f' }, '◉': { fg: '#d6cfb8' } },
-  }),
-  collapsed_wall: createDefinition({
-    id: 'collapsed_wall', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'ruins'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.7, minClusterSize: 1, maxClusterSize: 3,
-    blueprint: ['█▓█▓█▓', ' ▒ ▒  ', '▓█▓█▓ '],
-    glyphPalette: { '█': { fg: '#8c8880' }, '▓': { fg: '#7e7a72' }, '▒': { fg: '#6f6b64' } },
-  }),
-  ruined_arch: createDefinition({
-    id: 'ruined_arch', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest', 'ruins'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.42, minClusterSize: 1, maxClusterSize: 2,
-    blueprint: ['█   █', '█   █', '█═══█', '█   █'],
-    glyphPalette: { '█': { fg: '#8f8b84' }, '═': { fg: '#78746d' } },
-  }),
-  stone_pillar: createDefinition({
-    id: 'stone_pillar', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'ruins'], blocksMovement: true,
-    spawnWeight: 0.65, minClusterSize: 1, maxClusterSize: 4,
-    blueprint: [' ▓ ', ' █ ', ' █ ', ' ▓ '],
-    glyphPalette: { '▓': { fg: '#9b968e' }, '█': { fg: '#848078' } },
-  }),
-  grave: createDefinition({
-    id: 'grave', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'ruins'], blocksMovement: true,
-    spawnWeight: 0.45, minClusterSize: 1, maxClusterSize: 4,
-    blueprint: [' † ', '▓▓▓', '▒▒▒'],
-    glyphPalette: { '†': { fg: '#b7b19e' }, '▓': { fg: '#8d897f' }, '▒': { fg: '#726d64' } },
-  }),
-  cracked_obelisk: createDefinition({
-    id: 'cracked_obelisk', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest', 'ruins'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.25, minClusterSize: 1, maxClusterSize: 1, biomeRarity: 'rare',
-    blueprint: ['  Δ  ', ' ▓█▓ ', '  █  ', '  █  ', ' ▒▒▒ '],
-    glyphPalette: { 'Δ': { fg: '#d2cebb' }, '▓': { fg: '#928d83' }, '█': { fg: '#7d786f' }, '▒': { fg: '#6c675f' } },
-  }),
-  shattered_gate: createDefinition({
-    id: 'shattered_gate', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest', 'ruins'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.22, minClusterSize: 1, maxClusterSize: 1, biomeRarity: 'rare',
-    blueprint: ['█ ═ ═ █', '█     █', '█ ▒ ▒ █', '█     █'],
-    glyphPalette: { '█': { fg: '#8e8a83' }, '═': { fg: '#746f68' }, '▒': { fg: '#605b54' } },
-  }),
-
-  campfire_site: createDefinition({
-    id: 'campfire_site', category: OBJECT_CATEGORY.INTERACTABLE, biomeTags: ['forest', 'camp'], interactable: true,
-    blocksMovement: false, rotations: true, spawnWeight: 0.85, minClusterSize: 1, maxClusterSize: 3,
-    blueprint: [' ▒▒▒ ', '▒✶✸▒', '▒╬╬▒', ' ▒▒▒ '],
-    glyphPalette: { '▒': { fg: '#6a5034' }, '✶': { fg: '#f09a4b' }, '✸': { fg: '#d87332' }, '╬': { fg: '#7f5d3c' } },
-  }),
-  abandoned_cart: createDefinition({
-    id: 'abandoned_cart', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest', 'roadside', 'camp'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.36, minClusterSize: 1, maxClusterSize: 2,
-    blueprint: ['○═▒▒═○', '█▒▒▒▒█', ' ○   ○ '],
-    glyphPalette: { '○': { fg: '#8a8f97' }, '═': { fg: '#7f5d3c' }, '▒': { fg: '#926b42' }, '█': { fg: '#6f4f32' } },
-  }),
-  hunter_camp: createDefinition({
-    id: 'hunter_camp', category: OBJECT_CATEGORY.INTERACTABLE, biomeTags: ['forest', 'camp'], interactable: true,
-    blocksMovement: true, rotations: true, spawnWeight: 0.52, minClusterSize: 1, maxClusterSize: 2,
-    blueprint: ['▲▲▲  ', '▲▒▲ ║', '▲▲▲ ║', ' ○○  '],
-    glyphPalette: { '▲': { fg: '#8b6a43' }, '▒': { fg: '#6f5230' }, '║': { fg: '#5d452a' }, '○': { fg: '#8f9399' } },
-  }),
-  tent: createDefinition({
-    id: 'tent', category: OBJECT_CATEGORY.INTERACTABLE, biomeTags: ['forest', 'camp'], interactable: true,
-    blocksMovement: true, rotations: true, spawnWeight: 0.8, minClusterSize: 1, maxClusterSize: 3,
-    blueprint: ['  ▲  ', ' ▲▒▲ ', '▲▒▒▒▲', ' ║ ║ '],
-    glyphPalette: { '▲': { fg: '#a67b49' }, '▒': { fg: '#805c36' }, '║': { fg: '#6b4d2e' } },
-  }),
-  supply_pile: createDefinition({
-    id: 'supply_pile', category: OBJECT_CATEGORY.DESTRUCTIBLE, biomeTags: ['forest', 'camp'], destructible: true,
-    hp: 5, drops: [{ type: 'gold', min: 2, max: 8 }], blocksMovement: true,
-    spawnWeight: 0.58, minClusterSize: 1, maxClusterSize: 4,
-    blueprint: ['▦▥▦', '▩▒▩', '▦▥▦'],
-    glyphPalette: { '▦': { fg: '#a67946' }, '▥': { fg: '#8f643c' }, '▩': { fg: '#7b5534' }, '▒': { fg: '#6c4b2d' } },
-  }),
-  broken_wagon: createDefinition({
-    id: 'broken_wagon', category: OBJECT_CATEGORY.ENVIRONMENT, biomeTags: ['forest', 'roadside', 'camp'], blocksMovement: true,
-    rotations: true, spawnWeight: 0.42, minClusterSize: 1, maxClusterSize: 2,
-    blueprint: ['○═█═○', ' ▒▒▒ ', '○   ○'],
-    glyphPalette: { '○': { fg: '#8d9299' }, '═': { fg: '#7c5a3a' }, '█': { fg: '#6f4d2f' }, '▒': { fg: '#8a633f' } },
-  }),
-  ant_den: createDefinition({
-    id: 'ant_den',
-    category: OBJECT_CATEGORY.ENVIRONMENT,
-    biomeTags: ['forest'],
-    allowedMapTypes: ['forest'],
-    blocksMovement: true,
-    rotations: false,
-    spawnWeight: 0.42,
-    minClusterSize: 1,
-    maxClusterSize: 1,
-    clearanceRadius: 5,
-    biomeRarity: 'uncommon',
-    blueprint: [
-      '   ..o..   ',
-      ' ..:::::.. ',
-      '.::o:::o::.',
-      '.:o:::::o:.',
-      '.:::ooo:::.',
-      '.:o:::::o:.',
-      '.::o:::o::.',
-      ' ..:::::.. ',
-      '   ..o..   ',
-    ],
-    glyphPalette: {
-      '.': { fg: '#6f5236' },
-      ':': { fg: '#5a422c' },
-      o: { fg: '#2f251a' },
-    },
-    antSpawner: {
-      triggerRadius: 10,
-      spawnIntervalMin: 0.8,
-      spawnIntervalMax: 1.5,
-      spawnCountMin: 5,
-      spawnCountMax: 10,
-      spawnRadius: 3.5,
-      spawnPoints: [
-        { x: 0, y: 6 },
-        { x: 6, y: 0 },
-        { x: 0, y: -6 },
-        { x: -6, y: 0 },
-        { x: 4, y: 4 },
-        { x: -4, y: 4 },
-        { x: 4, y: -4 },
-        { x: -4, y: -4 },
-      ],
-      clearRadius: 7,
-      maxActiveAnts: 10,
-      enemyType: 'fire_ant',
-      spawnBiasToPlayer: 0.7,
-    },
-    collisionGroup: 'ant_den',
-  }),
-  cook_station: createDefinition({
-    id: 'cook_station', category: OBJECT_CATEGORY.INTERACTABLE, biomeTags: ['forest', 'camp'], interactable: true,
-    blocksMovement: true, rotations: true, spawnWeight: 0.44, minClusterSize: 1, maxClusterSize: 2,
-    blueprint: [' ═╬═ ', '▒✶▒▒', ' ▓▓ '],
-    glyphPalette: { '═': { fg: '#7f5e3b' }, '╬': { fg: '#6f5234' }, '▒': { fg: '#7a5a38' }, '✶': { fg: '#e8873f' }, '▓': { fg: '#8b857b' } },
-  }),
-  watch_post: createDefinition({
-    id: 'watch_post', category: OBJECT_CATEGORY.INTERACTABLE, biomeTags: ['forest', 'camp'], interactable: true,
-    blocksMovement: true, spawnWeight: 0.32, minClusterSize: 1, maxClusterSize: 2, biomeRarity: 'uncommon',
-    blueprint: [' ▓▓▓ ', ' ▓○▓ ', '  ║  ', ' ▒▒▒ '],
-    glyphPalette: { '▓': { fg: '#8a6440' }, '○': { fg: '#afc4d9' }, '║': { fg: '#6d4f31' }, '▒': { fg: '#5e452c' } },
-  }),
-
-  giant_tree: createDefinition({
-    id: 'giant_tree', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest'], blocksMovement: true,
-    spawnWeight: 0.18, minClusterSize: 1, maxClusterSize: 1, biomeRarity: 'rare',
-    blueprint: ['    ♣♣♣    ', '  ♣♣♣♣♣♣♣  ', ' ♣♣♧♣♣♧♣♣♣ ', '♣♣♣♣♣♣♣♣♣♣♣', '  ♣♣♣♣♣♣♣  ', '    ║▓║    ', '   ▓▓▓▓▓   ', '   ▓▓▓▓▓   '],
-    glyphPalette: { '♣': { fg: '#2f6129' }, '♧': { fg: '#42763a' }, '║': { fg: '#6b4f2a' }, '▓': { fg: '#594026' } },
-  }),
-  stone_circle: createDefinition({
-    id: 'stone_circle', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest', 'hills'], blocksMovement: true,
-    spawnWeight: 0.3, minClusterSize: 1, maxClusterSize: 1, biomeRarity: 'rare',
-    blueprint: ['  ○○○  ', ' ○   ○ ', '○  ✦  ○', '○ ✦◎✦ ○', '○  ✦  ○', ' ○   ○ ', '  ○○○  '],
-    glyphPalette: { '○': { fg: '#8d939b' }, '✦': { fg: '#b9c3d0' }, '◎': { fg: '#d9d2bc' } },
-  }),
-  forest_shrine: createDefinition({
-    id: 'forest_shrine', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest', 'ruins'], blocksMovement: true,
-    spawnWeight: 0.24, minClusterSize: 1, maxClusterSize: 1, biomeRarity: 'rare',
-    blueprint: ['   ▓▓▓   ', '  ▓††▓  ', ' ▓═◉═▓ ', ' ▓═○═▓ ', '   ▒▒▒   '],
-    glyphPalette: { '▓': { fg: '#8e8980' }, '†': { fg: '#c8c2ad' }, '═': { fg: '#767169' }, '◉': { fg: '#dfd8bf' }, '○': { fg: '#b8b19b' }, '▒': { fg: '#655f57' } },
-  }),
-  druid_altar: createDefinition({
-    id: 'druid_altar', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest'], blocksMovement: true,
-    spawnWeight: 0.2, minClusterSize: 1, maxClusterSize: 1, biomeRarity: 'rare',
-    blueprint: ['  ✶   ✶  ', ' ○ ▓▓▓ ○ ', '   ▓◉▓   ', ' ○ ▓▓▓ ○ ', '  ✶   ✶  '],
-    glyphPalette: { '✶': { fg: '#94c9d1' }, '○': { fg: '#9ba2ab' }, '▓': { fg: '#7f7a72' }, '◉': { fg: '#d5ceb5' } },
-  }),
-  ritual_circle: createDefinition({
-    id: 'ritual_circle', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest', 'ruins'], blocksMovement: false,
-    spawnWeight: 0.26, minClusterSize: 1, maxClusterSize: 1, biomeRarity: 'rare',
-    blueprint: ['  ✦✦✦  ', ' ✦   ✦ ', '✦ Δ◉Δ ✦', ' ✦   ✦ ', '  ✦✦✦  '],
-    glyphPalette: { '✦': { fg: '#a888d7' }, 'Δ': { fg: '#d2b7f5' }, '◉': { fg: '#ece3cf' } },
-  }),
-  moon_well: createDefinition({
-    id: 'moon_well', category: OBJECT_CATEGORY.LANDMARK, biomeTags: ['forest', 'ruins'], blocksMovement: true,
-    spawnWeight: 0.18, minClusterSize: 1, maxClusterSize: 1, biomeRarity: 'rare',
-    blueprint: ['  ▓▓▓  ', ' ▓◎◎▓ ', '▓◎◉◎▓', ' ▓◎◎▓ ', '  ▓▓▓  '],
-    glyphPalette: { '▓': { fg: '#7f848d' }, '◎': { fg: '#8cb4d4' }, '◉': { fg: '#d4e4f2' } },
-    interactable: true,
-  }),
-
-  legacy_signpost: createDefinition({
-    id: 'legacy_signpost', category: OBJECT_CATEGORY.INTERACTABLE, biomeTags: ['forest', 'roadside'],
-    footprint: [{ x: 0, y: 0 }], blocksMovement: true, interactable: true,
-    variants: [visual('†', '#b1864d'), visual('‡', '#9f7946'), visual('┼', '#c09358')],
-    spawnWeight: 0.1,
-  }),
-};
-
-
-function definitionFromPrefab(prefab) {
+function definitionFromPrefab(prefab, source = 'code') {
   if (!prefab || typeof prefab !== 'object') return null;
 
   const id = typeof prefab.id === 'string' && prefab.id.length > 0 ? prefab.id : null;
   if (!id) return null;
 
-  const tags = Array.isArray(prefab.tags) && prefab.tags.length > 0 ? prefab.tags : ['forest'];
+  const tags = Array.isArray(prefab.tags) && prefab.tags.length > 0
+    ? prefab.tags
+    : (Array.isArray(prefab?.meta?.biomes) && prefab.meta.biomes.length > 0 ? prefab.meta.biomes : ['forest']);
+
   const visualTiles = normalizeTiles(prefab.visual ?? []);
+  const spriteTiles = visualTiles.length > 0 ? visualTiles : extractTilesFromSpriteAsset(prefab);
+
   const collisionFootprint = Array.isArray(prefab.collision)
     ? prefab.collision
       .map((cell) => {
@@ -509,22 +173,27 @@ function definitionFromPrefab(prefab) {
         return { x, y };
       })
       .filter(Boolean)
-    : [];
+    : spriteTiles.map((tile) => ({ x: tile.x, y: tile.y }));
+
+  const category = prefab.category
+    ?? inferCategoryFromFilePath(prefab.__fileName, Array.isArray(prefab.interaction) && prefab.interaction.length > 0 ? OBJECT_CATEGORY.INTERACTABLE : OBJECT_CATEGORY.ENVIRONMENT);
+
+  const defaultCollision = category !== OBJECT_CATEGORY.PROP;
 
   return createDefinition({
     id,
-    category: prefab.category ?? (Array.isArray(prefab.interaction) && prefab.interaction.length > 0 ? OBJECT_CATEGORY.INTERACTABLE : OBJECT_CATEGORY.ENVIRONMENT),
+    category,
     biomeTags: tags,
-    blocksMovement: collisionFootprint.length > 0,
-    interactable: Array.isArray(prefab.interaction) && prefab.interaction.length > 0,
+    blocksMovement: prefab.blocksMovement ?? defaultCollision,
+    interactable: Boolean(prefab.interactable) || (Array.isArray(prefab.interaction) && prefab.interaction.length > 0),
     footprint: collisionFootprint,
-    tiles: visualTiles,
-    spawnWeight: Number(prefab.spawnWeight) || 1,
+    tiles: spriteTiles,
+    spawnWeight: Number(prefab.spawnWeight ?? prefab?.meta?.spawnWeight) || 1,
     minClusterSize: Number(prefab.clusterMin) || 1,
     maxClusterSize: Number(prefab.clusterMax) || 1,
     clusterRadius: Number(prefab.clusterRadius) || 1,
     biomeRarity: typeof prefab.rarity === 'string' ? prefab.rarity : 'common',
-    destructible: Boolean(prefab.destructible),
+    destructible: Boolean(prefab.destructible) || category === OBJECT_CATEGORY.DESTRUCTIBLE,
     hp: Number(prefab.hp) || null,
     material: typeof prefab.material === 'string' ? prefab.material : 'wood',
     drops: Array.isArray(prefab.dropTable)
@@ -533,17 +202,33 @@ function definitionFromPrefab(prefab) {
         ? [{ type: prefab.dropTable, min: 1, max: 1 }]
         : []),
     breakFrames: normalizeBreakFrames(prefab.breakFrames),
+    source,
+    assetId: prefab.assetId ?? id,
   });
 }
 
-export function registerPrefabObject(prefab) {
-  const definition = definitionFromPrefab(prefab);
+export function registerPrefabObject(prefab, options = {}) {
+  const definition = definitionFromPrefab(prefab, options.source ?? 'code');
   if (!definition?.id) return null;
   objectLibrary[definition.id] = definition;
   return definition;
 }
 
-export async function loadObjectsFromFolder(basePath = './assets/objects') {
+export function clearObjectLibrary() {
+  Object.keys(objectLibrary).forEach((id) => delete objectLibrary[id]);
+}
+
+export function listLoadedObjects() {
+  return Object.values(objectLibrary).map((definition) => ({
+    id: definition.id,
+    source: definition.source ?? 'code',
+  }));
+}
+
+export async function loadObjectsFromFolder(basePath = './assets/objects', options = {}) {
+  const { debugLog = false, clearExisting = true } = options;
+  if (clearExisting) clearObjectLibrary();
+
   try {
     const registryResponse = await fetch(`${basePath}/registry.json`, { cache: 'no-cache' });
     if (!registryResponse.ok) return;
@@ -551,15 +236,21 @@ export async function loadObjectsFromFolder(basePath = './assets/objects') {
     const registry = await registryResponse.json();
     const objectFiles = Array.isArray(registry.objects) ? registry.objects : [];
 
-    await Promise.all(objectFiles.map(async (fileName) => {
+    await Promise.all(objectFiles.map(async (entry) => {
+      const fileName = typeof entry === 'string' ? entry : entry?.file;
+      if (!fileName) return;
+
       const response = await fetch(`${basePath}/${fileName}`, { cache: 'no-cache' });
       if (!response.ok) return;
       const prefab = await response.json();
-      const definition = registerPrefabObject(prefab);
-      if (definition?.id) {
-        objectLibrary[definition.id] = definition;
-      }
+      prefab.__fileName = fileName;
+      registerPrefabObject(prefab, { source: 'asset' });
     }));
+
+    if (debugLog) {
+      const summary = listLoadedObjects();
+      console.info('[ObjectLibrary] Loaded objects:', summary);
+    }
   } catch (error) {
     console.warn('[ObjectLibrary] Failed to auto-load object prefabs.', error);
   }
@@ -616,6 +307,7 @@ export function spawnObject(type, position, overrides = {}, rng = Math.random) {
     type,
     name: definition.id,
     category: definition.category,
+    source: definition.source ?? 'code',
     assetId: definition.assetId,
     biomeTags: [...definition.biomeTags],
     x: position.x,

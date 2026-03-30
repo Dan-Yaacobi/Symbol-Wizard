@@ -1,4 +1,18 @@
 {
-  "generatedAt": "2026-03-15T16:57:14.593Z",
-  "objects": []
+  "generatedAt": "2026-03-30T00:00:00.000Z",
+  "objects": [
+    "environment/bush.json",
+    "environment/stone.json",
+    "environment/tree-dark.json",
+    "environment/tree-bright.json",
+    "loot/barrel.json",
+    "loot/barrel-break-1.json",
+    "loot/barrel-break-2.json",
+    "loot/crate.json",
+    "loot/crate-break-1.json",
+    "loot/crate-break-2.json",
+    "loot/vase.json",
+    "loot/vase-break-1.json",
+    "loot/vase-break-2.json"
+  ]
 }
