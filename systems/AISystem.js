@@ -3,6 +3,7 @@ import { ENEMY_BEHAVIOR } from '../entities/Enemy.js';
 import { applyPush, attemptMoveWithCollision, resolveWallOverlap } from './EnemyCollisionSystem.js';
 import { ensureEntityState, setEntityState, syncEntityMovementState, updateEntityState } from './EntityStateSystem.js';
 import { ensureEntityFacing, updateFacingFromVelocity, updateFacingTowardTarget } from './FacingSystem.js';
+import { assignDirectionalProjectileGlyph } from './ProjectileGlyphSystem.js';
 
 const ENEMY_POSITION_SMOOTHING = 0.2;
 const ENEMY_VELOCITY_SMOOTHING = 0.2;
@@ -174,6 +175,7 @@ function createEnemyProjectile(enemy) {
   if (projectile.projectileType === 'stingerProjectile') {
     projectile.directionalSpriteFrames = STINGER_DIRECTIONAL_GLYPHS;
     projectile.spriteFrames = [];
+    assignDirectionalProjectileGlyph(projectile);
   }
   return projectile;
 }

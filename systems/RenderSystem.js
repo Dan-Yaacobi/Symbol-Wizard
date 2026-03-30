@@ -4,6 +4,7 @@ import { palette } from '../data/SpritePalette.js';
 import { getItemDefinition } from '../data/ItemRegistry.js';
 import { renderLayers, toRenderCell, toSafeGlyph, visualPalette, visualTheme } from '../data/VisualTheme.js';
 import { ensureEntityFacing, toCardinalDirection } from './FacingSystem.js';
+import { resolveProjectileDirection, resolveProjectileGlyph } from './ProjectileGlyphSystem.js';
 
 function resolveDirectionalSprite(entity) {
   const directionalSprites = entity?.sprite;
@@ -153,17 +154,6 @@ function drawSprite(renderer, camera, entity, color, forceSprite = null) {
   }
 }
 
-function resolveProjectileDirection(projectile) {
-  const dx = projectile.dx ?? 0;
-  const dy = projectile.dy ?? 0;
-
-  const horizontal = Math.abs(dx) > 0.25 ? (dx > 0 ? 'east' : 'west') : '';
-  const vertical = Math.abs(dy) > 0.25 ? (dy > 0 ? 'south' : 'north') : '';
-
-  if (horizontal && vertical) return `${vertical}${horizontal}`;
-  return horizontal || vertical || 'east';
-}
-
 function getProjectileFrame(projectile) {
   const directionalFrames = projectile.directionalSpriteFrames;
   if (directionalFrames && typeof directionalFrames === 'object') {
@@ -176,6 +166,23 @@ function getProjectileFrame(projectile) {
 }
 
 function drawProjectile(renderer, camera, projectile) {
+  if (projectile.projectileType === 'stingerProjectile') {
+    const resolvedGlyph = resolveProjectileGlyph(projectile);
+    const direction = projectile.direction ?? resolvedGlyph.direction ?? resolveProjectileDirection(projectile);
+    const glyph = toSafeGlyph(projectile.glyph ?? resolvedGlyph.glyph);
+    const screenX = worldToScreenCell(projectile.x, camera.x);
+    const screenY = worldToScreenCell(projectile.y - 1, camera.y);
+    drawCell(renderer, { glyph, fg: projectile.color }, screenX, screenY);
+    console.debug('[ProjectileRenderDebug]', {
+      projectileType: projectile.projectileType,
+      velocity: { dx: projectile.dx ?? 0, dy: projectile.dy ?? 0 },
+      direction,
+      glyph,
+      renderSource: 'projectile.glyph',
+    });
+    return;
+  }
+
   const frames = getProjectileFrame(projectile);
   if (!frames || frames.length === 0) return;
 
