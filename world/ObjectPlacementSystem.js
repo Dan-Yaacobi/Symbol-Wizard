@@ -245,13 +245,21 @@ const OBJECT_RULES = {
   },
 };
 
-function buildBiomePool(biome, category) {
+function mapTypeAllowsDefinition(definition, mapType = null) {
+  if (!Array.isArray(definition?.allowedMapTypes) || definition.allowedMapTypes.length === 0) return true;
+  if (!mapType) return true;
+  return definition.allowedMapTypes.includes(mapType);
+}
+
+function buildBiomePool(biome, category, mapType = null) {
   if (category === OBJECT_CATEGORY.LANDMARK) {
     return getSpawnDefinitionsByCategory(null, biome)
-      .filter((definition) => definition?.placementCategory === OBJECT_CATEGORY.LANDMARK && isValidFootprint(definition.footprint));
+      .filter((definition) => definition?.placementCategory === OBJECT_CATEGORY.LANDMARK
+        && isValidFootprint(definition.footprint)
+        && mapTypeAllowsDefinition(definition, mapType));
   }
   return getSpawnDefinitionsByCategory(category, biome)
-    .filter((definition) => definition && isValidFootprint(definition.footprint));
+    .filter((definition) => definition && isValidFootprint(definition.footprint) && mapTypeAllowsDefinition(definition, mapType));
 }
 
 function violatesAnchorDistance(tilesToCheck, anchors = [], minDistance = 0) {
@@ -446,6 +454,7 @@ function placeFromPool(params) {
     blockedMask,
     roomId,
     biomeType,
+    mapType,
     category,
     targetMin,
     targetMax,
@@ -458,7 +467,7 @@ function placeFromPool(params) {
   } = params;
 
   const categoryRule = OBJECT_RULES[category] ?? OBJECT_RULES[OBJECT_CATEGORY.ENVIRONMENT];
-  const pools = buildBiomePool(biomeType, category);
+  const pools = buildBiomePool(biomeType, category, mapType);
   if (pools.length === 0) return [];
 
   const targetCount = Math.max(0, Math.floor(randomInt(rng, targetMin, targetMax) * (safetyConfig.objectDensity ?? 1)));
@@ -469,6 +478,7 @@ function placeFromPool(params) {
     const definition = category === OBJECT_CATEGORY.LANDMARK
       ? weightedChoice(rng, weightedPool)
       : (spawnByCategory(category, biomeType, rng) ?? weightedChoice(rng, weightedPool));
+    if (definition && !mapTypeAllowsDefinition(definition, mapType)) continue;
     if (!definition) continue;
 
     const center = selectBestCenter({
@@ -545,7 +555,7 @@ export class ObjectPlacementSystem {
     };
   }
 
-  placeObjects({ tiles, rng, blockedMask, roomId, biomeType = 'forest', safetyConfig = {}, occupiedTiles = null }) {
+  placeObjects({ tiles, rng, blockedMask, roomId, biomeType = 'forest', mapType = null, safetyConfig = {}, occupiedTiles = null }) {
     const localOccupied = occupiedTiles ?? new Set();
     const densityField = createObjectDensityField({ tiles, pathTiles: safetyConfig.pathTiles });
     const debugInfo = {
@@ -572,6 +582,7 @@ export class ObjectPlacementSystem {
         blockedMask,
         roomId,
         biomeType,
+        mapType,
         category,
         targetMin: category === OBJECT_CATEGORY.PROP ? 0 : 8,
         targetMax: category === OBJECT_CATEGORY.PROP ? 0 : 16,
@@ -597,7 +608,7 @@ export class ObjectPlacementSystem {
     return objects;
   }
 
-  placeLandmarks({ tiles, rng, blockedMask, roomId, biomeType = 'forest', safetyConfig = {}, occupiedTiles = null }) {
+  placeLandmarks({ tiles, rng, blockedMask, roomId, biomeType = 'forest', mapType = null, safetyConfig = {}, occupiedTiles = null }) {
     const localOccupied = occupiedTiles ?? new Set();
     const densityField = createObjectDensityField({ tiles, pathTiles: safetyConfig.pathTiles });
     const placedObjects = [];
@@ -608,6 +619,7 @@ export class ObjectPlacementSystem {
       blockedMask,
       roomId,
       biomeType,
+      mapType,
       category: OBJECT_CATEGORY.LANDMARK,
       targetMin: 1,
       targetMax: 2,

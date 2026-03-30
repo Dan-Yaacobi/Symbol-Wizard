@@ -69,6 +69,11 @@ function run() {
   const houses = town.objects.filter((object) => object.enterable);
   assert.ok(houses.length >= 3 && houses.length <= 6, 'Town should generate multiple enterable houses.');
   assert.ok((town.npcs ?? []).length >= 2, 'Town should generate NPCs.');
+  assert.equal(
+    town.objects.some((object) => object.type === 'ant_den'),
+    false,
+    'Town object pool should not place forest-only ant dens.',
+  );
 
   const sameTown = worldMapManager.enterStartingWorld(townSeed);
   assert.deepEqual(

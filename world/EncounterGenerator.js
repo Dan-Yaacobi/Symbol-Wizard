@@ -72,6 +72,15 @@ function resolveSpawnStyle(definition) {
   return definition?.spawnStyle ?? 'scattered';
 }
 
+function isEligibleWorldSpawnSource(definition) {
+  const source = definition?.spawnSource ?? 'world';
+  return source === 'world' || source === 'both';
+}
+
+export function filterEncounterDefinitions(definitions = []) {
+  return definitions.filter((definition) => isEligibleWorldSpawnSource(definition));
+}
+
 export class EncounterGenerator {
   constructor(runtimeConfig = null) {
     this.settings = resolveSettings(runtimeConfig);
@@ -88,7 +97,7 @@ export class EncounterGenerator {
       exitAnchors: options.exitAnchors ?? [],
       pathMask: options.pathMask ?? new Set(),
     });
-    const definitions = getSpawnDefinitionsByCategory(SPAWN_CATEGORY.ENEMY, options.biomeType);
+    const definitions = filterEncounterDefinitions(getSpawnDefinitionsByCategory(SPAWN_CATEGORY.ENEMY, options.biomeType));
     if (!definitions.length) return { enemies: [], debug: { encounterZones: debugZoneTiles(zones) } };
 
     const occupiedTiles = collectOccupiedTiles(room);

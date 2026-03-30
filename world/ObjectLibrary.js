@@ -384,6 +384,7 @@ export const objectLibrary = {
     id: 'ant_den',
     category: OBJECT_CATEGORY.ENVIRONMENT,
     biomeTags: ['forest'],
+    allowedMapTypes: ['forest'],
     blocksMovement: true,
     rotations: false,
     spawnWeight: 0.42,
