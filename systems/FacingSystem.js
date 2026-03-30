@@ -95,20 +95,6 @@ export function facingToDirection8(facing, fallback = DEFAULT_DIRECTION) {
   return closest.key;
 }
 
-export function directionToArrow(direction) {
-  switch (direction) {
-    case 'N': return '↑';
-    case 'NE': return '↗';
-    case 'E': return '→';
-    case 'SE': return '↘';
-    case 'S': return '↓';
-    case 'SW': return '↙';
-    case 'W': return '←';
-    case 'NW': return '↖';
-    default: return '•';
-  }
-}
-
 export function toCardinalDirection(direction, fallback = 'S') {
   switch (direction) {
     case 'N':
