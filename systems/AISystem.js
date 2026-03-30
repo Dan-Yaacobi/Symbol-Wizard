@@ -11,6 +11,16 @@ const ENEMY_SEPARATION_STRENGTH = 0.6;
 const ENEMY_PERSONAL_SPACE_PUSH = 0.2;
 const ENEMY_COLLISION_MIN_DISTANCE = 1;
 const FACING_LOG_MAX_ENEMIES = 5;
+const STINGER_DIRECTIONAL_GLYPHS = {
+  east: [['─']],
+  west: [['─']],
+  north: [['|']],
+  south: [['|']],
+  northeast: [['/']],
+  southwest: [['/']],
+  northwest: [['\\']],
+  southeast: [['\\']],
+};
 
 function ensureTargetPosition(enemy) {
   if (!Number.isFinite(enemy.targetX)) enemy.targetX = enemy.x;
@@ -161,6 +171,10 @@ function createEnemyProjectile(enemy) {
   projectile.glowColor = '#ffd4b8';
   projectile.trailColor = '#ffc69b';
   projectile.hitParticleColor = '#ffd6b8';
+  if (projectile.projectileType === 'stingerProjectile') {
+    projectile.directionalSpriteFrames = STINGER_DIRECTIONAL_GLYPHS;
+    projectile.spriteFrames = [];
+  }
   return projectile;
 }
 
