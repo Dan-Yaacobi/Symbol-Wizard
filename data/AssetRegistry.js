@@ -48,6 +48,10 @@ export function hasAsset(assetId) {
   return Boolean(assetId) && assetPathStore.has(assetId);
 }
 
+export function getAllAssetPaths() {
+  return [...assetPathStore.values()];
+}
+
 export function resetAssetRegistry() {
   assetPathStore = new Map();
   loadedRegistryPath = null;
