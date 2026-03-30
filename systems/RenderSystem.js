@@ -2,8 +2,8 @@ import { getSpriteFrame } from '../data/SpriteAssetLoader.js';
 import { isEntityAttacking } from './EntityStateSystem.js';
 import { palette } from '../data/SpritePalette.js';
 import { getItemDefinition } from '../data/ItemRegistry.js';
-import { glyphDensity, renderLayers, toRenderCell, toSafeGlyph, visualPalette, visualTheme } from '../data/VisualTheme.js';
-import { directionToArrow, ensureEntityFacing, toCardinalDirection } from './FacingSystem.js';
+import { renderLayers, toRenderCell, toSafeGlyph, visualPalette, visualTheme } from '../data/VisualTheme.js';
+import { ensureEntityFacing, toCardinalDirection } from './FacingSystem.js';
 
 function resolveDirectionalSprite(entity) {
   const directionalSprites = entity?.sprite;
@@ -96,25 +96,15 @@ function drawCell(renderer, { glyph, fg, bg = c.worldBackground, layer = renderL
 }
 
 
-function densityTierForGlyph(glyph) {
-  if (glyphDensity.high.has(glyph)) return 'high';
-  if (glyphDensity.medium.has(glyph)) return 'medium';
-  return 'low';
-}
-
 export function spriteUsesAuthoredGlyphs(sprite) {
   if (!sprite?.cells?.length) return false;
   return sprite.cells.some((row) => row.some((cell) => cell?.fg != null || cell?.bg != null));
 }
 
 export function resolveSpriteRenderGlyph(entity, sprite, ch) {
-  const safeGlyph = toSafeGlyph(ch);
-  const preserveAuthoredGlyphs = spriteUsesAuthoredGlyphs(sprite);
-  if (preserveAuthoredGlyphs) return safeGlyph;
-
-  const densityTier = densityTierForGlyph(safeGlyph);
-  const expectedTier = entity.type === 'player' || entity.type === 'enemy' ? 'high' : (entity.category ? 'low' : 'medium');
-  return expectedTier === 'high' && densityTier === 'low' && ch !== ' ' ? '#' : safeGlyph;
+  void entity;
+  void sprite;
+  return toSafeGlyph(ch);
 }
 
 function colorForEntity(entity) {
@@ -161,14 +151,6 @@ function drawSprite(renderer, camera, entity, color, forceSprite = null) {
       drawCell(renderer, { glyph: finalGlyph, fg: cell?.fg ?? color, bg: cell?.bg ?? c.worldBackground }, screenX, screenY);
     }
   }
-}
-
-function drawEnemyFacingGlyph(renderer, camera, enemy) {
-  if (!enemy?.alive || enemy.type !== 'enemy') return;
-  const direction = toCardinalDirection(enemy.direction, 'S');
-  const glyph = enemy.facingGlyphs?.[direction];
-  if (!glyph) return;
-  drawCell(renderer, { glyph, fg: '#ffe7ad', layer: renderLayers.effects }, worldToScreenCell(enemy.x, camera.x), worldToScreenCell(enemy.y - 2, camera.y));
 }
 
 function resolveProjectileDirection(projectile) {
@@ -511,7 +493,7 @@ function drawWorldObjectToContext(renderer, ctx, object, overrideSpriteId = null
       for (let sx = 0; sx < sprite.width; sx += 1) {
         const cell = sprite.cells[sy]?.[sx];
         const ch = cell?.ch ?? ' ';
-        if ((ch === ' ' || ch === ' ') && !cell?.bg) continue;
+        if ((ch === ' ' || ch === '\0') && !cell?.bg) continue;
         const finalGlyph = resolveSpriteRenderGlyph(object, sprite, ch);
         renderer.drawCellToContext(ctx, {
           glyph: finalGlyph,
@@ -651,21 +633,22 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, world
     for (const entity of facingEntities) {
       if (!entity) continue;
       const facing = ensureEntityFacing(entity);
-      drawCell(
-        renderer,
-        { glyph: directionToArrow(entity.direction), fg: entity.type === 'player' ? '#7ce6ff' : '#ffcf84' },
-        Math.round(entity.x + facing.x * 2) - camera.x,
-        Math.round(entity.y + facing.y * 2) - camera.y,
-      );
+      const color = entity.type === 'player' ? '#7ce6ff' : '#ffcf84';
+      for (let step = 1; step <= 2; step += 1) {
+        drawCell(
+          renderer,
+          { glyph: '·', fg: color },
+          Math.round(entity.x + facing.x * step) - camera.x,
+          Math.round(entity.y + facing.y * step) - camera.y,
+        );
+      }
     }
   }
 
   if (debugOptions.facingLabels) {
     for (const enemy of enemies.filter((entity) => entity.alive)) {
       const direction = toCardinalDirection(enemy.direction, 'S');
-      const glyph = enemy.facingGlyphs?.[direction] ?? '?';
       drawCell(renderer, { glyph: direction, fg: '#ffe9a6' }, Math.round(enemy.x) - camera.x, Math.round(enemy.y - 6) - camera.y);
-      drawCell(renderer, { glyph, fg: '#ffcf84' }, Math.round(enemy.x + 1) - camera.x, Math.round(enemy.y - 6) - camera.y);
     }
   }
 
@@ -905,7 +888,6 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     }
 
     drawSprite(renderer, camera, enemy, renderColor);
-    drawEnemyFacingGlyph(renderer, camera, enemy);
 
     if (isEntityAttacking(enemy) && enemy.behavior !== 'ranged' && (enemy.state?.time ?? 0) < (enemy.attackWindup ?? 0.4)) {
       const sx = worldToScreenCell(enemy.x, camera.x);
