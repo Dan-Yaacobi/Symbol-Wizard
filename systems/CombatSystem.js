@@ -2,6 +2,7 @@ import { SpellEffectSystem } from './spells/SpellEffectSystem.js';
 import { isEntityAttacking } from './EntityStateSystem.js';
 import { collides } from './CollisionSystem.js';
 import { applyAttackToObject, objectIntersectsCircle } from './ObjectInteractionSystem.js';
+import { ensureEntityFacing } from './FacingSystem.js';
 
 function spawnProjectileTrail(projectile) {
   const particleCount = 2 + Math.floor(Math.random() * 3);
@@ -186,6 +187,16 @@ export function updateEnemyPlayerInteractions(enemies, player, dt, combatTextSys
     const distance = Math.hypot(player.x - enemy.x, player.y - enemy.y);
     const attackRange = (enemy.attackRange ?? 3) * (config?.get?.('enemies.attackRangeMultiplier') ?? 1);
     if (distance > attackRange + player.radius * 0.5) {
+      enemy.attackImpactApplied = true;
+      continue;
+    }
+
+    const facing = ensureEntityFacing(enemy);
+    const toPlayerX = player.x - enemy.x;
+    const toPlayerY = player.y - enemy.y;
+    const toPlayerLength = Math.hypot(toPlayerX, toPlayerY) || 1;
+    const forwardDot = (facing.x * (toPlayerX / toPlayerLength)) + (facing.y * (toPlayerY / toPlayerLength));
+    if (forwardDot < 0.35) {
       enemy.attackImpactApplied = true;
       continue;
     }

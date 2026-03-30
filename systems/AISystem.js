@@ -2,6 +2,7 @@ import { Projectile } from '../entities/Projectile.js';
 import { ENEMY_BEHAVIOR } from '../entities/Enemy.js';
 import { applyPush, attemptMoveWithCollision, resolveWallOverlap } from './EnemyCollisionSystem.js';
 import { ensureEntityState, setEntityState, syncEntityMovementState, updateEntityState } from './EntityStateSystem.js';
+import { ensureEntityFacing, updateFacingFromVelocity, updateFacingTowardTarget } from './FacingSystem.js';
 
 const ENEMY_POSITION_SMOOTHING = 0.2;
 const ENEMY_VELOCITY_SMOOTHING = 0.2;
@@ -139,19 +140,17 @@ function enterOrbitReposition(enemy) {
   enemy.orbitWaitTimer = 0;
 }
 
-function fireOrbitShot(enemy, player, projectiles, rangedCooldown) {
-  projectiles.push(createEnemyProjectile(enemy, player));
+function fireOrbitShot(enemy, projectiles, rangedCooldown) {
+  projectiles.push(createEnemyProjectile(enemy));
   enemy.attackTimer = Math.max(enemy.attackCooldown ?? rangedCooldown, rangedCooldown);
   enemy.orbitPhase = 'wait';
   enemy.orbitWaitTimer = enemy.orbitWaitDuration ?? 0.35;
 }
 
-function createEnemyProjectile(enemy, player) {
+function createEnemyProjectile(enemy) {
   ensureTargetPosition(enemy);
-  const dx = player.x - enemy.targetX;
-  const dy = player.y - enemy.targetY;
-  const len = Math.hypot(dx, dy) || 1;
-  const projectile = new Projectile(enemy.targetX, enemy.targetY, dx / len, dy / len);
+  ensureEntityFacing(enemy);
+  const projectile = new Projectile(enemy.targetX, enemy.targetY, enemy.facing.x, enemy.facing.y);
   projectile.faction = 'enemy';
   projectile.projectileType = enemy.projectileType ?? 'enemyProjectile';
   projectile.damage = enemy.attackDamage ?? 2;
@@ -174,7 +173,6 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
   const cooldownMult = config?.get?.('enemies.attackCooldownMultiplier') ?? 1;
   const rangedAttackRange = config?.get?.('enemies.rangedAttackRange') ?? 10;
   const rangedCooldown = config?.get?.('enemies.rangedCooldown') ?? 1.2;
-  const rangedOrbitWaitDuration = config?.get?.('enemies.rangedOrbitWaitDuration') ?? 0.35;
   const tankSpeedMultiplier = config?.get?.('enemies.tankSpeedMultiplier') ?? 0.6;
   const flankerOffsetDistance = config?.get?.('enemies.flankerOffsetDistance') ?? 5;
   const collisionMap = collisionContext?.map ?? null;
@@ -188,6 +186,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
     ensureTargetPosition(enemy);
+    ensureEntityFacing(enemy);
     ensureEntityState(enemy);
     enemy.stateContext = { player, projectiles, system, config };
     aliveEnemies.push(enemy);
@@ -227,6 +226,9 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       if (player) enemy.target = player;
       newlyAggroed.push(enemy);
     }
+
+    if (enemy.isAggroed) updateFacingTowardTarget(enemy, player);
+    else updateFacingFromVelocity(enemy);
   }
 
   for (let i = 0; i < newlyAggroed.length; i += 1) {
@@ -278,10 +280,11 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     switch (enemy.behavior) {
       case ENEMY_BEHAVIOR.RANGED: {
         if (hasAttackState(enemy)) {
+          updateFacingTowardTarget(enemy, player);
           const finishedAttack = enemy.state.time + dt >= (enemy.chargeDuration ?? 0.35);
           updateAttackState(enemy, dt);
           if (finishedAttack) {
-            fireOrbitShot(enemy, player, projectiles, rangedCooldown, rangedOrbitWaitDuration);
+            fireOrbitShot(enemy, projectiles, rangedCooldown);
           }
           break;
         }
@@ -291,6 +294,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
         if (!enemy.orbitPhase) enterOrbitReposition(enemy);
         switch (enemy.orbitPhase) {
           case 'shoot':
+            updateFacingTowardTarget(enemy, player);
             stopEnemy(enemy);
             beginAttack(enemy, enemy.chargeDuration ?? 0.35);
             break;
@@ -327,6 +331,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
       case ENEMY_BEHAVIOR.CHASER:
       default: {
         if (hasAttackState(enemy)) {
+          updateFacingTowardTarget(enemy, player);
           const finishedAttack = enemy.state.time + dt >= ((enemy.attackWindup ?? 0.4) + (enemy.attackDuration ?? 0.3));
           updateAttackState(enemy, dt);
           if (finishedAttack) enemy.attackTimer = enemy.pendingAttackCooldown ?? ((enemy.attackCooldown ?? 0.8) * cooldownMult);
@@ -350,7 +355,9 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
             move(enemy, dx, dy, dt, speedMult, jitter);
           }
           syncEntityMovementState(enemy);
+          updateFacingFromVelocity(enemy);
         } else {
+          updateFacingTowardTarget(enemy, player);
           stopEnemy(enemy);
           tryStartMeleeAttack(enemy, cooldownMult);
           syncEntityMovementState(enemy);
@@ -362,6 +369,7 @@ export function updateEnemies(enemies, player, dt, projectiles = [], config = nu
     applyEnemySeparation(enemy, aliveEnemies);
     applyPlayerPersonalSpace(enemy, player);
     commitEnemyVelocity(enemy, dt, collisionMap, tileSize);
+    updateFacingFromVelocity(enemy);
     interpolateEnemyPosition(enemy);
     syncEntityMovementState(enemy);
   }

@@ -6,6 +6,7 @@ import { resolveComponent } from './components/index.js';
 import { updateOrbitBehavior } from './behaviors/orbit.js';
 import { cleanupBeamBehavior, updateBeamBehavior } from './behaviors/beam.js';
 import { SpellEffectSystem } from './SpellEffectSystem.js';
+import { ensureEntityFacing } from '../FacingSystem.js';
 
 export function resolveTarget(context = {}) {
   if (context.targetPosition && Number.isFinite(context.targetPosition.x) && Number.isFinite(context.targetPosition.y)) {
@@ -19,9 +20,9 @@ export function resolveTarget(context = {}) {
   const player = context.player;
   const originX = Number.isFinite(player?.x) ? player.x : 0;
   const originY = Number.isFinite(player?.y) ? player.y : 0;
-
-  const forwardX = Number.isFinite(player?.facingX) ? player.facingX : (Number.isFinite(player?.vx) && player.vx !== 0 ? Math.sign(player.vx) : 1);
-  const forwardY = Number.isFinite(player?.facingY) ? player.facingY : (Number.isFinite(player?.vy) ? Math.sign(player.vy) : 0);
+  const facing = player ? ensureEntityFacing(player) : { x: 1, y: 0 };
+  const forwardX = Number.isFinite(player?.facingX) ? player.facingX : facing.x;
+  const forwardY = Number.isFinite(player?.facingY) ? player.facingY : facing.y;
   const length = Math.hypot(forwardX, forwardY) || 1;
 
   return {

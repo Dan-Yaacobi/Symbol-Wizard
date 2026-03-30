@@ -1,3 +1,5 @@
+import { updateFacingFromVelocity } from './FacingSystem.js';
+
 function stopMovement(entity) {
   entity.vx = 0;
   entity.vy = 0;
@@ -8,10 +10,7 @@ function getMovementState(entity) {
 }
 
 export function updateEntityFacingFromVelocity(entity, threshold = 0.01) {
-  if (!entity) return;
-  const vx = entity.vx ?? 0;
-  if (vx > threshold) entity.facing = 'right';
-  else if (vx < -threshold) entity.facing = 'left';
+  updateFacingFromVelocity(entity, threshold);
 }
 
 export function createEntityState(type = 'idle') {

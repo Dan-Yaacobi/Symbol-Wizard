@@ -3,8 +3,29 @@ import { isEntityAttacking } from './EntityStateSystem.js';
 import { palette } from '../data/SpritePalette.js';
 import { getItemDefinition } from '../data/ItemRegistry.js';
 import { glyphDensity, renderLayers, toRenderCell, toSafeGlyph, visualPalette, visualTheme } from '../data/VisualTheme.js';
+import { directionToArrow, ensureEntityFacing } from './FacingSystem.js';
+
+function resolveDirectionalSprite(entity) {
+  const directionalSprites = entity?.sprite;
+  if (!directionalSprites || typeof directionalSprites !== 'object') return null;
+  const direction = entity?.direction;
+  if (direction && directionalSprites[direction]) return directionalSprites[direction];
+
+  const cardinalFallbacks = {
+    N: directionalSprites.up,
+    S: directionalSprites.down,
+    E: directionalSprites.right,
+    W: directionalSprites.left,
+  };
+  if (direction && cardinalFallbacks[direction]) return cardinalFallbacks[direction];
+  return directionalSprites.down ?? directionalSprites.right ?? directionalSprites.idle ?? null;
+}
 
 function getEntitySprite(entity) {
+  const directionalSpriteId = resolveDirectionalSprite(entity);
+  if (directionalSpriteId) {
+    return getSpriteFrame(directionalSpriteId, entity.animationState ?? 'idle', entity.currentFrame ?? entity.frameIndex ?? 0);
+  }
   return getSpriteFrame(entity.spriteId, entity.animationState ?? 'idle', entity.currentFrame ?? entity.frameIndex ?? 0);
 }
 
@@ -94,11 +115,6 @@ export function resolveSpriteRenderGlyph(entity, sprite, ch) {
   return expectedTier === 'high' && densityTier === 'low' && ch !== ' ' ? '#' : safeGlyph;
 }
 
-function getSpriteCellX(sprite, facing, sx) {
-  if (facing === 'left') return (sprite.width - 1) - sx;
-  return sx;
-}
-
 function colorForEntity(entity) {
   if (entity.type === 'npc') return palette[entity.role] ?? palette.npc;
   if (entity.type === 'house') {
@@ -125,6 +141,7 @@ function colorForEntity(entity) {
 }
 
 function drawSprite(renderer, camera, entity, color, forceSprite = null) {
+  ensureEntityFacing(entity);
   const sprite = forceSprite ?? getEntitySprite(entity);
   if (!sprite?.cells?.length) return;
 
@@ -133,7 +150,7 @@ function drawSprite(renderer, camera, entity, color, forceSprite = null) {
 
   for (let sy = 0; sy < sprite.height; sy += 1) {
     for (let sx = 0; sx < sprite.width; sx += 1) {
-      const cell = sprite.cells[sy]?.[getSpriteCellX(sprite, entity.facing, sx)];
+      const cell = sprite.cells[sy]?.[sx];
       const ch = cell?.ch ?? ' ';
       if ((ch === ' ' || ch === '\0') && !cell?.bg) continue;
       const screenX = worldToScreenCell(baseX + sx, camera.x);
@@ -482,7 +499,7 @@ function drawWorldObjectToContext(renderer, ctx, object, overrideSpriteId = null
 
     for (let sy = 0; sy < sprite.height; sy += 1) {
       for (let sx = 0; sx < sprite.width; sx += 1) {
-        const cell = sprite.cells[sy]?.[getSpriteCellX(sprite, object.facing, sx)];
+        const cell = sprite.cells[sy]?.[sx];
         const ch = cell?.ch ?? ' ';
         if ((ch === ' ' || ch === ' ') && !cell?.bg) continue;
         const finalGlyph = resolveSpriteRenderGlyph(object, sprite, ch);
@@ -619,8 +636,18 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, world
     }
   }
 
-  if (debugOptions.facingMarker && player?.facingVector) {
-    drawCell(renderer, { glyph: '→', fg: '#7ce6ff' }, Math.round(player.x + player.facingVector.x * 2) - camera.x, Math.round(player.y + player.facingVector.y * 2) - camera.y);
+  if (debugOptions.facingMarker) {
+    const facingEntities = [player, ...enemies.filter((enemy) => enemy.alive)];
+    for (const entity of facingEntities) {
+      if (!entity) continue;
+      const facing = ensureEntityFacing(entity);
+      drawCell(
+        renderer,
+        { glyph: directionToArrow(entity.direction), fg: entity.type === 'player' ? '#7ce6ff' : '#ffcf84' },
+        Math.round(entity.x + facing.x * 2) - camera.x,
+        Math.round(entity.y + facing.y * 2) - camera.y,
+      );
+    }
   }
 
   if (debugOptions.cameraCenter) {
