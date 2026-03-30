@@ -3,7 +3,7 @@ import { isEntityAttacking } from './EntityStateSystem.js';
 import { palette } from '../data/SpritePalette.js';
 import { getItemDefinition } from '../data/ItemRegistry.js';
 import { glyphDensity, renderLayers, toRenderCell, toSafeGlyph, visualPalette, visualTheme } from '../data/VisualTheme.js';
-import { directionToArrow, ensureEntityFacing } from './FacingSystem.js';
+import { directionToArrow, ensureEntityFacing, toCardinalDirection } from './FacingSystem.js';
 
 function resolveDirectionalSprite(entity) {
   const directionalSprites = entity?.sprite;
@@ -24,8 +24,10 @@ function resolveDirectionalSprite(entity) {
 function getEntitySprite(entity) {
   const directionalSpriteId = resolveDirectionalSprite(entity);
   if (directionalSpriteId) {
+    entity.lastRenderSpriteKey = directionalSpriteId;
     return getSpriteFrame(directionalSpriteId, entity.animationState ?? 'idle', entity.currentFrame ?? entity.frameIndex ?? 0);
   }
+  entity.lastRenderSpriteKey = entity.spriteId;
   return getSpriteFrame(entity.spriteId, entity.animationState ?? 'idle', entity.currentFrame ?? entity.frameIndex ?? 0);
 }
 
@@ -159,6 +161,14 @@ function drawSprite(renderer, camera, entity, color, forceSprite = null) {
       drawCell(renderer, { glyph: finalGlyph, fg: cell?.fg ?? color, bg: cell?.bg ?? c.worldBackground }, screenX, screenY);
     }
   }
+}
+
+function drawEnemyFacingGlyph(renderer, camera, enemy) {
+  if (!enemy?.alive || enemy.type !== 'enemy') return;
+  const direction = toCardinalDirection(enemy.direction, 'S');
+  const glyph = enemy.facingGlyphs?.[direction];
+  if (!glyph) return;
+  drawCell(renderer, { glyph, fg: '#ffe7ad', layer: renderLayers.effects }, worldToScreenCell(enemy.x, camera.x), worldToScreenCell(enemy.y - 2, camera.y));
 }
 
 function resolveProjectileDirection(projectile) {
@@ -650,6 +660,15 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, world
     }
   }
 
+  if (debugOptions.facingLabels) {
+    for (const enemy of enemies.filter((entity) => entity.alive)) {
+      const direction = toCardinalDirection(enemy.direction, 'S');
+      const glyph = enemy.facingGlyphs?.[direction] ?? '?';
+      drawCell(renderer, { glyph: direction, fg: '#ffe9a6' }, Math.round(enemy.x) - camera.x, Math.round(enemy.y - 6) - camera.y);
+      drawCell(renderer, { glyph, fg: '#ffcf84' }, Math.round(enemy.x + 1) - camera.x, Math.round(enemy.y - 6) - camera.y);
+    }
+  }
+
   if (debugOptions.cameraCenter) {
     drawCell(renderer, { glyph: '+', fg: '#f9dd7b' }, Math.floor(camera.viewW / 2), Math.floor(camera.viewH / 2));
   }
@@ -704,6 +723,14 @@ function drawDebugOverlays(renderer, camera, player, enemies, projectiles, world
 
     for (const center of enemyOverlay?.enemyGroupCenters ?? []) {
       drawCell(renderer, { glyph: '◎', fg: '#ff3cbf' }, center.x - camera.x, center.y - camera.y);
+    }
+
+    if (debugOptions.showEnemySpawnRejections) {
+      for (const rejection of enemyOverlay?.enemySpawnRejections ?? []) {
+        const glyph = rejection.reason === 'enemy_overlap' ? '×' : (rejection.reason === 'blocked_tile' ? '■' : '·');
+        const color = rejection.reason === 'enemy_overlap' ? '#ff6565' : (rejection.reason === 'blocked_tile' ? '#8f9aa8' : '#ffd07a');
+        drawCell(renderer, { glyph, fg: color }, rejection.x - camera.x, rejection.y - camera.y);
+      }
     }
 
     const drawSafetyRing = (anchors, radius, color) => {
@@ -878,6 +905,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     }
 
     drawSprite(renderer, camera, enemy, renderColor);
+    drawEnemyFacingGlyph(renderer, camera, enemy);
 
     if (isEntityAttacking(enemy) && enemy.behavior !== 'ranged' && (enemy.state?.time ?? 0) < (enemy.attackWindup ?? 0.4)) {
       const sx = worldToScreenCell(enemy.x, camera.x);

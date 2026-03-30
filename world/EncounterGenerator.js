@@ -10,12 +10,12 @@ function toInt(value, fallback) {
 }
 
 const DEFAULT_SETTINGS = {
-  minDistanceFromEntrance: 10,
-  minDistanceFromExit: 8,
-  minDistanceFromSpawn: 10,
-  minDistanceBetweenEnemyGroups: 14,
+  minDistanceFromEntrance: 8,
+  minDistanceFromExit: 6,
+  minDistanceFromSpawn: 8,
+  minDistanceBetweenEnemyGroups: 12,
   minDistanceBetweenEnemies: 2,
-  maxSpawnAttempts: 120,
+  maxSpawnAttempts: 140,
 };
 
 function resolveSettings(runtimeConfig = null) {
@@ -37,20 +37,11 @@ function fallbackThreatLevel(definition) {
   return 2;
 }
 
-function pickDefinitionForZone(definitions, zone, rng) {
-  const inRange = definitions.filter((definition) => {
-    const threat = fallbackThreatLevel(definition);
-    return threat >= zone.minThreatLevel && threat <= zone.maxThreatLevel;
-  });
-  const pool = inRange.length ? inRange : definitions;
-  return weightedPickDefinition(pool, rng);
-}
-
 function zonePlan(zoneType, roomIndex) {
-  const ramp = Math.max(0, Math.floor(roomIndex * 0.25));
-  if (zoneType === 'rest') return { groupCount: [0, 1], groupSize: [0, 2], radius: 6, threatBudget: 3 + ramp };
-  if (zoneType === 'skirmish') return { groupCount: [1, 2], groupSize: [2, 4], radius: 5, threatBudget: 8 + ramp };
-  return { groupCount: [1, 2], groupSize: [5, 8], radius: 4, threatBudget: 16 + Math.floor(roomIndex * 0.5) };
+  const ramp = Math.max(0, Math.floor(roomIndex * 0.35));
+  if (zoneType === 'rest') return { targetRange: [2 + ramp, 5 + ramp], threatBudget: 8 + ramp, swarmChance: 0.08 };
+  if (zoneType === 'skirmish') return { targetRange: [5 + ramp, 9 + ramp], threatBudget: 16 + ramp, swarmChance: 0.12 };
+  return { targetRange: [8 + ramp, 13 + ramp], threatBudget: 24 + ramp, swarmChance: 0.2 };
 }
 
 function randomInt(rng, min, max) {
@@ -70,6 +61,15 @@ function collectOccupiedTiles(room) {
 
 function debugZoneTiles(zones) {
   return zones.flatMap((zone) => zone.tiles.map((tile) => ({ x: tile.x, y: tile.y, zoneId: zone.id, zoneType: zone.type, color: zone.debugColor })));
+}
+
+function filterDefinitionsForZone(definitions, threatBudget) {
+  const ranged = definitions.filter((definition) => fallbackThreatLevel(definition) <= threatBudget);
+  return ranged.length ? ranged : definitions;
+}
+
+function resolveSpawnStyle(definition) {
+  return definition?.spawnStyle ?? 'scattered';
 }
 
 export class EncounterGenerator {
@@ -95,58 +95,85 @@ export class EncounterGenerator {
     const enemies = [];
     const enemySpawnPoints = [];
     const enemyGroupCenters = [];
+    const enemySpawnRejections = [];
     const roomIndex = Math.max(0, Number(options.roomDepth ?? 0));
+    const placedEnemies = [];
+    const zoneSpawnSummary = [];
     let groupIndex = 0;
 
     for (const zone of zones) {
       const plan = zonePlan(zone.type, roomIndex);
-      const groupCount = randomInt(rng, plan.groupCount[0], plan.groupCount[1]);
-      const centers = this.enemySpawner.pickGroupCenters(zone, groupCount, {
+      const targetCount = randomInt(rng, plan.targetRange[0], plan.targetRange[1]);
+      const zonePool = filterDefinitionsForZone(definitions, plan.threatBudget);
+      const context = {
+        zoneId: zone.id,
         rng,
         settings: this.settings,
-      });
+        occupiedTiles,
+        allowedTileSet: zone.tileSet,
+        allowedTiles: zone.tiles,
+        placedEnemies,
+        rejections: enemySpawnRejections,
+        entranceAnchors: options.entranceAnchors ?? [],
+        exitAnchors: options.exitAnchors ?? [],
+        spawnAnchors: [options.spawnPoint ?? { x: Math.floor(room.tiles[0].length / 2), y: Math.floor(room.tiles.length / 2) }],
+      };
 
-      for (const center of centers) {
-        const definition = pickDefinitionForZone(definitions, {
-          minThreatLevel: 1,
-          maxThreatLevel: plan.threatBudget,
-        }, rng);
+      let spawnedInZone = 0;
+      const styleCounts = { scattered: 0, swarm: 0, elite: 0 };
+      let zoneAttempts = 0;
+      while (spawnedInZone < targetCount && zoneAttempts < targetCount * 4) {
+        zoneAttempts += 1;
+        const definition = weightedPickDefinition(zonePool, rng);
         if (!definition?.id) continue;
-        const threat = fallbackThreatLevel(definition);
-        const maxSizeByThreat = Math.max(1, Math.floor(plan.threatBudget / Math.max(1, threat)));
-        const targetSize = Math.min(
-          randomInt(rng, plan.groupSize[0], plan.groupSize[1]),
-          maxSizeByThreat,
-        );
-        if (targetSize <= 0) continue;
 
-        const groupId = `${zone.id}-group-${groupIndex}`;
-        const group = this.enemySpawner.spawnGroup({
+        const threat = fallbackThreatLevel(definition);
+        const style = resolveSpawnStyle(definition);
+        if (style !== 'swarm') {
+          const result = this.enemySpawner.spawnScattered({
+            room,
+            enemyType: definition.id,
+            definition,
+            count: 1,
+            threatLevel: threat,
+            context,
+          });
+          if (!result.enemies.length) continue;
+          enemies.push(...result.enemies);
+          enemySpawnPoints.push(...result.points);
+          spawnedInZone += result.enemies.length;
+          styleCounts[style] = (styleCounts[style] ?? 0) + result.enemies.length;
+          continue;
+        }
+
+        if (rng() > plan.swarmChance) continue;
+        const swarmMax = Math.max(2, Math.min(targetCount - spawnedInZone, definition.clusterMax ?? 6));
+        const swarmMin = Math.min(swarmMax, Math.max(2, definition.clusterMin ?? 3));
+        const swarmCount = randomInt(rng, swarmMin, swarmMax);
+        const centerTile = zone.tiles[randomInt(rng, 0, zone.tiles.length - 1)] ?? null;
+        if (!centerTile) continue;
+        const groupId = `${zone.id}-swarm-${groupIndex}`;
+        const result = this.enemySpawner.spawnSwarm({
           room,
           enemyType: definition.id,
-          center,
-          groupSize: targetSize,
-          radius: definition.clusterRadius ?? plan.radius,
+          definition,
+          center: { x: centerTile.x, y: centerTile.y },
+          count: swarmCount,
+          radius: definition.clusterRadius ?? 4,
           threatLevel: threat,
           groupId,
-          context: {
-            zoneId: zone.id,
-            rng,
-            settings: this.settings,
-            occupiedTiles,
-            allowedTileSet: zone.tileSet,
-            entranceAnchors: options.entranceAnchors ?? [],
-            exitAnchors: options.exitAnchors ?? [],
-            spawnAnchors: [options.spawnPoint ?? { x: Math.floor(room.tiles[0].length / 2), y: Math.floor(room.tiles.length / 2) }],
-          },
+          context,
         });
-
-        if (!group.enemies.length) continue;
-        enemies.push(...group.enemies);
-        enemySpawnPoints.push(...group.points);
-        enemyGroupCenters.push({ x: center.x, y: center.y, zoneId: zone.id, type: definition.id, groupId });
+        if (!result.enemies.length) continue;
+        enemies.push(...result.enemies);
+        enemySpawnPoints.push(...result.points);
+        enemyGroupCenters.push({ x: centerTile.x, y: centerTile.y, zoneId: zone.id, type: definition.id, groupId, spawnStyle: 'swarm' });
+        spawnedInZone += result.enemies.length;
+        styleCounts.swarm += result.enemies.length;
         groupIndex += 1;
       }
+
+      zoneSpawnSummary.push({ zoneId: zone.id, zoneType: zone.type, targetCount, spawned: spawnedInZone, styles: styleCounts });
     }
 
     return {
@@ -154,9 +181,11 @@ export class EncounterGenerator {
       debug: {
         enemySpawnPoints,
         enemyGroupCenters,
+        enemySpawnRejections,
         encounterZones: debugZoneTiles(zones),
         encounterZoneSummaries: zones.map((zone) => ({ id: zone.id, type: zone.type, tileCount: zone.tiles.length })),
         encounterModel: zones.map((zone) => ({ type: zone.type, density: zone.density })),
+        enemySpawnSummary: zoneSpawnSummary,
         entranceSafetyAnchors: options.entranceAnchors ?? [],
         exitSafetyAnchors: options.exitAnchors ?? [],
         pathSafetyTiles: [...(options.pathMask ?? new Set())].map((key) => {
@@ -167,6 +196,7 @@ export class EncounterGenerator {
           minDistanceFromEntrance: this.settings.minDistanceFromEntrance,
           minDistanceFromExit: this.settings.minDistanceFromExit,
           minDistanceFromSpawn: this.settings.minDistanceFromSpawn,
+          minDistanceBetweenEnemies: this.settings.minDistanceBetweenEnemies,
         },
       },
     };

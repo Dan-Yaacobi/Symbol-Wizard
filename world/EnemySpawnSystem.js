@@ -1,5 +1,6 @@
 import { EncounterGenerator } from './EncounterGenerator.js';
 import { EnemySpawner } from './EnemySpawner.js';
+import { getSpawnDefinition } from '../data/SpawnDefinitionRegistry.js';
 
 const DEFAULT_SETTINGS = {
   minDistanceFromEntrance: 10,
@@ -13,24 +14,32 @@ const DEFAULT_SETTINGS = {
 export function spawnEnemyGroup(type, centerX, centerY, options = {}) {
   const settings = { ...DEFAULT_SETTINGS, ...(options.settings ?? {}) };
   const spawner = new EnemySpawner(settings);
-  return spawner.spawnGroup({
-    room: options.room,
+  const room = options.room;
+  const allowedTiles = (room?.tiles ?? []).flatMap((row, y) => row.map((_, x) => ({ x, y })));
+  const definition = getSpawnDefinition(type) ?? { id: type, spawnStyle: 'swarm', combat: { radius: 1.3 } };
+  const context = {
+    zoneId: options.zoneId ?? 'manual-zone',
+    rng: options.rng ?? Math.random,
+    settings,
+    occupiedTiles: options.occupiedTiles ?? new Set(),
+    allowedTileSet: options.allowedTileSet ?? new Set(allowedTiles.map((tile) => `${tile.x},${tile.y}`)),
+    allowedTiles,
+    placedEnemies: [],
+    rejections: [],
+    entranceAnchors: options.entranceAnchors ?? [],
+    exitAnchors: options.exitAnchors ?? [],
+    spawnAnchors: options.spawnAnchors ?? [],
+  };
+  return spawner.spawnSwarm({
+    room,
     enemyType: type,
+    definition,
     center: { x: Math.round(centerX), y: Math.round(centerY) },
-    groupSize: options.groupSize ?? 1,
+    count: options.groupSize ?? 1,
     radius: options.clusterRadius ?? 4,
     threatLevel: options.threatLevel ?? 1,
     groupId: options.groupId ?? 'manual-group',
-    context: {
-      zoneId: options.zoneId ?? 'manual-zone',
-      rng: options.rng ?? Math.random,
-      settings,
-      occupiedTiles: options.occupiedTiles ?? new Set(),
-      allowedTileSet: options.allowedTileSet ?? new Set((options.room?.tiles ?? []).flatMap((row, y) => row.map((_, x) => `${x},${y}`))),
-      entranceAnchors: options.entranceAnchors ?? [],
-      exitAnchors: options.exitAnchors ?? [],
-      spawnAnchors: options.spawnAnchors ?? [],
-    },
+    context,
   });
 }
 
@@ -38,4 +47,3 @@ export function spawnEnemiesForRoom(room, options = {}) {
   const generator = new EncounterGenerator(options.runtimeConfig);
   return generator.generate(room, options);
 }
-

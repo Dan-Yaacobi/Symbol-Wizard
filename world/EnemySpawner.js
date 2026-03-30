@@ -6,14 +6,24 @@ function randomInt(rng, min, max) {
   return lo + Math.floor(rng() * (hi - lo + 1));
 }
 
+function tileKey(x, y) {
+  return `${x},${y}`;
+}
+
 function isNearAnchors(x, y, anchors, radius) {
   if (!Array.isArray(anchors) || radius <= 0) return false;
   const radiusSq = radius * radius;
   return anchors.some((anchor) => ((x - anchor.x) ** 2) + ((y - anchor.y) ** 2) <= radiusSq);
 }
 
-function tileKey(x, y) {
-  return `${x},${y}`;
+function resolveSpawnStyle(definition) {
+  return definition?.spawnStyle ?? 'scattered';
+}
+
+function separationMultiplierForStyle(style) {
+  if (style === 'swarm') return 0.75;
+  if (style === 'elite') return 1.5;
+  return 1;
 }
 
 export class EnemySpawner {
@@ -21,44 +31,94 @@ export class EnemySpawner {
     this.settings = settings;
   }
 
-  isValidSpawnTile(room, x, y, context) {
-    if (!room?.tiles?.[y]?.[x]?.walkable) return false;
-    if (room.collisionMap?.[y]?.[x]) return false;
-    if (context.occupiedTiles.has(tileKey(x, y))) return false;
-    if (!context.allowedTileSet.has(tileKey(x, y))) return false;
-    if (isNearAnchors(x, y, context.entranceAnchors, context.settings.minDistanceFromEntrance)) return false;
-    if (isNearAnchors(x, y, context.exitAnchors, context.settings.minDistanceFromExit)) return false;
-    if (isNearAnchors(x, y, context.spawnAnchors, context.settings.minDistanceFromSpawn)) return false;
-    return true;
+  minSpawnSeparation(candidateRadius, otherRadius, style = 'scattered') {
+    const base = Math.max(0.5, this.settings.minDistanceBetweenEnemies ?? 2);
+    const radiusBuffer = Math.max(0.25, (candidateRadius ?? 1.3) + (otherRadius ?? 1.3));
+    return Math.max(base * separationMultiplierForStyle(style), radiusBuffer);
   }
 
-  spawnGroup({ room, enemyType, center, groupSize, radius, threatLevel = 1, groupId, context }) {
+  resolveRejectionReason(room, x, y, definition, context) {
+    if (!room?.tiles?.[y]?.[x]?.walkable) return 'blocked_tile';
+    if (room.collisionMap?.[y]?.[x]) return 'blocked_tile';
+    if (context.occupiedTiles.has(tileKey(x, y))) return 'blocked_object';
+    if (!context.allowedTileSet.has(tileKey(x, y))) return 'invalid_zone';
+    if (isNearAnchors(x, y, context.entranceAnchors, context.settings.minDistanceFromEntrance)) return 'near_entrance';
+    if (isNearAnchors(x, y, context.exitAnchors, context.settings.minDistanceFromExit)) return 'near_exit';
+    if (isNearAnchors(x, y, context.spawnAnchors, context.settings.minDistanceFromSpawn)) return 'near_spawn';
+
+    const style = resolveSpawnStyle(definition);
+    const candidateRadius = definition?.combat?.radius ?? definition?.radius ?? 1.3;
+    for (const enemy of context.placedEnemies) {
+      const distance = Math.hypot(enemy.x - x, enemy.y - y);
+      const minDistance = this.minSpawnSeparation(candidateRadius, enemy.radius, style);
+      if (distance < minDistance) return 'enemy_overlap';
+    }
+
+    return null;
+  }
+
+  registerEnemy(enemy, context, pointMeta = {}) {
+    context.occupiedTiles.add(tileKey(enemy.x, enemy.y));
+    context.placedEnemies.push({ x: enemy.x, y: enemy.y, radius: enemy.radius ?? 1.3, type: enemy.enemyType, spawnStyle: enemy.spawnStyle ?? 'scattered' });
+    return {
+      x: enemy.x,
+      y: enemy.y,
+      type: enemy.enemyType,
+      zoneId: context.zoneId,
+      threatLevel: pointMeta.threatLevel ?? 1,
+      spawnStyle: enemy.spawnStyle ?? 'scattered',
+      groupId: pointMeta.groupId ?? null,
+    };
+  }
+
+  createEnemy(enemyType, x, y, definition, context, metadata = {}) {
+    const enemy = new Enemy(enemyType, x, y);
+    enemy.threatLevel = metadata.threatLevel ?? 1;
+    enemy.encounterZone = context.zoneId;
+    enemy.encounterGroupId = metadata.groupId ?? null;
+    enemy.spawnStyle = resolveSpawnStyle(definition);
+    return enemy;
+  }
+
+  findValidPoint(room, candidateTiles, definition, context, around = null, radius = 0) {
+    if (!candidateTiles.length) return null;
+    for (let attempt = 0; attempt < context.settings.maxSpawnAttempts; attempt += 1) {
+      const tile = around
+        ? {
+          x: Math.round(around.x + Math.cos(context.rng() * Math.PI * 2) * (context.rng() * radius)),
+          y: Math.round(around.y + Math.sin(context.rng() * Math.PI * 2) * (context.rng() * radius)),
+        }
+        : candidateTiles[randomInt(context.rng, 0, candidateTiles.length - 1)];
+      const rejection = this.resolveRejectionReason(room, tile.x, tile.y, definition, context);
+      if (!rejection) return { x: tile.x, y: tile.y };
+      context.rejections.push({ x: tile.x, y: tile.y, reason: rejection, zoneId: context.zoneId });
+    }
+    return null;
+  }
+
+  spawnScattered({ room, enemyType, definition, count, threatLevel = 1, context }) {
     const enemies = [];
     const points = [];
-    for (let i = 0; i < groupSize; i += 1) {
-      let found = null;
-      for (let attempt = 0; attempt < context.settings.maxSpawnAttempts; attempt += 1) {
-        const angle = context.rng() * Math.PI * 2;
-        const distance = context.rng() * radius;
-        const x = Math.round(center.x + Math.cos(angle) * distance);
-        const y = Math.round(center.y + Math.sin(angle) * distance);
-        if (!this.isValidSpawnTile(room, x, y, context)) continue;
-
-        const minDistanceSq = context.settings.minDistanceBetweenEnemies ** 2;
-        const overlap = points.some((point) => ((point.x - x) ** 2) + ((point.y - y) ** 2) < minDistanceSq);
-        if (overlap) continue;
-        found = { x, y };
-        break;
-      }
-
-      if (!found) continue;
-      context.occupiedTiles.add(tileKey(found.x, found.y));
-      const enemy = new Enemy(enemyType, found.x, found.y);
-      enemy.threatLevel = threatLevel;
-      enemy.encounterZone = context.zoneId;
-      enemy.encounterGroupId = groupId;
+    const candidateTiles = [...context.allowedTiles];
+    for (let i = 0; i < count; i += 1) {
+      const point = this.findValidPoint(room, candidateTiles, definition, context);
+      if (!point) continue;
+      const enemy = this.createEnemy(enemyType, point.x, point.y, definition, context, { threatLevel });
       enemies.push(enemy);
-      points.push({ x: found.x, y: found.y, type: enemyType, groupId, zoneId: context.zoneId, threatLevel });
+      points.push(this.registerEnemy(enemy, context, { threatLevel }));
+    }
+    return { enemies, points };
+  }
+
+  spawnSwarm({ room, enemyType, definition, center, count, radius, threatLevel = 1, groupId, context }) {
+    const enemies = [];
+    const points = [];
+    for (let i = 0; i < count; i += 1) {
+      const point = this.findValidPoint(room, context.allowedTiles, definition, context, center, radius);
+      if (!point) continue;
+      const enemy = this.createEnemy(enemyType, point.x, point.y, definition, context, { threatLevel, groupId });
+      enemies.push(enemy);
+      points.push(this.registerEnemy(enemy, context, { threatLevel, groupId }));
     }
     return { enemies, points };
   }
@@ -81,4 +141,3 @@ export class EnemySpawner {
     return centers;
   }
 }
-
