@@ -919,7 +919,22 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   const safeAbilityEffects = Array.isArray(abilityEffects) ? abilityEffects : [];
   const safeWorldDrops = Array.isArray(worldDrops) ? worldDrops : [];
   const activeRoomId = activeRoom?.id ?? null;
-  console.log('WORLD RENDER', activeRoomId, map?.length ?? 0);
+  const mapRows = map?.length ?? 0;
+  const mapCols = map?.[0]?.length ?? 0;
+  if (globalThis?.location?.search?.includes('debugRenderCounts=1')) {
+    const count = {
+      mapRows,
+      mapCols,
+      enemies: enemies?.length ?? 0,
+      npcs: npcs?.length ?? 0,
+      worldObjects: worldObjects?.length ?? 0,
+      projectiles: projectiles?.length ?? 0,
+      goldPiles: goldPiles?.length ?? 0,
+      worldDrops: safeWorldDrops.filter((drop) => (drop?.roomId ?? activeRoomId) === activeRoomId).length,
+      abilityEffects: safeAbilityEffects.length,
+    };
+    console.debug('WORLD RENDER', activeRoomId, count);
+  }
   ensureBackgroundCache(renderer, map, worldObjects);
   renderer.renderBackground(map, camera);
 
