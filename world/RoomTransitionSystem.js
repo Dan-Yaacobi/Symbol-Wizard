@@ -33,7 +33,6 @@ export class RoomTransitionSystem {
     this.maxFadeAlpha = 0.78;
     this.pendingExit = null;
     this.preparedTransition = null;
-    this.preparedTransitionTask = null;
     this.exitTriggerLockTimer = 0;
     this.transitionSequence = 0;
     this.activeTimeline = null;
@@ -48,7 +47,6 @@ export class RoomTransitionSystem {
     this.fadeAlpha = 0;
     this.pendingExit = null;
     this.preparedTransition = null;
-    this.preparedTransitionTask = null;
     this.exitTriggerLockTimer = 0;
     this.activeTimeline = null;
     this.newRoomActivatedAtMs = null;
@@ -87,7 +85,6 @@ export class RoomTransitionSystem {
     });
     this.pendingExit = exit;
     this.preparedTransition = null;
-    this.preparedTransitionTask = null;
     this.markTimeline('input_lock_start');
     this.setPhase('fadeOut');
     this.phaseTimer = 0;
@@ -284,7 +281,7 @@ export class RoomTransitionSystem {
       phase: this.phase,
       fadeAlpha: this.fadeAlpha,
       pendingExitId: typeof this.pendingExit === 'object' ? this.pendingExit?.id ?? null : this.pendingExit,
-      loading: Boolean(this.preparedTransitionTask && !this.preparedTransitionTask.done),
+      loading: false,
       lastTransitionTimeline: this.lastTransitionTimeline,
       blockingHotspots: this.lastBlockingSummary,
     };
@@ -309,34 +306,26 @@ export class RoomTransitionSystem {
       this.fadeAlpha = easedProgress * this.maxFadeAlpha;
       if (this.fadeAlpha > 0 && !this.hasTimelineCheckpoint('fade_black_screen_start')) this.markTimeline('fade_black_screen_start');
       if (progress < 1) return null;
-      this.setPhase('loading');
-      this.phaseTimer = 0;
       this.fadeAlpha = this.maxFadeAlpha;
-      this.startAsyncPrepareTask(context);
-      return null;
-    }
-
-    if (this.phase === 'loading') {
-      this.fadeAlpha = this.maxFadeAlpha;
-      if (!this.preparedTransitionTask?.done) return null;
-      if (!this.preparedTransitionTask.success) {
-        this.log('FAIL: async transition preparation failed', { error: this.preparedTransitionTask.error });
+      const prepareStartMs = nowMs();
+      this.preparedTransition = this.prepareTransitionTarget(context, this.pendingExit);
+      this.logPhase('transition_target_prepare', prepareStartMs, nowMs(), {
+        success: Boolean(this.preparedTransition?.targetRoom && this.preparedTransition?.targetEntrance),
+      });
+      if (!this.preparedTransition?.targetRoom || !this.preparedTransition?.targetEntrance) {
+        this.log('FAIL: transition preparation failed');
         this.setPhase('fadeIn');
         this.phaseTimer = 0;
         this.pendingExit = null;
         this.preparedTransition = null;
-        this.preparedTransitionTask = null;
         return null;
       }
-
-      this.preparedTransition = this.preparedTransitionTask.result;
       this.markTimeline('renderer_swap_start');
       const transitionResult = this.switchRoom(context, this.pendingExit);
       this.markTimeline('renderer_swap_end');
       this.setPhase('fadeIn');
       this.phaseTimer = 0;
       this.pendingExit = null;
-      this.preparedTransitionTask = null;
       if (!transitionResult?.room) {
         this.preparedTransition = null;
       }
@@ -419,7 +408,7 @@ export class RoomTransitionSystem {
     const prepared = this.preparedTransition?.fromRoomId === context.activeRoom?.id
       && (this.preparedTransition?.exit?.id ?? null) === (exit?.id ?? null)
       ? this.preparedTransition
-      : this.prepareTransitionTarget(context, exit);
+      : null;
     markSection('resolve_target', targetResolveStart);
     const normalizedExit = prepared?.normalizedExit ?? this.normalizeExit(context.activeRoom, exit);
     const targetRoom = prepared?.targetRoom ?? null;
@@ -479,56 +468,4 @@ export class RoomTransitionSystem {
     };
   }
 
-  startAsyncPrepareTask(context) {
-    if (!this.pendingExit || this.preparedTransitionTask) return;
-
-    const activeRoom = context.activeRoom;
-    const player = context.player;
-    const pendingExit = this.pendingExit;
-    this.preparedTransitionTask = {
-      done: false,
-      success: false,
-      result: null,
-      error: null,
-    };
-
-    const taskStartMs = nowMs();
-    this.emitPerfEvent('startAsyncPrepareTask_execute', {
-      roomId: activeRoom?.id ?? null,
-      exitId: typeof pendingExit === 'object' ? pendingExit?.id ?? null : pendingExit,
-    });
-    this.markTimeline('map_generation_start', {
-      details: {
-        roomId: activeRoom?.id ?? null,
-        exitId: typeof pendingExit === 'object' ? pendingExit?.id ?? null : pendingExit,
-      },
-    });
-
-    try {
-      this.emitPerfEvent('prepareTransitionTarget_start', {
-        roomId: activeRoom?.id ?? null,
-      });
-      const prepared = this.prepareTransitionTarget({ activeRoom, player }, pendingExit);
-      this.preparedTransitionTask.result = prepared;
-      this.preparedTransitionTask.success = true;
-      this.emitPerfEvent('prepareTransitionTarget_end', {
-        roomId: prepared?.targetRoom?.id ?? null,
-      });
-    } catch (error) {
-      this.preparedTransitionTask.error = error instanceof Error ? error.message : String(error);
-    } finally {
-      const durationMs = Number((nowMs() - taskStartMs).toFixed(3));
-      this.markTimeline('map_generation_end', {
-        details: {
-          durationMs,
-          success: this.preparedTransitionTask.success,
-        },
-      });
-      this.emitPerfEvent('startAsyncPrepareTask_complete', {
-        success: this.preparedTransitionTask.success,
-        durationMs,
-      });
-      this.preparedTransitionTask.done = true;
-    }
-  }
 }
