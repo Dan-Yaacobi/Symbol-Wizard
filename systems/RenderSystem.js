@@ -899,6 +899,7 @@ function traceCoordinateRoundTrip(renderer, camera, mouse, player) {
 export function renderWorld(renderer, camera, map, player, enemies, npcs, worldObjects, projectiles, goldPiles, worldDrops = [], combatTextSystem = null, abilityEffects = [], mouse = null, debugOptions = {}, activeRoom = null) {
   const safeAbilityEffects = Array.isArray(abilityEffects) ? abilityEffects : [];
   const safeWorldDrops = Array.isArray(worldDrops) ? worldDrops : [];
+  const activeRoomId = activeRoom?.id ?? null;
   ensureBackgroundCache(renderer, map, worldObjects);
   renderer.renderBackground(map, camera);
 
@@ -977,7 +978,10 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
     drawCell(renderer, { glyph: '$', fg: palette.gold }, gx, gy);
   }
 
-  for (const drop of safeWorldDrops) drawWorldDrop(renderer, camera, drop);
+  for (const drop of safeWorldDrops) {
+    if ((drop?.roomId ?? activeRoomId) !== activeRoomId) continue;
+    drawWorldDrop(renderer, camera, drop);
+  }
 
   const playerColor = getEntityTintColor(player, palette.player);
   drawSprite(renderer, camera, player, playerColor);

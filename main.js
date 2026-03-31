@@ -348,12 +348,13 @@ function isValidDropLandingPosition(x, y) {
   return !collidesWithBlockingObjectAt(DROP_COLLISION_PROBE, x, y, worldObjects);
 }
 
-function createWorldDrop(drop) {
+function createWorldDrop(drop, room = activeRoom) {
   const originX = drop?.x ?? 0;
   const originY = drop?.y ?? 0;
   const angle = randomRange(0, Math.PI * 2);
   const speed = randomRange(6.5, 9.5);
   const duration = randomRange(0.38, 0.6);
+  const roomId = room?.id ?? activeRoom?.id ?? null;
   const item = assertItemDefinition(drop?.itemId);
   const spriteId = String(item.spriteId ?? '').trim();
   if (!getSpriteAsset(spriteId)) {
@@ -363,6 +364,7 @@ function createWorldDrop(drop) {
 
   return {
     ...drop,
+    roomId: drop?.roomId ?? roomId,
     type: drop?.type ?? 'drop',
     isDropped: true,
     x: originX,
@@ -389,8 +391,14 @@ function createWorldDrop(drop) {
 
 function updateWorldDrops(dt) {
   const kept = [];
+  const activeRoomId = activeRoom?.id ?? null;
 
   for (const drop of worldDrops) {
+    if ((drop?.roomId ?? activeRoomId) !== activeRoomId) {
+      kept.push(drop);
+      continue;
+    }
+    if (drop.roomId == null) drop.roomId = activeRoomId;
     if (!Number.isFinite(drop.animationTimer)) drop.animationTimer = 0;
     if (!Number.isFinite(drop.animationPhase)) drop.animationPhase = randomRange(0, Math.PI * 2);
     const resolvedAnimationSpeed = Number.isFinite(drop.animationSpeed)
@@ -451,8 +459,14 @@ function updateWorldDrops(dt) {
 
 function collectWorldDrops() {
   const kept = [];
+  const activeRoomId = activeRoom?.id ?? null;
 
   for (const drop of worldDrops) {
+    if ((drop?.roomId ?? activeRoomId) !== activeRoomId) {
+      kept.push(drop);
+      continue;
+    }
+    if (drop.roomId == null) drop.roomId = activeRoomId;
     const dx = drop.x - player.x;
     const dy = drop.y - player.y;
     if ((dx * dx + dy * dy) >= (2.5 * 2.5)) {
@@ -484,7 +498,7 @@ function collectWorldDrops() {
 
 function handleEnemyDefeat(enemy) {
   const result = LootSystem.awardEnemyDrops(player, enemy, combatTextSystem);
-  for (const drop of result.drops) worldDrops.push(createWorldDrop(drop));
+  for (const drop of result.drops) worldDrops.push(createWorldDrop(drop, activeRoom));
   return result;
 }
 
