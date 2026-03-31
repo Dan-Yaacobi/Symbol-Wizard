@@ -2,6 +2,10 @@ import { spawnObject, OBJECT_CATEGORY } from './ObjectLibrary.js';
 import { getSpawnDefinitionsByCategory, spawnByCategory } from '../data/SpawnDefinitionRegistry.js';
 import { biomeToneBias, colorVariation } from './ColorVariation.js';
 
+function nowMs() {
+  return globalThis?.performance?.now?.() ?? Date.now();
+}
+
 function randomInt(rng, min, max) {
   return Math.floor(rng() * (max - min + 1)) + min;
 }
@@ -21,6 +25,10 @@ function weightedChoice(rng, weightedEntries) {
 
 function tileKey(x, y) {
   return `${x},${y}`;
+}
+
+function toIndex(x, y, width) {
+  return (y * width) + x;
 }
 
 function normalizeFootprintCells(footprint) {
@@ -76,55 +84,6 @@ function rotateFootprintCells(footprint, quarterTurns = 0) {
   });
 }
 
-function isFootprintValid({ tiles, footprint, center, occupiedTiles, blockedMask, safetyConfig, densityField }) {
-  const cells = collectObjectTiles(center, footprint);
-  if (cells.length === 0) return false;
-
-  const mapHeight = tiles.length;
-  const mapWidth = tiles[0]?.length ?? 0;
-  const mapEdge = safetyConfig.minDistanceFromMapEdge ?? 0;
-
-  for (const cell of cells) {
-    const inBounds = cell.x >= 0 && cell.x < mapWidth && cell.y >= 0 && cell.y < mapHeight;
-    if (!inBounds) return false;
-
-    // Protect outer boundary walls regardless of runtime edge distance tuning.
-    if (cell.x <= 1 || cell.x >= mapWidth - 2 || cell.y <= 1 || cell.y >= mapHeight - 2) return false;
-
-    if (cell.x < mapEdge || cell.y < mapEdge || cell.x >= mapWidth - mapEdge || cell.y >= mapHeight - mapEdge) return false;
-
-    const tile = tiles[cell.y]?.[cell.x];
-    if (!tile?.walkable || tile.type === 'road') return false;
-    if (blockedMask?.has(tileKey(cell.x, cell.y))) return false;
-    if (occupiedTiles?.has(tileKey(cell.x, cell.y))) return false;
-    if ((densityField[cell.y]?.[cell.x] ?? 0) <= 0) return false;
-  }
-
-  if (violatesAnchorDistance(cells, safetyConfig.pathAnchors, safetyConfig.minDistanceFromPath)) return false;
-  if (violatesAnchorDistance(cells, safetyConfig.exitAnchors, safetyConfig.minDistanceFromExit)) return false;
-  if (violatesAnchorDistance(cells, safetyConfig.entranceAnchors, safetyConfig.minDistanceFromExit)) return false;
-
-  return true;
-}
-
-function isWithinDistanceSquared(ax, ay, bx, by, distance) {
-  const dx = ax - bx;
-  const dy = ay - by;
-  return (dx * dx) + (dy * dy) <= distance * distance;
-}
-
-function nearestDistanceToPath(x, y, pathTiles, cap = 8) {
-  if (!pathTiles?.size) return cap;
-  let best = cap;
-  for (let oy = -cap; oy <= cap; oy += 1) {
-    for (let ox = -cap; ox <= cap; ox += 1) {
-      if (!pathTiles.has(tileKey(x + ox, y + oy))) continue;
-      best = Math.min(best, Math.hypot(ox, oy));
-    }
-  }
-  return best;
-}
-
 function tileVariationScore(tiles, x, y) {
   const centerType = tiles[y]?.[x]?.type;
   if (!centerType) return 0;
@@ -136,7 +95,7 @@ function tileVariationScore(tiles, x, y) {
   return differences;
 }
 
-function samplePlacementCenter(tiles, rng, minDistanceFromMapEdge) {
+function samplePlacementCenter(tiles, rng, minDistanceFromMapEdge = 2) {
   return {
     x: randomInt(rng, minDistanceFromMapEdge, tiles[0].length - 1 - minDistanceFromMapEdge),
     y: randomInt(rng, minDistanceFromMapEdge, tiles.length - 1 - minDistanceFromMapEdge),
@@ -174,7 +133,48 @@ function sanitizeClusterSize(definition) {
   return { min, max };
 }
 
-function createObjectDensityField({ tiles, pathTiles }) {
+function buildPathDistanceField({ width, height, pathTiles }) {
+  const total = width * height;
+  const distances = new Int16Array(total);
+  distances.fill(-1);
+  if (!pathTiles?.size) return distances;
+
+  const queue = new Int32Array(total);
+  let head = 0;
+  let tail = 0;
+
+  for (const key of pathTiles) {
+    const [x, y] = key.split(',').map(Number);
+    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+    const idx = toIndex(x, y, width);
+    if (distances[idx] === 0) continue;
+    distances[idx] = 0;
+    queue[tail++] = idx;
+  }
+
+  const neighbors = [1, -1, width, -width];
+  while (head < tail) {
+    const idx = queue[head++];
+    const x = idx % width;
+    const y = Math.floor(idx / width);
+    const baseDist = distances[idx];
+
+    for (const offset of neighbors) {
+      const n = idx + offset;
+      if (n < 0 || n >= total) continue;
+      const nx = n % width;
+      const ny = Math.floor(n / width);
+      if (Math.abs(nx - x) + Math.abs(ny - y) !== 1) continue;
+      if (distances[n] !== -1) continue;
+      distances[n] = baseDist + 1;
+      queue[tail++] = n;
+    }
+  }
+
+  return distances;
+}
+
+function createObjectDensityField({ tiles, pathDistanceField }) {
   const height = tiles.length;
   const width = tiles[0]?.length ?? 0;
   const field = Array.from({ length: height }, () => Array.from({ length: width }, () => 0.5));
@@ -194,8 +194,9 @@ function createObjectDensityField({ tiles, pathTiles }) {
           if (n && !n.walkable) nearbyWalls += 1;
         }
       }
-      const pathDistance = nearestDistanceToPath(x, y, pathTiles, 8);
-      const pathFactor = Math.min(1, pathDistance / 6);
+      const pathDistance = pathDistanceField[toIndex(x, y, width)];
+      const normalizedPathDistance = pathDistance < 0 ? 8 : Math.min(8, pathDistance);
+      const pathFactor = Math.min(1, normalizedPathDistance / 6);
       const wallFactor = Math.min(1, nearbyWalls / 8);
       field[y][x] = Math.max(0.05, Math.min(1, (0.25 + (wallFactor * 0.5) + (pathFactor * 0.25))));
     }
@@ -262,17 +263,8 @@ function buildBiomePool(biome, category, mapType = null) {
     .filter((definition) => definition && isValidFootprint(definition.footprint) && mapTypeAllowsDefinition(definition, mapType));
 }
 
-function violatesAnchorDistance(tilesToCheck, anchors = [], minDistance = 0) {
-  if (minDistance <= 0 || !Array.isArray(anchors)) return false;
-  for (const tile of tilesToCheck) {
-    for (const anchor of anchors) {
-      if (isWithinDistanceSquared(tile.x, tile.y, anchor.x, anchor.y, minDistance)) return true;
-    }
-  }
-  return false;
-}
-
-function hasClearanceConflict({ center, definition, placedObjects }) {
+function hasClearanceConflict({ center, definition, placedObjects, metrics }) {
+  const start = nowMs();
   const thisClearance = sanitizeClearanceRadius(definition);
   if (!Array.isArray(placedObjects) || placedObjects.length === 0) return false;
 
@@ -281,64 +273,243 @@ function hasClearanceConflict({ center, definition, placedObjects }) {
     const otherClearance = sanitizeClearanceRadius(placed);
     const minDistance = thisClearance + otherClearance;
     if (minDistance <= 0) continue;
-    if (Math.hypot(center.x - placed.x, center.y - placed.y) < minDistance) return true;
+    metrics.collisionChecks += 1;
+    if (Math.hypot(center.x - placed.x, center.y - placed.y) < minDistance) {
+      metrics.phaseMs.collisionChecks += nowMs() - start;
+      return true;
+    }
   }
 
+  metrics.phaseMs.collisionChecks += nowMs() - start;
   return false;
 }
 
-function validatePlacement({ tiles, center, definition, footprint = definition.footprint, occupiedTiles, blockedMask, safetyConfig, densityField, placedObjects = [] }) {
-  if (hasClearanceConflict({ center, definition, placedObjects })) return false;
-  return isFootprintValid({
+function isFootprintValid({
+  tiles,
+  footprint,
+  center,
+  occupiedGrid,
+  blockedGrid,
+  pathForbiddenGrid,
+  exitForbiddenGrid,
+  entranceForbiddenGrid,
+  safetyConfig,
+  densityField,
+  width,
+  height,
+}) {
+  const cells = collectObjectTiles(center, footprint);
+  if (cells.length === 0) return false;
+
+  const mapEdge = safetyConfig.minDistanceFromMapEdge ?? 0;
+
+  for (const cell of cells) {
+    const inBounds = cell.x >= 0 && cell.x < width && cell.y >= 0 && cell.y < height;
+    if (!inBounds) return false;
+
+    if (cell.x <= 1 || cell.x >= width - 2 || cell.y <= 1 || cell.y >= height - 2) return false;
+    if (cell.x < mapEdge || cell.y < mapEdge || cell.x >= width - mapEdge || cell.y >= height - mapEdge) return false;
+
+    const tile = tiles[cell.y]?.[cell.x];
+    if (!tile?.walkable || tile.type === 'road') return false;
+
+    const idx = toIndex(cell.x, cell.y, width);
+    if (blockedGrid[idx] !== 0 || occupiedGrid[idx] !== 0) return false;
+    if (pathForbiddenGrid[idx] || exitForbiddenGrid[idx] || entranceForbiddenGrid[idx]) return false;
+    if ((densityField[cell.y]?.[cell.x] ?? 0) <= 0) return false;
+  }
+
+  return true;
+}
+
+function validatePlacement({
+  tiles,
+  center,
+  definition,
+  footprint = definition.footprint,
+  occupiedGrid,
+  blockedGrid,
+  pathForbiddenGrid,
+  exitForbiddenGrid,
+  entranceForbiddenGrid,
+  safetyConfig,
+  densityField,
+  placedObjects = [],
+  width,
+  height,
+  metrics,
+}) {
+  const start = nowMs();
+  metrics.validationChecks += 1;
+  if (hasClearanceConflict({ center, definition, placedObjects, metrics })) return false;
+  const ok = isFootprintValid({
     tiles,
     footprint,
     center,
-    occupiedTiles,
-    blockedMask,
+    occupiedGrid,
+    blockedGrid,
+    pathForbiddenGrid,
+    exitForbiddenGrid,
+    entranceForbiddenGrid,
     safetyConfig,
     densityField,
+    width,
+    height,
   });
+  metrics.phaseMs.validation += nowMs() - start;
+  return ok;
 }
 
-function reservePlacement({ occupiedTiles, blockedMask, cells, padding = 0 }) {
+function reservePlacement({ occupiedTiles, occupiedGrid, blockedGrid, cells, padding = 0, width, height }) {
   for (const cell of cells) {
+    const baseIdx = toIndex(cell.x, cell.y, width);
+    occupiedGrid[baseIdx] = 1;
+    blockedGrid[baseIdx] = 1;
     occupiedTiles.add(tileKey(cell.x, cell.y));
-    blockedMask.add(tileKey(cell.x, cell.y));
+
     for (let oy = -padding; oy <= padding; oy += 1) {
+      const py = cell.y + oy;
+      if (py < 0 || py >= height) continue;
       for (let ox = -padding; ox <= padding; ox += 1) {
-        blockedMask.add(tileKey(cell.x + ox, cell.y + oy));
+        const px = cell.x + ox;
+        if (px < 0 || px >= width) continue;
+        blockedGrid[toIndex(px, py, width)] = 1;
       }
     }
   }
 }
 
-function zoneWeightForDefinition(zone, definition, categoryRule) {
-  const preferred = Array.isArray(definition.preferredZones) && definition.preferredZones.length > 0
-    ? definition.preferredZones
-    : categoryRule.preferredZones;
-  const idx = preferred.indexOf(zone);
-  if (idx < 0) return 0.25;
-  return Math.max(0.4, 1.2 - (idx * 0.2));
+function buildPlacementCandidates({
+  tiles,
+  densityField,
+  pathDistanceField,
+  safetyConfig,
+  blockedGrid,
+  pathForbiddenGrid,
+  exitForbiddenGrid,
+  entranceForbiddenGrid,
+  width,
+  height,
+}) {
+  const zones = {
+    pathside: [],
+    denseForest: [],
+    clearing: [],
+    sparseForest: [],
+  };
+  const all = [];
+  const mapEdge = safetyConfig.minDistanceFromMapEdge ?? 0;
+
+  for (let y = 2; y < height - 2; y += 1) {
+    for (let x = 2; x < width - 2; x += 1) {
+      if (x < mapEdge || y < mapEdge || x >= width - mapEdge || y >= height - mapEdge) continue;
+      const tile = tiles[y]?.[x];
+      if (!tile?.walkable || tile.type === 'road') continue;
+
+      const idx = toIndex(x, y, width);
+      if (blockedGrid[idx] !== 0) continue;
+      if ((densityField[y]?.[x] ?? 0) <= 0) continue;
+
+      if (pathForbiddenGrid[idx] || exitForbiddenGrid[idx] || entranceForbiddenGrid[idx]) continue;
+
+      const pathDistance = pathDistanceField[idx] < 0 ? 8 : Math.min(8, pathDistanceField[idx]);
+      const densityValue = densityField[y]?.[x] ?? 0.2;
+      const zone = classifyZone({ tiles, x, y, densityValue, pathDistance });
+      const variation = tileVariationScore(tiles, x, y);
+      const candidate = { x, y, idx, zone, densityValue, variation, pathDistance };
+      zones[zone].push(candidate);
+      all.push(candidate);
+    }
+  }
+
+  return { zones, all };
 }
 
-function weightedCenterScore({ tiles, center, definition, densityField, pathTiles, categoryRule }) {
-  const zone = classifyZone({
-    tiles,
-    x: center.x,
-    y: center.y,
-    densityValue: densityField[center.y]?.[center.x] ?? 0.2,
-    pathDistance: nearestDistanceToPath(center.x, center.y, pathTiles, 8),
-  });
-  const zoneWeight = zoneWeightForDefinition(zone, definition, categoryRule);
-  const density = densityField[center.y]?.[center.x] ?? 0;
-  const variation = tileVariationScore(tiles, center.x, center.y);
-  return (density * 3) + (zoneWeight * 2) + variation;
+function buildAnchorForbiddenGrid({ width, height, anchors = [], radius = 0 }) {
+  const grid = new Uint8Array(width * height);
+  if (!Array.isArray(anchors) || anchors.length === 0 || radius <= 0) return grid;
+  const r = Math.ceil(radius);
+  const r2 = radius * radius;
+  for (const anchor of anchors) {
+    for (let oy = -r; oy <= r; oy += 1) {
+      const y = anchor.y + oy;
+      if (y < 0 || y >= height) continue;
+      for (let ox = -r; ox <= r; ox += 1) {
+        if ((ox * ox) + (oy * oy) > r2) continue;
+        const x = anchor.x + ox;
+        if (x < 0 || x >= width) continue;
+        grid[toIndex(x, y, width)] = 1;
+      }
+    }
+  }
+  return grid;
+}
+
+function pickCandidateCenter({ definition, categoryRule, candidates, rng, maxAttempts, metrics }) {
+  const start = nowMs();
+  const preferredZones = Array.isArray(definition.preferredZones) && definition.preferredZones.length > 0
+    ? definition.preferredZones
+    : categoryRule.preferredZones;
+
+  const tries = Math.max(5, Math.min(10, maxAttempts || 8));
+  let retries = 0;
+
+  const zoneCycle = [...preferredZones, 'denseForest', 'sparseForest', 'clearing', 'pathside'];
+  for (let attempt = 0; attempt < tries; attempt += 1) {
+    const zone = zoneCycle[attempt % zoneCycle.length];
+    const pool = candidates.zones[zone];
+    if (pool?.length) {
+      const pick = pool[Math.floor(rng() * pool.length)];
+      metrics.candidateSelections += 1;
+      metrics.retryAttempts += retries;
+      const elapsed = nowMs() - start;
+      metrics.phaseMs.candidateSelection += elapsed;
+      metrics.phaseMs.retryLoops += elapsed * (retries / Math.max(1, attempt + 1));
+      return { x: pick.x, y: pick.y };
+    }
+    retries += 1;
+  }
+
+  if (!candidates.all.length) {
+    metrics.retryAttempts += retries;
+    const elapsed = nowMs() - start;
+    metrics.phaseMs.candidateSelection += elapsed;
+    metrics.phaseMs.retryLoops += elapsed;
+    return null;
+  }
+
+  metrics.candidateSelections += 1;
+  metrics.retryAttempts += retries;
+  const elapsed = nowMs() - start;
+  metrics.phaseMs.candidateSelection += elapsed;
+  metrics.phaseMs.retryLoops += elapsed * (retries / Math.max(1, tries));
+  const pick = candidates.all[Math.floor(rng() * candidates.all.length)];
+  return { x: pick.x, y: pick.y };
 }
 
 function spawnPlacedObject(params) {
   const {
-    tiles, rng, occupiedTiles, blockedMask, roomId, idPrefix, definition, center,
-    idIndex, safetyConfig, densityField, categoryRule, placedObjects, biomeType,
+    tiles,
+    rng,
+    occupiedTiles,
+    occupiedGrid,
+    blockedGrid,
+    pathForbiddenGrid,
+    exitForbiddenGrid,
+    entranceForbiddenGrid,
+    roomId,
+    idPrefix,
+    definition,
+    center,
+    idIndex,
+    safetyConfig,
+    densityField,
+    categoryRule,
+    placedObjects,
+    biomeType,
+    width,
+    height,
+    metrics,
   } = params;
 
   const previewRotation = definition.rotations ? Math.floor(rng() * 4) : 0;
@@ -349,10 +520,17 @@ function spawnPlacedObject(params) {
     definition,
     footprint: previewFootprint,
     occupiedTiles,
-    blockedMask,
+    occupiedGrid,
+    blockedGrid,
+    pathForbiddenGrid,
+    exitForbiddenGrid,
+    entranceForbiddenGrid,
     safetyConfig,
     densityField,
     placedObjects,
+    width,
+    height,
+    metrics,
   })) return null;
 
   const placed = spawnObject(
@@ -369,19 +547,22 @@ function spawnPlacedObject(params) {
   if (!placed) return null;
 
   const cells = collectObjectTiles(center, placed.footprint);
-  reservePlacement({ occupiedTiles, blockedMask, cells, padding: categoryRule.basePadding });
+  reservePlacement({ occupiedTiles, occupiedGrid, blockedGrid, cells, padding: categoryRule.basePadding, width, height });
   placedObjects.push(placed);
   stampObjectTiles(tiles, placed, biomeType);
   return placed;
 }
 
 function placeCluster(definition, center, options) {
+  const clusterStart = nowMs();
   const limits = sanitizeClusterSize(definition);
   if (!limits) return [];
 
   const {
-    tiles, rng, occupiedTiles, blockedMask, roomId, idPrefix,
-    startIndex, safetyConfig, densityField, categoryRule, placedObjects,
+    tiles, rng, occupiedTiles, occupiedGrid, blockedGrid, roomId, idPrefix,
+    pathForbiddenGrid, exitForbiddenGrid, entranceForbiddenGrid,
+    startIndex, safetyConfig, densityField, categoryRule, placedObjects, width, height,
+    metrics,
   } = options;
 
   const clusterRadius = Math.max(1, Math.floor((definition.clusterRadius ?? 4) * (safetyConfig.clusterRadiusMultiplier ?? 1)));
@@ -389,17 +570,38 @@ function placeCluster(definition, center, options) {
   const clusterPlacedObjects = [];
 
   const seedObject = spawnPlacedObject({
-    tiles, rng, occupiedTiles, blockedMask, roomId, idPrefix, definition, center,
-      idIndex: startIndex, safetyConfig, densityField, categoryRule, placedObjects,
-      biomeType: options.biomeType,
+    tiles,
+    rng,
+    occupiedTiles,
+    occupiedGrid,
+    blockedGrid,
+    pathForbiddenGrid,
+    exitForbiddenGrid,
+    entranceForbiddenGrid,
+    roomId,
+    idPrefix,
+    definition,
+    center,
+    idIndex: startIndex,
+    safetyConfig,
+    densityField,
+    categoryRule,
+    placedObjects,
+    biomeType: options.biomeType,
+    width,
+    height,
+    metrics,
   });
   if (!seedObject) return [];
   clusterPlacedObjects.push(seedObject);
 
-  const maxAttempts = Math.max(clusterSize * 16, 24);
+  metrics.clustersGenerated += 1;
+
+  const maxAttempts = Math.max(6, clusterSize * 4);
   let attempts = 0;
   while (clusterPlacedObjects.length < clusterSize && attempts < maxAttempts) {
     attempts += 1;
+    metrics.clusterAttempts += 1;
     const angle = rng() * Math.PI * 2;
     const distance = rng() * clusterRadius;
     const candidate = {
@@ -408,42 +610,35 @@ function placeCluster(definition, center, options) {
     };
 
     const placed = spawnPlacedObject({
-      tiles, rng, occupiedTiles, blockedMask, roomId, idPrefix, definition, center: candidate,
-      idIndex: startIndex + clusterPlacedObjects.length, safetyConfig, densityField, categoryRule, placedObjects,
+      tiles,
+      rng,
+      occupiedTiles,
+      occupiedGrid,
+      blockedGrid,
+      pathForbiddenGrid,
+      exitForbiddenGrid,
+      entranceForbiddenGrid,
+      roomId,
+      idPrefix,
+      definition,
+      center: candidate,
+      idIndex: startIndex + clusterPlacedObjects.length,
+      safetyConfig,
+      densityField,
+      categoryRule,
+      placedObjects,
       biomeType: options.biomeType,
+      width,
+      height,
+      metrics,
     });
 
     if (placed) clusterPlacedObjects.push(placed);
   }
 
   const majorityRequired = Math.max(1, Math.ceil(clusterSize * 0.6));
+  metrics.phaseMs.clusterGeneration += nowMs() - clusterStart;
   return clusterPlacedObjects.length >= majorityRequired ? clusterPlacedObjects : [clusterPlacedObjects[0]];
-}
-
-function selectBestCenter({ tiles, rng, occupiedTiles, blockedMask, definition, safetyConfig, densityField, categoryRule, attempts, placedObjects }) {
-  let bestCenter = null;
-  let bestScore = -Infinity;
-
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const center = samplePlacementCenter(tiles, rng, safetyConfig.minDistanceFromMapEdge ?? 2);
-    if (!validatePlacement({ tiles, center, definition, occupiedTiles, blockedMask, safetyConfig, densityField, placedObjects })) continue;
-
-    const score = weightedCenterScore({
-      tiles,
-      center,
-      definition,
-      densityField,
-      pathTiles: safetyConfig.pathTiles,
-      categoryRule,
-    });
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestCenter = center;
-    }
-  }
-
-  return bestCenter;
 }
 
 function placeFromPool(params) {
@@ -451,7 +646,11 @@ function placeFromPool(params) {
     tiles,
     rng,
     occupiedTiles,
-    blockedMask,
+    occupiedGrid,
+    blockedGrid,
+    pathForbiddenGrid,
+    exitForbiddenGrid,
+    entranceForbiddenGrid,
     roomId,
     biomeType,
     mapType,
@@ -464,6 +663,10 @@ function placeFromPool(params) {
     densityField,
     debugInfo,
     placedObjects,
+    candidates,
+    width,
+    height,
+    metrics,
   } = params;
 
   const categoryRule = OBJECT_RULES[category] ?? OBJECT_RULES[OBJECT_CATEGORY.ENVIRONMENT];
@@ -481,17 +684,13 @@ function placeFromPool(params) {
     if (definition && !mapTypeAllowsDefinition(definition, mapType)) continue;
     if (!definition) continue;
 
-    const center = selectBestCenter({
-      tiles,
-      rng,
-      occupiedTiles,
-      blockedMask,
+    const center = pickCandidateCenter({
       definition,
-      safetyConfig,
-      densityField,
       categoryRule,
-      attempts: safetyConfig.maxAttemptsPerObjectType ?? 100,
-      placedObjects,
+      candidates,
+      rng,
+      maxAttempts: safetyConfig.maxAttemptsPerObjectType ?? 10,
+      metrics,
     });
     if (!center) continue;
 
@@ -504,7 +703,11 @@ function placeFromPool(params) {
         tiles,
         rng,
         occupiedTiles,
-        blockedMask,
+        occupiedGrid,
+        blockedGrid,
+        pathForbiddenGrid,
+        exitForbiddenGrid,
+        entranceForbiddenGrid,
         roomId,
         idPrefix,
         startIndex: objects.length,
@@ -513,6 +716,9 @@ function placeFromPool(params) {
         categoryRule,
         placedObjects,
         biomeType,
+        width,
+        height,
+        metrics,
       });
       objects.push(...cluster);
       if (cluster.length > 0) debugInfo.clusterCenters.push(center);
@@ -523,7 +729,11 @@ function placeFromPool(params) {
       tiles,
       rng,
       occupiedTiles,
-      blockedMask,
+      occupiedGrid,
+      blockedGrid,
+      pathForbiddenGrid,
+      exitForbiddenGrid,
+      entranceForbiddenGrid,
       roomId,
       idPrefix,
       definition,
@@ -534,12 +744,35 @@ function placeFromPool(params) {
       categoryRule,
       placedObjects,
       biomeType,
+      width,
+      height,
+      metrics,
     });
 
     if (placed) objects.push(placed);
   }
 
   return objects;
+}
+
+function buildBlockedGrid({ blockedMask, width, height }) {
+  const grid = new Uint8Array(width * height);
+  for (const key of blockedMask) {
+    const [x, y] = key.split(',').map(Number);
+    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+    grid[toIndex(x, y, width)] = 1;
+  }
+  return grid;
+}
+
+function buildOccupiedGrid({ occupiedTiles, width, height }) {
+  const grid = new Uint8Array(width * height);
+  for (const key of occupiedTiles) {
+    const [x, y] = key.split(',').map(Number);
+    if (x < 0 || y < 0 || x >= width || y >= height) continue;
+    grid[toIndex(x, y, width)] = 1;
+  }
+  return grid;
 }
 
 export class ObjectPlacementSystem {
@@ -552,12 +785,73 @@ export class ObjectPlacementSystem {
       exitSafetyTiles: [],
       occupiedFootprintTiles: [],
       objectClearanceZones: [],
+      profiling: null,
     };
   }
 
   placeObjects({ tiles, rng, blockedMask, roomId, biomeType = 'forest', mapType = null, safetyConfig = {}, occupiedTiles = null }) {
+    const profileStart = nowMs();
     const localOccupied = occupiedTiles ?? new Set();
-    const densityField = createObjectDensityField({ tiles, pathTiles: safetyConfig.pathTiles });
+    const height = tiles.length;
+    const width = tiles[0]?.length ?? 0;
+
+    const metrics = {
+      validationChecks: 0,
+      retryAttempts: 0,
+      collisionChecks: 0,
+      candidateSelections: 0,
+      clustersGenerated: 0,
+      clusterAttempts: 0,
+      phaseMs: {
+        setup: 0,
+        candidateSelection: 0,
+        validation: 0,
+        retryLoops: 0,
+        collisionChecks: 0,
+        clusterGeneration: 0,
+      },
+    };
+
+    const setupStart = nowMs();
+    const blockedGrid = buildBlockedGrid({ blockedMask, width, height });
+    const occupiedGrid = buildOccupiedGrid({ occupiedTiles: localOccupied, width, height });
+    const pathForbiddenGrid = buildAnchorForbiddenGrid({
+      width,
+      height,
+      anchors: safetyConfig.pathAnchors,
+      radius: safetyConfig.minDistanceFromPath ?? 0,
+    });
+    const exitForbiddenGrid = buildAnchorForbiddenGrid({
+      width,
+      height,
+      anchors: safetyConfig.exitAnchors,
+      radius: safetyConfig.minDistanceFromExit ?? 0,
+    });
+    const entranceForbiddenGrid = buildAnchorForbiddenGrid({
+      width,
+      height,
+      anchors: safetyConfig.entranceAnchors,
+      radius: safetyConfig.minDistanceFromExit ?? 0,
+    });
+    const pathDistanceField = buildPathDistanceField({ width, height, pathTiles: safetyConfig.pathTiles });
+    const densityField = createObjectDensityField({ tiles, pathDistanceField });
+    metrics.phaseMs.setup += nowMs() - setupStart;
+
+    const candidateStart = nowMs();
+    const candidates = buildPlacementCandidates({
+      tiles,
+      densityField,
+      pathDistanceField,
+      safetyConfig,
+      blockedGrid,
+      pathForbiddenGrid,
+      exitForbiddenGrid,
+      entranceForbiddenGrid,
+      width,
+      height,
+    });
+    metrics.phaseMs.candidateSelection += nowMs() - candidateStart;
+
     const debugInfo = {
       clusterCenters: [],
       blockedPlacementTiles: Array.from(blockedMask).map((key) => {
@@ -568,6 +862,7 @@ export class ObjectPlacementSystem {
       exitSafetyTiles: [],
       occupiedFootprintTiles: [],
       objectClearanceZones: [],
+      profiling: null,
     };
     const placedObjects = [...this.placedObjectsBuffer];
 
@@ -579,7 +874,11 @@ export class ObjectPlacementSystem {
         tiles,
         rng,
         occupiedTiles: localOccupied,
-        blockedMask,
+        occupiedGrid,
+        blockedGrid,
+        pathForbiddenGrid,
+        exitForbiddenGrid,
+        entranceForbiddenGrid,
         roomId,
         biomeType,
         mapType,
@@ -592,6 +891,10 @@ export class ObjectPlacementSystem {
         densityField,
         debugInfo,
         placedObjects,
+        candidates,
+        width,
+        height,
+        metrics,
       });
       objects.push(...placed);
     }
@@ -603,6 +906,14 @@ export class ObjectPlacementSystem {
     debugInfo.objectClearanceZones = placedObjects
       .filter((object) => sanitizeClearanceRadius(object) > 0)
       .map((object) => ({ x: object.x, y: object.y, radius: sanitizeClearanceRadius(object), type: object.type }));
+
+    debugInfo.profiling = {
+      ...metrics,
+      totalMs: Number((nowMs() - profileStart).toFixed(3)),
+      candidatePoolSize: candidates.all.length,
+      placedCount: objects.length,
+    };
+
     this.lastDebugInfo = debugInfo;
     this.placedObjectsBuffer = placedObjects;
     return objects;
@@ -610,26 +921,107 @@ export class ObjectPlacementSystem {
 
   placeLandmarks({ tiles, rng, blockedMask, roomId, biomeType = 'forest', mapType = null, safetyConfig = {}, occupiedTiles = null }) {
     const localOccupied = occupiedTiles ?? new Set();
-    const densityField = createObjectDensityField({ tiles, pathTiles: safetyConfig.pathTiles });
-    const placedObjects = [];
-    const placed = placeFromPool({
-      tiles,
-      rng,
-      occupiedTiles: localOccupied,
-      blockedMask,
-      roomId,
-      biomeType,
-      mapType,
-      category: OBJECT_CATEGORY.LANDMARK,
-      targetMin: 1,
-      targetMax: 2,
-      idPrefix: 'landmark',
-      allowClusters: false,
-      safetyConfig,
-      densityField,
-      debugInfo: this.lastDebugInfo,
-      placedObjects,
+    const height = tiles.length;
+    const width = tiles[0]?.length ?? 0;
+    const blockedGrid = buildBlockedGrid({ blockedMask, width, height });
+    const occupiedGrid = buildOccupiedGrid({ occupiedTiles: localOccupied, width, height });
+    const pathForbiddenGrid = buildAnchorForbiddenGrid({
+      width,
+      height,
+      anchors: safetyConfig.pathAnchors,
+      radius: safetyConfig.minDistanceFromPath ?? 0,
     });
+    const exitForbiddenGrid = buildAnchorForbiddenGrid({
+      width,
+      height,
+      anchors: safetyConfig.exitAnchors,
+      radius: safetyConfig.minDistanceFromExit ?? 0,
+    });
+    const entranceForbiddenGrid = buildAnchorForbiddenGrid({
+      width,
+      height,
+      anchors: safetyConfig.entranceAnchors,
+      radius: safetyConfig.minDistanceFromExit ?? 0,
+    });
+    const pathDistanceField = buildPathDistanceField({ width, height, pathTiles: safetyConfig.pathTiles });
+    const densityField = createObjectDensityField({ tiles, pathDistanceField });
+
+    const placedObjects = [];
+    const metrics = {
+      validationChecks: 0,
+      retryAttempts: 0,
+      collisionChecks: 0,
+      candidateSelections: 0,
+      clustersGenerated: 0,
+      clusterAttempts: 0,
+      phaseMs: {
+        setup: 0,
+        candidateSelection: 0,
+        validation: 0,
+        retryLoops: 0,
+        collisionChecks: 0,
+        clusterGeneration: 0,
+      },
+    };
+
+    const pools = buildBiomePool(biomeType, OBJECT_CATEGORY.LANDMARK, mapType);
+    const targetCount = pools.length > 0 ? randomInt(rng, 1, 2) : 0;
+    const placed = [];
+    for (let i = 0; i < targetCount; i += 1) {
+      const weightedPool = pools.map((definition) => [definition, definition.spawnWeight ?? 1]);
+      const definition = weightedChoice(rng, weightedPool);
+      if (!definition) continue;
+
+      let center = null;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const candidate = samplePlacementCenter(tiles, rng, safetyConfig.minDistanceFromMapEdge ?? 2);
+        if (!validatePlacement({
+          tiles,
+          center: candidate,
+          definition,
+          occupiedTiles: localOccupied,
+          occupiedGrid,
+          blockedGrid,
+          pathForbiddenGrid,
+          exitForbiddenGrid,
+          entranceForbiddenGrid,
+          safetyConfig,
+          densityField,
+          placedObjects,
+          width,
+          height,
+          metrics,
+        })) continue;
+        center = candidate;
+        break;
+      }
+      if (!center) continue;
+
+      const landmark = spawnPlacedObject({
+        tiles,
+        rng,
+        occupiedTiles: localOccupied,
+        occupiedGrid,
+        blockedGrid,
+        pathForbiddenGrid,
+        exitForbiddenGrid,
+        entranceForbiddenGrid,
+        roomId,
+        idPrefix: 'landmark',
+        definition,
+        center,
+        idIndex: placed.length,
+        safetyConfig,
+        densityField,
+        categoryRule: OBJECT_RULES[OBJECT_CATEGORY.LANDMARK],
+        placedObjects,
+        biomeType,
+        width,
+        height,
+        metrics,
+      });
+      if (landmark) placed.push(landmark);
+    }
     this.placedObjectsBuffer = placedObjects;
     return placed;
   }

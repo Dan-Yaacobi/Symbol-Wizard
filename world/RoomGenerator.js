@@ -184,9 +184,11 @@ export class RoomGenerator {
     });
 
     terrainGenerator.decorate(grid, rng, objectBlockedMask);
+    const objectDebug = this.objectPlacementSystem.getDebugInfo();
     logGenerationPhase(roomNode.id, 'object_placement', objectPlacementStart, nowMs(), {
       landmarkCount: landmarks.length,
       objectCount: objects.length,
+      placementProfile: objectDebug.profiling ?? null,
     });
 
     const triggers = this.exitTriggerSystem.build({ plan });
@@ -224,7 +226,6 @@ export class RoomGenerator {
     }
 
     const placedObjects = [...objects, ...landmarks];
-    const objectDebug = this.objectPlacementSystem.getDebugInfo();
     const collisionMap = buildCollisionMap(grid, placedObjects);
 
     const roomBase = {
