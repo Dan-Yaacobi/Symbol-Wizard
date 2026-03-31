@@ -229,13 +229,35 @@ export class RoomTransitionSystem {
 
     let targetRoom = null;
     let targetEntrance = null;
+    let targetWasCached = null;
     if (normalizedExit.targetMapType && this.worldMapManager) {
+      const mapCache = this.worldMapManager.mapCache;
+      if (mapCache?.has && normalizedExit.targetMapType === 'town') {
+        const townMapId = this.worldMapManager.buildTownMapId(normalizedExit.targetSeed);
+        targetWasCached = mapCache.has(townMapId);
+      } else if (mapCache?.has && normalizedExit.targetMapType === 'house_interior') {
+        const houseMapId = this.worldMapManager.buildMapId('house', normalizedExit.targetSeed);
+        targetWasCached = mapCache.has(houseMapId);
+      } else if (mapCache?.has && normalizedExit.targetMapType === 'forest') {
+        const forestSeed = normalizedExit.targetSeed ?? context.activeRoom?.seed;
+        const forestMapId = normalizedExit.targetRoomId
+          ? this.worldMapManager.buildForestMapId(forestSeed, normalizedExit.targetRoomId)
+          : null;
+        targetWasCached = forestMapId ? mapCache.has(forestMapId) : null;
+      }
       targetRoom = this.worldMapManager.resolveMapByExit(context.activeRoom, normalizedExit);
       targetEntrance = this.worldMapManager.getEntrance(targetRoom, normalizedExit.targetEntryId);
     } else if (normalizedExit.targetRoomId && normalizedExit.targetEntranceId) {
+      targetWasCached = this.biomeGenerator?.roomCache?.has?.(normalizedExit.targetRoomId) ?? null;
       targetRoom = this.biomeGenerator.loadRoom(normalizedExit.targetRoomId);
       targetEntrance = targetRoom?.entrances?.[normalizedExit.targetEntranceId];
     }
+
+    this.log('prepareTransitionTarget resolved room target', {
+      targetRoomId: targetRoom?.id ?? normalizedExit.targetRoomId ?? null,
+      alreadyCached: targetWasCached,
+      newlyGenerated: targetWasCached === false && Boolean(targetRoom),
+    });
 
     const endMs = nowMs();
     this.markTimeline('map_lookup_end', {
@@ -413,6 +435,10 @@ export class RoomTransitionSystem {
     const normalizedExit = prepared?.normalizedExit ?? this.normalizeExit(context.activeRoom, exit);
     const targetRoom = prepared?.targetRoom ?? null;
     const targetEntrance = prepared?.targetEntrance ?? null;
+    this.log('switchRoom entered', {
+      roomId: targetRoom?.id ?? normalizedExit?.targetRoomId ?? null,
+      preparedTransitionExists: Boolean(prepared),
+    });
 
     if (!targetRoom || !targetEntrance) {
       this.log('FAIL: transition called but failed — target room or entrance missing', {
