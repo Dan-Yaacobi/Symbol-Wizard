@@ -172,13 +172,6 @@ function drawProjectile(renderer, camera, projectile) {
     const screenX = worldToScreenCell(projectile.x, camera.x);
     const screenY = worldToScreenCell(projectile.y - 1, camera.y);
     drawCell(renderer, { glyph, fg: projectile.color }, screenX, screenY);
-    console.debug('[ProjectileRenderDebug]', {
-      projectileType: projectile.projectileType,
-      velocity: { dx: projectile.dx ?? 0, dy: projectile.dy ?? 0 },
-      direction,
-      glyph,
-      renderSource: 'projectile.glyph',
-    });
     return;
   }
 
