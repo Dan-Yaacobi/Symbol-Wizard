@@ -362,11 +362,25 @@ export class Renderer {
       const sourceY = Math.round(camera.y * this.cellH);
       const sourceWidth = this.background.canvas.width;
       const sourceHeight = this.background.canvas.height;
-      ctx.drawImage(cachedCanvas, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
-      this.frameMetrics.background += 1;
-      this.frameMetrics.drawCalls += 1;
-      this.frameMetrics.renderBackgroundMs += performance.now() - renderBackgroundStart;
-      return;
+      const cacheBoundsValid = sourceX >= 0
+        && sourceY >= 0
+        && sourceX + sourceWidth <= cachedCanvas.width
+        && sourceY + sourceHeight <= cachedCanvas.height;
+      if (cacheBoundsValid) {
+        ctx.drawImage(cachedCanvas, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, sourceWidth, sourceHeight);
+        this.frameMetrics.background += 1;
+        this.frameMetrics.drawCalls += 1;
+        this.frameMetrics.renderBackgroundMs += performance.now() - renderBackgroundStart;
+        return;
+      }
+      console.warn('[Renderer] Background cache viewport out of bounds; falling back to tile render', {
+        sourceX,
+        sourceY,
+        sourceWidth,
+        sourceHeight,
+        cacheWidth: cachedCanvas.width,
+        cacheHeight: cachedCanvas.height,
+      });
     }
 
     const cameraTileX = Math.floor(camera.x);
