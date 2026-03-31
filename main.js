@@ -186,6 +186,35 @@ function syncActiveRoomCollections(room) {
   for (const npc of room?.npcs ?? []) npcs.push(npc);
 }
 
+function scheduleBackgroundPrewarm(rendererInstance, room, reason = 'unknown') {
+  if (!rendererInstance || !room?.tiles) return;
+  const executePrewarm = () => {
+    const startMs = nowMs();
+    prewarmBackgroundCache(rendererInstance, room.tiles, room.objects ?? []);
+    const endMs = nowMs();
+    console.info('[RenderTiming]', {
+      phase: 'prewarm_background_cache',
+      reason,
+      roomId: room?.id ?? null,
+      durationMs: Number((endMs - startMs).toFixed(3)),
+    });
+  };
+
+  if (typeof window === 'undefined') {
+    executePrewarm();
+    return;
+  }
+
+  const runDuringIdle = () => {
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(() => executePrewarm(), { timeout: 150 });
+      return;
+    }
+    window.setTimeout(executePrewarm, 0);
+  };
+  window.requestAnimationFrame(runDuringIdle);
+}
+
 function spawnEnemyInActiveRoom(enemyType, position) {
   const previewEnemy = new Enemy(enemyType, Math.round(position?.x ?? 0), Math.round(position?.y ?? 0));
   const spawnSearch = tryFindSpawnPosition(position ?? { x: 0, y: 0 }, {
@@ -223,7 +252,7 @@ function resolveInitialSpawn(room) {
 
 syncActiveRoomCollections(activeRoom);
 syncRoomEnemies(activeRoom);
-prewarmBackgroundCache(renderer, activeRoom.tiles, activeRoom.objects ?? []);
+scheduleBackgroundPrewarm(renderer, activeRoom, 'startup');
 prewarmLikelyFirstTransition(activeRoom);
 if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
 const initialSpawn = resolveInitialSpawn(activeRoom);
@@ -1513,7 +1542,7 @@ function tick(now) {
     syncRoomEnemies(activeRoom);
     if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
     roomTransitionSystem.noteExternalTimeline('renderer_related_work_start', { operation: 'background_cache_prewarm' });
-    prewarmBackgroundCache(renderer, activeRoom.tiles, activeRoom.objects ?? []);
+    scheduleBackgroundPrewarm(renderer, activeRoom, 'room_transition');
     roomTransitionSystem.noteExternalTimeline('renderer_related_work_end', { operation: 'background_cache_prewarm' });
     pendingTransitionFirstRenderMark = true;
     roomTransitionSystem.noteExternalTimeline('room_swap_commit_end');
