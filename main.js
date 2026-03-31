@@ -45,7 +45,7 @@ import { visualTheme } from './data/VisualTheme.js';
 import { rollObjectLoot } from './systems/ObjectInteractionSystem.js';
 import { tryInteract } from './systems/InteractionSystem.js';
 import { loadObjectsFromFolder } from './world/ObjectLibrary.js';
-import { getSpriteAsset, loadAllSpriteAssets } from './data/SpriteAssetLoader.js';
+import { getAnimationFrameCount, getSpriteAsset, loadAllSpriteAssets } from './data/SpriteAssetLoader.js';
 import {
   collidesWithBlockingObjectAt,
   cleanupDestroyedObjects,
@@ -314,6 +314,7 @@ function randomRange(min, max) {
 const DROP_COLLISION_PROBE = { radius: 0.35 };
 const DROP_ANIMATION_AMPLITUDE = 0.35;
 const DROP_ANIMATION_SPEED = 3.6;
+const DROP_IDLE_FRAME_DURATION = 0.24;
 
 function isValidDropLandingPosition(x, y) {
   const tx = Math.round(x);
@@ -355,6 +356,10 @@ function createWorldDrop(drop) {
     bobAmplitude: item?.dropAnimation?.bobAmplitude ?? DROP_ANIMATION_AMPLITUDE,
     bobSpeed: item?.dropAnimation?.bobSpeed ?? DROP_ANIMATION_SPEED,
     animationSpeed: item?.dropAnimation?.bobSpeed ?? DROP_ANIMATION_SPEED,
+    frameTimer: 0,
+    frameDuration: item?.dropAnimation?.frameDuration ?? DROP_IDLE_FRAME_DURATION,
+    frameIndex: 0,
+    currentFrame: 0,
   };
 }
 
@@ -372,8 +377,25 @@ function updateWorldDrops(dt) {
     drop.animationSpeed = resolvedAnimationSpeed;
     drop.bobSpeed = resolvedAnimationSpeed;
     drop.bobAmplitude = resolvedBobAmplitude;
+    if (!Number.isFinite(drop.frameTimer)) drop.frameTimer = 0;
+    if (!Number.isFinite(drop.frameDuration) || drop.frameDuration <= 0) {
+      drop.frameDuration = DROP_IDLE_FRAME_DURATION;
+    }
+    if (!Number.isFinite(drop.frameIndex) || drop.frameIndex < 0) drop.frameIndex = 0;
     drop.life = (drop.life ?? 0) + dt;
     drop.animationTimer += dt;
+    drop.frameTimer += dt;
+    const idleFrameCount = getAnimationFrameCount(drop.spriteId, 'idle');
+    if (idleFrameCount > 1) {
+      while (drop.frameTimer >= drop.frameDuration) {
+        drop.frameTimer -= drop.frameDuration;
+        drop.frameIndex = (drop.frameIndex + 1) % idleFrameCount;
+      }
+    } else {
+      drop.frameTimer = 0;
+      drop.frameIndex = 0;
+    }
+    drop.currentFrame = drop.frameIndex;
     const duration = Math.max(0.0001, drop.duration ?? 0.2);
     const t = drop.life / duration;
 
