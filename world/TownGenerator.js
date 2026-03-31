@@ -5,6 +5,7 @@ import { createSeededRng, hashSeed, pickOne, randomInt } from './SeededRandom.js
 import { buildCollidableMask, carveBoundaryCrossing, carvePath, floodFillWalkable } from './PathConnectivity.js';
 import { createRegionResult, ensureRegionConnectivity, normalizeExit, placeRegionExits, townDefinitions } from './RegionGenerationSystem.js';
 import { MIN_ROAD_WIDTH } from './GenerationConstants.js';
+import { buildRoomTransitionCache } from './TransitionCache.js';
 
 function cloneTile(tile) {
   return { ...tile };
@@ -669,6 +670,7 @@ export class TownGenerator {
 
     placeRegionExits({ region: map, exits, metadataType: 'townType', metadataValue: townType, seed, debug });
     ensureRegionConnectivity(map, { spawn: { x: entryX, y: entryY }, debug, pathWidth: Math.max(MIN_ROAD_WIDTH, exitLayout.roadWidth) });
+    buildRoomTransitionCache(map);
     logDebug('exit placement', { exits: map.exits.map((exit) => ({ id: exit.id, x: exit.x, y: exit.y, interactionData: exit.interactionData })) });
     console.log('Town exit side:', exitLayout.side, 'position:', exitLayout.exitPosition.x, exitLayout.exitPosition.y);
     console.log('Town → Forest', seed, '→', forestSeed);
@@ -738,7 +740,7 @@ export class TownGenerator {
       npcs.push(createNpc(seed, 0, doorX + 4, 8, 'villager', 'Welcome in. It is cozy, but the town square is livelier.'));
     }
 
-    return {
+    const map = {
       id: `house-${seed}`,
       type: 'house_interior',
       seed,
@@ -774,5 +776,8 @@ export class TownGenerator {
         houseId: options.houseId ?? null,
       },
     };
+
+    buildRoomTransitionCache(map);
+    return map;
   }
 }

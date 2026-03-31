@@ -2,6 +2,7 @@ import { TownGenerator } from './TownGenerator.js';
 import { buildCollidableMask, carveBoundaryCrossing, carveEntranceSafetyZone, carvePath, floodFillWalkable, nearestReachablePoint } from './PathConnectivity.js';
 import { deriveForestSeedFromTown, normalizeExit } from './RegionGenerationSystem.js';
 import { ENTRANCE_CLEAR_ZONE_RADIUS, MIN_ROAD_WIDTH } from './GenerationConstants.js';
+import { buildRoomTransitionCache } from './TransitionCache.js';
 
 function buildCollisionMap(grid, objects = []) {
   const map = Array.from({ length: grid.length }, (_, y) => Array.from({ length: grid[0].length }, (_, x) => !grid[y][x].walkable));
@@ -311,7 +312,7 @@ function normalizeForestRoom(room, { biomeId, biomeSeed, mapId, returnLink = nul
 
   const reachability = ensureForestEntranceReachable(room, exits, 'forest_entry_from_town', Math.max(MIN_ROAD_WIDTH, returnLink?.roadWidth ?? MIN_ROAD_WIDTH));
 
-  return {
+  const normalizedRoom = {
     ...room,
     id: mapId ?? `forest-${biomeSeed}-${room.id}`,
     sourceRoomId: room.id,
@@ -327,6 +328,9 @@ function normalizeForestRoom(room, { biomeId, biomeSeed, mapId, returnLink = nul
       reachability,
     },
   };
+
+  buildRoomTransitionCache(normalizedRoom);
+  return normalizedRoom;
 }
 
 export class WorldMapManager {
