@@ -298,7 +298,7 @@ export class RoomGenerator {
       },
     };
 
-    buildRoomTransitionCache(room);
+    buildRoomTransitionCache(room, { pathMask: roadMask, blockedMask: objectBlockedMask });
     return room;
   }
 }

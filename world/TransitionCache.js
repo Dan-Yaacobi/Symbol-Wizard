@@ -14,6 +14,14 @@ function isWalkableTile(room, x, y) {
   return Boolean(tile?.walkable);
 }
 
+function isBoundaryBlockedTile(room, x, y) {
+  const tile = room?.tiles?.[y]?.[x];
+  if (!tile) return true;
+  const type = String(tile.type ?? '').toLowerCase();
+  if (type.includes('boundary') || type.includes('wall') || type.includes('cliff')) return true;
+  return type.includes('dense-tree') || type.includes('tree');
+}
+
 function tileKey(x, y) {
   return `${Math.round(x)},${Math.round(y)}`;
 }
@@ -75,17 +83,74 @@ function collectExitTriggerTiles(room) {
 
 function isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, x, y) {
   const key = tileKey(x, y);
-  return isWalkableTile(room, x, y) && !blockedTiles.has(key) && !exitTriggerTiles.has(key);
+  return isWalkableTile(room, x, y)
+    && !blockedTiles.has(key)
+    && !exitTriggerTiles.has(key)
+    && !isBoundaryBlockedTile(room, x, y);
 }
 
-function findSpawnPosition(room, blockedTiles, exitTriggerTiles, preferredX, preferredY) {
+function buildPathConnectivitySet(room, blockedTiles, pathMask = null) {
+  const width = room?.tiles?.[0]?.length ?? 0;
+  const height = room?.tiles?.length ?? 0;
+  const seeds = [];
+  const seedKeys = new Set();
+  const addSeed = (x, y) => {
+    const key = tileKey(x, y);
+    if (seedKeys.has(key) || !isOpenSpawnTile(room, blockedTiles, new Set(), x, y)) return;
+    seedKeys.add(key);
+    seeds.push({ x, y });
+  };
+
+  if (pathMask instanceof Set && pathMask.size > 0) {
+    for (const key of pathMask) {
+      const [x, y] = key.split(',').map(Number);
+      if (Number.isFinite(x) && Number.isFinite(y)) addSeed(x, y);
+    }
+  } else {
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const type = String(room?.tiles?.[y]?.[x]?.type ?? '').toLowerCase();
+        if (type !== 'road' && type !== 'path' && type !== 'path-pebble' && type !== 'dirt') continue;
+        addSeed(x, y);
+      }
+    }
+  }
+
+  const connected = new Set();
+  const queue = [...seeds];
+  let index = 0;
+  while (index < queue.length) {
+    const current = queue[index++];
+    const key = tileKey(current.x, current.y);
+    if (connected.has(key)) continue;
+    if (!isOpenSpawnTile(room, blockedTiles, new Set(), current.x, current.y)) continue;
+    connected.add(key);
+    queue.push(
+      { x: current.x + 1, y: current.y },
+      { x: current.x - 1, y: current.y },
+      { x: current.x, y: current.y + 1 },
+      { x: current.x, y: current.y - 1 },
+    );
+  }
+  return connected;
+}
+
+function isValidSpawnTile(room, blockedTiles, exitTriggerTiles, pathConnectivity, x, y) {
+  if (!isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, x, y)) return false;
+  if (!(pathConnectivity instanceof Set) || pathConnectivity.size === 0) return true;
+  return pathConnectivity.has(tileKey(x, y));
+}
+
+function findSpawnPosition(room, blockedTiles, exitTriggerTiles, pathConnectivity, preferredX, preferredY) {
   const startX = Math.round(preferredX);
   const startY = Math.round(preferredY);
-  if (isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, startX, startY)) return { x: startX, y: startY };
+  if (isValidSpawnTile(room, blockedTiles, exitTriggerTiles, pathConnectivity, startX, startY)) {
+    return { x: startX, y: startY, corrected: false };
+  }
 
   const width = room?.tiles?.[0]?.length ?? 0;
   const height = room?.tiles?.length ?? 0;
-  const maxRadius = Math.min(12, Math.max(width, height));
+  const maxRadius = Math.min(8, Math.max(3, Math.max(width, height)));
   for (let radius = 1; radius <= maxRadius; radius += 1) {
     const left = Math.max(0, startX - radius);
     const right = Math.min(width - 1, startX + radius);
@@ -93,15 +158,15 @@ function findSpawnPosition(room, blockedTiles, exitTriggerTiles, preferredX, pre
     const bottom = Math.min(height - 1, startY + radius);
 
     for (let x = left; x <= right; x += 1) {
-      if (isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, x, top)) return { x, y: top };
+      if (isValidSpawnTile(room, blockedTiles, exitTriggerTiles, pathConnectivity, x, top)) return { x, y: top, corrected: true };
       if (bottom === top) continue;
-      if (isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, x, bottom)) return { x, y: bottom };
+      if (isValidSpawnTile(room, blockedTiles, exitTriggerTiles, pathConnectivity, x, bottom)) return { x, y: bottom, corrected: true };
     }
 
     for (let y = top + 1; y < bottom; y += 1) {
-      if (isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, left, y)) return { x: left, y };
+      if (isValidSpawnTile(room, blockedTiles, exitTriggerTiles, pathConnectivity, left, y)) return { x: left, y, corrected: true };
       if (right === left) continue;
-      if (isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, right, y)) return { x: right, y };
+      if (isValidSpawnTile(room, blockedTiles, exitTriggerTiles, pathConnectivity, right, y)) return { x: right, y, corrected: true };
     }
   }
 
@@ -111,6 +176,7 @@ function findSpawnPosition(room, blockedTiles, exitTriggerTiles, preferredX, pre
   for (let y = 0; y < tiles.length; y += 1) {
     for (let x = 0; x < (tiles[y]?.length ?? 0); x += 1) {
       if (!isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, x, y)) continue;
+      if (pathConnectivity instanceof Set && pathConnectivity.size > 0 && !pathConnectivity.has(tileKey(x, y))) continue;
       const distance = Math.abs(x - startX) + Math.abs(y - startY);
       if (distance < nearestDistance) {
         nearestDistance = distance;
@@ -119,7 +185,7 @@ function findSpawnPosition(room, blockedTiles, exitTriggerTiles, preferredX, pre
     }
   }
 
-  if (nearest) return nearest;
+  if (nearest) return { ...nearest, corrected: true };
 
   for (let y = 0; y < tiles.length; y += 1) {
     for (let x = 0; x < (tiles[y]?.length ?? 0); x += 1) {
@@ -132,7 +198,7 @@ function findSpawnPosition(room, blockedTiles, exitTriggerTiles, preferredX, pre
     }
   }
 
-  return nearest ?? { x: startX, y: startY };
+  return { ...(nearest ?? { x: startX, y: startY }), corrected: nearest !== null };
 }
 
 function buildBlockedTiles(room) {
@@ -145,17 +211,33 @@ function buildBlockedTiles(room) {
   return blockedTiles;
 }
 
-export function buildRoomTransitionCache(room) {
+export function buildRoomTransitionCache(room, options = {}) {
   const startMs = globalThis?.performance?.now?.() ?? Date.now();
   emitTransitionCachePerf('buildRoomTransitionCache_start', { roomId: room?.id ?? null });
-  const blockedTiles = buildBlockedTiles(room);
+  const blockedTiles = options.blockedMask instanceof Set ? new Set(options.blockedMask) : buildBlockedTiles(room);
   const exitTriggerTiles = collectExitTriggerTiles(room);
+  const pathConnectivity = buildPathConnectivitySet(room, blockedTiles, options.pathMask);
   const spawnByEntrance = new Map();
 
   for (const entrance of Object.values(room?.entrances ?? {})) {
     const preferredSpawn = getEntranceSpawnTarget(room, entrance);
     const spawnKey = entranceSpawnCacheKey(entrance, preferredSpawn.x, preferredSpawn.y);
-    const spawn = findSpawnPosition(room, blockedTiles, exitTriggerTiles, preferredSpawn.x, preferredSpawn.y);
+    const spawn = findSpawnPosition(
+      room,
+      blockedTiles,
+      exitTriggerTiles,
+      pathConnectivity,
+      preferredSpawn.x,
+      preferredSpawn.y,
+    );
+    if (spawn.corrected) {
+      console.warn('[TransitionCache] Corrected invalid entrance spawn during generation', {
+        roomId: room?.id ?? null,
+        entranceId: entrance?.id ?? null,
+        requested: preferredSpawn,
+        corrected: { x: spawn.x, y: spawn.y },
+      });
+    }
     spawnByEntrance.set(spawnKey, { x: spawn.x, y: spawn.y });
   }
 
