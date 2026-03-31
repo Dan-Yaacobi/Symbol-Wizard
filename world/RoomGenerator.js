@@ -12,6 +12,7 @@ import { resolveWorldGenerationConfig } from './WorldGenerationConfig.js';
 import { resolveObjectGenerationConfig } from './ObjectGenerationConfig.js';
 import { spawnEnemiesForRoom } from './EnemySpawnSystem.js';
 import { buildRoomTransitionCache } from './TransitionCache.js';
+import { RoomPlanCompiler } from './room/RoomPlanCompiler.js';
 
 function nowMs() {
   return globalThis?.performance?.now?.() ?? Date.now();
@@ -104,6 +105,8 @@ export class RoomGenerator {
 
     const effectiveBiomeConfig = roomNode.biomeConfig ?? this.biomeConfig;
     const terrainGenerator = new TerrainGenerator({ roomWidth, roomHeight });
+    const graphNode = roomNode;
+    const roomPlan = RoomPlanCompiler.compile(graphNode, graphNode.connections ?? []);
     const plan = this.roomPlanner.createPlan({ roomNode, width: roomWidth, height: roomHeight, biomeType });
     const reservations = this.exitAnchorSystem.reserve(plan);
     const pathConfig = resolvePathGenerationConfig(this.runtimeConfig);
@@ -296,6 +299,7 @@ export class RoomGenerator {
       state: {
         visited: roomNode.state?.visited ?? false,
       },
+      __roomPlan: roomPlan,
     };
 
     buildRoomTransitionCache(room, { pathMask: roadMask, blockedMask: objectBlockedMask });
