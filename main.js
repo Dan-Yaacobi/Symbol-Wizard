@@ -275,6 +275,8 @@ function randomRange(min, max) {
 }
 
 const DROP_COLLISION_PROBE = { radius: 0.35 };
+const DROP_ANIMATION_AMPLITUDE = 0.35;
+const DROP_ANIMATION_SPEED = 3.6;
 
 function isValidDropLandingPosition(x, y) {
   const tx = Math.round(x);
@@ -313,8 +315,9 @@ function createWorldDrop(drop) {
     dropTint: drop?.dropTint ?? item?.dropTint,
     animationTimer: 0,
     animationPhase: randomRange(0, Math.PI * 2),
-    bobAmplitude: item?.dropAnimation?.bobAmplitude ?? 0.35,
-    bobSpeed: item?.dropAnimation?.bobSpeed ?? 3.6,
+    bobAmplitude: item?.dropAnimation?.bobAmplitude ?? DROP_ANIMATION_AMPLITUDE,
+    bobSpeed: item?.dropAnimation?.bobSpeed ?? DROP_ANIMATION_SPEED,
+    animationSpeed: item?.dropAnimation?.bobSpeed ?? DROP_ANIMATION_SPEED,
   };
 }
 
@@ -322,8 +325,18 @@ function updateWorldDrops(dt) {
   const kept = [];
 
   for (const drop of worldDrops) {
+    if (!Number.isFinite(drop.animationTimer)) drop.animationTimer = 0;
+    if (!Number.isFinite(drop.animationPhase)) drop.animationPhase = randomRange(0, Math.PI * 2);
+    const resolvedAnimationSpeed = Number.isFinite(drop.animationSpeed)
+      ? drop.animationSpeed
+      : (Number.isFinite(drop.bobSpeed) ? drop.bobSpeed : DROP_ANIMATION_SPEED);
+    const resolvedBobAmplitude = Number.isFinite(drop.bobAmplitude) ? drop.bobAmplitude : DROP_ANIMATION_AMPLITUDE;
+
+    drop.animationSpeed = resolvedAnimationSpeed;
+    drop.bobSpeed = resolvedAnimationSpeed;
+    drop.bobAmplitude = resolvedBobAmplitude;
     drop.life = (drop.life ?? 0) + dt;
-    drop.animationTimer = (drop.animationTimer ?? 0) + dt;
+    drop.animationTimer += dt;
     const duration = Math.max(0.0001, drop.duration ?? 0.2);
     const t = drop.life / duration;
 

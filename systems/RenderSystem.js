@@ -586,7 +586,7 @@ function drawWorldDrop(renderer, camera, drop) {
   if (!drop?.spriteId) return;
 
   const bobAmplitude = Math.max(0, Number(drop.bobAmplitude) || 0);
-  const bobSpeed = Math.max(0, Number(drop.bobSpeed) || 0);
+  const bobSpeed = Math.max(0, Number(drop.animationSpeed ?? drop.bobSpeed) || 0);
   const animationTimer = Number(drop.animationTimer) || 0;
   const animationPhase = Number(drop.animationPhase) || 0;
   const bobOffset = Math.sin(animationTimer * bobSpeed + animationPhase) * bobAmplitude;
