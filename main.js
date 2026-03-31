@@ -1608,6 +1608,12 @@ function tick(now) {
     }
     syncActiveRoomCollections(activeRoom);
     abilitySystem.map = map;
+    projectiles = [];
+    goldPiles = [];
+    combatTextSystem.combatTexts.length = 0;
+    combatTextSystem.pickupStack.length = 0;
+    abilitySystem.effects.length = 0;
+    abilitySystem.activeFreeze = null;
     roomTransitionSystem.noteExternalTimeline('camera_viewport_update_start');
     camera.worldW = map[0]?.length ?? ROOM_W;
     camera.worldH = map.length ?? ROOM_H;
