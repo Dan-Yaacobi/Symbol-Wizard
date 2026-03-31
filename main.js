@@ -123,6 +123,7 @@ const roomTransitionSystem = new RoomTransitionSystem({
   debug: false,
 });
 let pendingTransitionFirstRenderMark = false;
+let scheduledBackgroundPrewarm = null;
 
 function prewarmLikelyFirstTransition(room) {
   const exits = Array.isArray(room?.exits)
@@ -188,7 +189,23 @@ function syncActiveRoomCollections(room) {
 
 function scheduleBackgroundPrewarm(rendererInstance, room, reason = 'unknown') {
   if (!rendererInstance || !room?.tiles) return;
+  const roomId = room?.id ?? null;
+  if (scheduledBackgroundPrewarm?.roomId === roomId) return;
+
+  if (typeof window !== 'undefined') {
+    if (scheduledBackgroundPrewarm?.idleHandle != null && typeof window.cancelIdleCallback === 'function') {
+      window.cancelIdleCallback(scheduledBackgroundPrewarm.idleHandle);
+    }
+    if (scheduledBackgroundPrewarm?.timeoutHandle != null) {
+      window.clearTimeout(scheduledBackgroundPrewarm.timeoutHandle);
+    }
+    if (scheduledBackgroundPrewarm?.rafHandle != null) {
+      window.cancelAnimationFrame(scheduledBackgroundPrewarm.rafHandle);
+    }
+  }
+
   const executePrewarm = () => {
+    scheduledBackgroundPrewarm = null;
     const startMs = nowMs();
     prewarmBackgroundCache(rendererInstance, room.tiles, room.objects ?? []);
     const endMs = nowMs();
@@ -205,14 +222,22 @@ function scheduleBackgroundPrewarm(rendererInstance, room, reason = 'unknown') {
     return;
   }
 
+  const pending = {
+    roomId,
+    rafHandle: null,
+    idleHandle: null,
+    timeoutHandle: null,
+  };
+  scheduledBackgroundPrewarm = pending;
+
   const runDuringIdle = () => {
     if (typeof window.requestIdleCallback === 'function') {
-      window.requestIdleCallback(() => executePrewarm(), { timeout: 150 });
+      pending.idleHandle = window.requestIdleCallback(() => executePrewarm(), { timeout: 150 });
       return;
     }
-    window.setTimeout(executePrewarm, 0);
+    pending.timeoutHandle = window.setTimeout(executePrewarm, 0);
   };
-  window.requestAnimationFrame(runDuringIdle);
+  pending.rafHandle = window.requestAnimationFrame(runDuringIdle);
 }
 
 function spawnEnemyInActiveRoom(enemyType, position) {

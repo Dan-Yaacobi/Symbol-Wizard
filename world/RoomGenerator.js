@@ -11,6 +11,7 @@ import { resolvePathGenerationConfig } from './PathGenerationConfig.js';
 import { resolveWorldGenerationConfig } from './WorldGenerationConfig.js';
 import { resolveObjectGenerationConfig } from './ObjectGenerationConfig.js';
 import { spawnEnemiesForRoom } from './EnemySpawnSystem.js';
+import { buildRoomTransitionCache } from './TransitionCache.js';
 
 function nowMs() {
   return globalThis?.performance?.now?.() ?? Date.now();
@@ -251,7 +252,7 @@ export class RoomGenerator {
     });
     logGenerationPhase(roomNode.id, 'room_generation_total', generationStart, nowMs());
 
-    return {
+    const room = {
       id: roomNode.id,
       tiles: grid,
       collisionMap,
@@ -295,5 +296,8 @@ export class RoomGenerator {
         visited: roomNode.state?.visited ?? false,
       },
     };
+
+    buildRoomTransitionCache(room);
+    return room;
   }
 }
