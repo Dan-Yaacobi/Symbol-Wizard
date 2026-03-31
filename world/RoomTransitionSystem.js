@@ -20,11 +20,13 @@ function getRoomTransitionCache(room) {
 }
 
 export class RoomTransitionSystem {
-  constructor({ biomeGenerator, worldMapManager = null, fadeDurationMs = 150, debug = false } = {}) {
+  constructor({ biomeGenerator, worldMapManager = null, fadeDurationMs = 150, debug = false, profilingEnabled = false, onPerfEvent = null } = {}) {
     this.biomeGenerator = biomeGenerator;
     this.worldMapManager = worldMapManager;
     this.fadeDuration = fadeDurationMs / 1000;
     this.debug = debug;
+    this.profilingEnabled = profilingEnabled;
+    this.onPerfEvent = typeof onPerfEvent === 'function' ? onPerfEvent : null;
     this.phase = 'idle';
     this.phaseTimer = 0;
     this.fadeAlpha = 0;
@@ -158,7 +160,7 @@ export class RoomTransitionSystem {
       durationMs: entry.sincePreviousMs,
     }));
 
-    console.info('[TransitionTimeline]', {
+    if (this.profilingEnabled) console.info('[TransitionTimeline]', {
       transitionId: timeline.id,
       exitId: timeline.exitId,
       source: timeline.source,
@@ -183,7 +185,13 @@ export class RoomTransitionSystem {
       durationMs: Number((endMs - startMs).toFixed(3)),
       ...details,
     };
-    console.info('[TransitionTiming]', payload);
+    if (this.profilingEnabled) console.info('[TransitionTiming]', payload);
+  }
+
+  emitPerfEvent(name, details = {}) {
+    if (this.onPerfEvent) this.onPerfEvent(name, details);
+    if (!this.profilingEnabled) return;
+    console.info('[TransitionPerf]', { name, at: wallClockIso(), ...details });
   }
 
   normalizeExit(activeRoom, exit) {
@@ -457,7 +465,7 @@ export class RoomTransitionSystem {
 
     this.log('Transition succeeded', { fromRoomId: context.activeRoom?.id ?? null, toRoomId: targetRoom?.id ?? null, spawn });
     const switchEndMs = nowMs();
-    console.info('[TransitionTimingDetailed]', {
+    if (this.profilingEnabled) console.info('[TransitionTimingDetailed]', {
       phase: 'switch_room_internal',
       fromRoomId: context.activeRoom?.id ?? null,
       toRoomId: targetRoom?.id ?? null,
@@ -484,29 +492,43 @@ export class RoomTransitionSystem {
       error: null,
     };
 
-    setTimeout(() => {
-      const taskStartMs = nowMs();
-      this.markTimeline('map_generation_start', {
+    const taskStartMs = nowMs();
+    this.emitPerfEvent('startAsyncPrepareTask_execute', {
+      roomId: activeRoom?.id ?? null,
+      exitId: typeof pendingExit === 'object' ? pendingExit?.id ?? null : pendingExit,
+    });
+    this.markTimeline('map_generation_start', {
+      details: {
+        roomId: activeRoom?.id ?? null,
+        exitId: typeof pendingExit === 'object' ? pendingExit?.id ?? null : pendingExit,
+      },
+    });
+
+    try {
+      this.emitPerfEvent('prepareTransitionTarget_start', {
+        roomId: activeRoom?.id ?? null,
+      });
+      const prepared = this.prepareTransitionTarget({ activeRoom, player }, pendingExit);
+      this.preparedTransitionTask.result = prepared;
+      this.preparedTransitionTask.success = true;
+      this.emitPerfEvent('prepareTransitionTarget_end', {
+        roomId: prepared?.targetRoom?.id ?? null,
+      });
+    } catch (error) {
+      this.preparedTransitionTask.error = error instanceof Error ? error.message : String(error);
+    } finally {
+      const durationMs = Number((nowMs() - taskStartMs).toFixed(3));
+      this.markTimeline('map_generation_end', {
         details: {
-          roomId: activeRoom?.id ?? null,
-          exitId: typeof pendingExit === 'object' ? pendingExit?.id ?? null : pendingExit,
+          durationMs,
+          success: this.preparedTransitionTask.success,
         },
       });
-      try {
-        const prepared = this.prepareTransitionTarget({ activeRoom, player }, pendingExit);
-        this.preparedTransitionTask.result = prepared;
-        this.preparedTransitionTask.success = true;
-      } catch (error) {
-        this.preparedTransitionTask.error = error instanceof Error ? error.message : String(error);
-      } finally {
-        this.markTimeline('map_generation_end', {
-          details: {
-            durationMs: Number((nowMs() - taskStartMs).toFixed(3)),
-            success: this.preparedTransitionTask.success,
-          },
-        });
-        this.preparedTransitionTask.done = true;
-      }
-    }, 0);
+      this.emitPerfEvent('startAsyncPrepareTask_complete', {
+        success: this.preparedTransitionTask.success,
+        durationMs,
+      });
+      this.preparedTransitionTask.done = true;
+    }
   }
 }

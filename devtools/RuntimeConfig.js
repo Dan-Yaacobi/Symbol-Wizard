@@ -120,6 +120,8 @@ export const DEFAULT_CONFIG = {
     showAntDenSpawnDebug: false,
     showObjectClearanceRadius: false,
     logAntDenSpawns: false,
+    logTransitionPerf: false,
+    logBackgroundPrewarmPerf: false,
   },
   pathGeneration: {
     baseTrailRadius: 2,
@@ -246,6 +248,8 @@ export const CONFIG_FIELDS = [
   { path: 'debug.showAntDenSpawnDebug', label: 'Show Ant Den Spawn Debug', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.showObjectClearanceRadius', label: 'Show Object Clearance Radius', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.logAntDenSpawns', label: 'Log Ant Den Spawn Count', section: 'Debug / Overlays', type: 'boolean' },
+  { path: 'debug.logTransitionPerf', label: 'Log Transition Perf', section: 'Performance', type: 'boolean' },
+  { path: 'debug.logBackgroundPrewarmPerf', label: 'Log Background Prewarm Perf', section: 'Performance', type: 'boolean' },
   { path: 'debug.overlaysEnabled', label: 'Master Overlay Toggle', section: 'Debug / Overlays', type: 'boolean' },
   { path: 'debug.showStatsHud', label: 'Compact Stats HUD', section: 'Performance', type: 'boolean' },
   { path: 'pathGeneration.baseTrailRadius', label: 'Base Trail Radius', section: 'Path Generation', type: 'number', min: 1, max: 8, step: 1 },

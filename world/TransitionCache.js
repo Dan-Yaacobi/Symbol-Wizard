@@ -1,3 +1,13 @@
+let transitionCachePerfHook = null;
+
+export function setTransitionCachePerfHook(hook) {
+  transitionCachePerfHook = typeof hook === 'function' ? hook : null;
+}
+
+function emitTransitionCachePerf(event, details = {}) {
+  if (transitionCachePerfHook) transitionCachePerfHook(event, details);
+}
+
 function isWalkableTile(room, x, y) {
   const row = room?.tiles?.[y];
   const tile = row?.[x];
@@ -63,28 +73,15 @@ function collectExitTriggerTiles(room) {
   return triggerTiles;
 }
 
-function buildWalkableCandidateList(room, blockedTiles, exitTriggerTiles) {
-  const candidates = [];
-  const tiles = room?.tiles ?? [];
-  for (let y = 0; y < tiles.length; y += 1) {
-    for (let x = 0; x < (tiles[y]?.length ?? 0); x += 1) {
-      if (!isWalkableTile(room, x, y)) continue;
-      const key = tileKey(x, y);
-      if (blockedTiles.has(key) || exitTriggerTiles.has(key)) continue;
-      candidates.push({ x, y });
-    }
-  }
-  return candidates;
+function isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, x, y) {
+  const key = tileKey(x, y);
+  return isWalkableTile(room, x, y) && !blockedTiles.has(key) && !exitTriggerTiles.has(key);
 }
 
-function findSpawnPositionFromCache(room, cache, preferredX, preferredY) {
+function findSpawnPosition(room, blockedTiles, exitTriggerTiles, preferredX, preferredY) {
   const startX = Math.round(preferredX);
   const startY = Math.round(preferredY);
-  const key = tileKey(startX, startY);
-
-  if (isWalkableTile(room, startX, startY) && !cache.blockedTiles.has(key) && !cache.exitTriggerTiles.has(key)) {
-    return { x: startX, y: startY };
-  }
+  if (isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, startX, startY)) return { x: startX, y: startY };
 
   const width = room?.tiles?.[0]?.length ?? 0;
   const height = room?.tiles?.length ?? 0;
@@ -96,34 +93,46 @@ function findSpawnPositionFromCache(room, cache, preferredX, preferredY) {
     const bottom = Math.min(height - 1, startY + radius);
 
     for (let x = left; x <= right; x += 1) {
-      const topKey = tileKey(x, top);
-      if (isWalkableTile(room, x, top) && !cache.blockedTiles.has(topKey) && !cache.exitTriggerTiles.has(topKey)) return { x, y: top };
+      if (isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, x, top)) return { x, y: top };
       if (bottom === top) continue;
-      const bottomKey = tileKey(x, bottom);
-      if (isWalkableTile(room, x, bottom) && !cache.blockedTiles.has(bottomKey) && !cache.exitTriggerTiles.has(bottomKey)) return { x, y: bottom };
+      if (isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, x, bottom)) return { x, y: bottom };
     }
 
     for (let y = top + 1; y < bottom; y += 1) {
-      const leftKey = tileKey(left, y);
-      if (isWalkableTile(room, left, y) && !cache.blockedTiles.has(leftKey) && !cache.exitTriggerTiles.has(leftKey)) return { x: left, y };
+      if (isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, left, y)) return { x: left, y };
       if (right === left) continue;
-      const rightKey = tileKey(right, y);
-      if (isWalkableTile(room, right, y) && !cache.blockedTiles.has(rightKey) && !cache.exitTriggerTiles.has(rightKey)) return { x: right, y };
+      if (isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, right, y)) return { x: right, y };
     }
   }
 
   let nearest = null;
   let nearestDistance = Number.POSITIVE_INFINITY;
-  for (const candidate of cache.walkableCandidates) {
-    const distance = Math.abs(candidate.x - startX) + Math.abs(candidate.y - startY);
-    if (distance < nearestDistance) {
-      nearestDistance = distance;
-      nearest = candidate;
-      if (distance === 0) break;
+  const tiles = room?.tiles ?? [];
+  for (let y = 0; y < tiles.length; y += 1) {
+    for (let x = 0; x < (tiles[y]?.length ?? 0); x += 1) {
+      if (!isOpenSpawnTile(room, blockedTiles, exitTriggerTiles, x, y)) continue;
+      const distance = Math.abs(x - startX) + Math.abs(y - startY);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = { x, y };
+      }
     }
   }
 
-  return nearest ? { x: nearest.x, y: nearest.y } : { x: startX, y: startY };
+  if (nearest) return nearest;
+
+  for (let y = 0; y < tiles.length; y += 1) {
+    for (let x = 0; x < (tiles[y]?.length ?? 0); x += 1) {
+      if (!isWalkableTile(room, x, y)) continue;
+      const distance = Math.abs(x - startX) + Math.abs(y - startY);
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearest = { x, y };
+      }
+    }
+  }
+
+  return nearest ?? { x: startX, y: startY };
 }
 
 function buildBlockedTiles(room) {
@@ -137,28 +146,28 @@ function buildBlockedTiles(room) {
 }
 
 export function buildRoomTransitionCache(room) {
+  const startMs = globalThis?.performance?.now?.() ?? Date.now();
+  emitTransitionCachePerf('buildRoomTransitionCache_start', { roomId: room?.id ?? null });
   const blockedTiles = buildBlockedTiles(room);
   const exitTriggerTiles = collectExitTriggerTiles(room);
-  const walkableCandidates = buildWalkableCandidateList(room, blockedTiles, exitTriggerTiles);
   const spawnByEntrance = new Map();
 
   for (const entrance of Object.values(room?.entrances ?? {})) {
     const preferredSpawn = getEntranceSpawnTarget(room, entrance);
     const spawnKey = entranceSpawnCacheKey(entrance, preferredSpawn.x, preferredSpawn.y);
-    const spawn = findSpawnPositionFromCache(room, {
-      blockedTiles,
-      exitTriggerTiles,
-      walkableCandidates,
-    }, preferredSpawn.x, preferredSpawn.y);
+    const spawn = findSpawnPosition(room, blockedTiles, exitTriggerTiles, preferredSpawn.x, preferredSpawn.y);
     spawnByEntrance.set(spawnKey, { x: spawn.x, y: spawn.y });
   }
 
   room.__transitionCache = {
-    blockedTiles,
-    exitTriggerTiles,
-    walkableCandidates,
     spawnByEntrance,
   };
+
+  emitTransitionCachePerf('buildRoomTransitionCache_end', {
+    roomId: room?.id ?? null,
+    entranceCount: spawnByEntrance.size,
+    durationMs: Number((((globalThis?.performance?.now?.() ?? Date.now()) - startMs)).toFixed(3)),
+  });
 
   return room.__transitionCache;
 }
