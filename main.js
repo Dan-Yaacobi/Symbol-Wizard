@@ -13,7 +13,7 @@ import { updateEnemies } from './systems/AISystem.js';
 import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/CombatSystem.js';
 import * as LootSystem from './systems/LootSystem.js';
 import { CombatTextSystem } from './systems/CombatTextSystem.js';
-import { prewarmBackgroundCache, renderWorld } from './systems/RenderSystem.js';
+import { cloneBackgroundCache, prewarmBackgroundCache, renderWorld } from './systems/RenderSystem.js';
 import { setTransitionCachePerfHook } from './world/TransitionCache.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
 import { setEntityState, syncEntityMovementState, updateEntityState } from './systems/EntityStateSystem.js';
@@ -64,6 +64,7 @@ const VIEW_H = 58;
 const ROOM_W = 240;
 const ROOM_H = 160;
 const DEBUG_PERF_PROBE = false;
+const DIAG_BYPASS_BACKGROUND_CACHE = false;
 
 function nowMs() {
   return globalThis?.performance?.now?.() ?? Date.now();
@@ -275,6 +276,12 @@ async function runInitialPrewarm() {
   loadingProgressText = 'Generating world...';
   activeRoom = worldMapManager.enterStartingWorld(currentBiomeSeed);
   map = activeRoom?.tiles ?? [];
+  if (!activeRoom || !Array.isArray(activeRoom.tiles) || activeRoom.tiles.length <= 0) {
+    console.warn('[Startup] Active room missing tiles', {
+      roomId: activeRoom?.id ?? null,
+      tileCount: activeRoom?.tiles?.length ?? 0,
+    });
+  }
 
   loadingProgressText = 'Building transition cache...';
   const preloadRooms = new Map();
@@ -306,7 +313,10 @@ async function runInitialPrewarm() {
   for (const room of preloadRooms.values()) {
     if (!room?.tiles) continue;
     prewarmBackgroundCache(renderer, room.tiles, room.objects ?? []);
-    room.__backgroundCache = renderer.backgroundCache;
+    room.__backgroundCache = cloneBackgroundCache(renderer.backgroundCache);
+    if (!room.__backgroundCache) {
+      console.warn('[BackgroundCache] Missing background cache after prewarm', room.id);
+    }
   }
 
   loadingProgressText = 'Finalizing startup...';
@@ -316,7 +326,7 @@ async function runInitialPrewarm() {
   const initialSpawn = resolveInitialSpawn(activeRoom);
   player.x = initialSpawn.x;
   player.y = initialSpawn.y;
-  renderer.setBackgroundCache(activeRoom?.__backgroundCache ?? null);
+  renderer.setBackgroundCache(DIAG_BYPASS_BACKGROUND_CACHE ? null : (activeRoom?.__backgroundCache ?? null));
   camera.follow(player);
 }
 
@@ -1590,6 +1600,12 @@ function tick(now) {
     });
     activeRoom = transitionResult.room;
     map = activeRoom.tiles;
+    if (!activeRoom || !Array.isArray(activeRoom.tiles) || activeRoom.tiles.length <= 0) {
+      console.warn('[RoomTransition] Active room has no tiles', {
+        roomId: activeRoom?.id ?? null,
+        tileCount: activeRoom?.tiles?.length ?? 0,
+      });
+    }
     syncActiveRoomCollections(activeRoom);
     abilitySystem.map = map;
     roomTransitionSystem.noteExternalTimeline('camera_viewport_update_start');
@@ -1601,7 +1617,10 @@ function tick(now) {
     roomTransitionSystem.noteExternalTimeline('camera_viewport_update_end');
     syncRoomEnemies(activeRoom);
     if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
-    renderer.setBackgroundCache(activeRoom?.__backgroundCache ?? null);
+    if (!activeRoom?.__backgroundCache) {
+      console.warn('[BackgroundCache] Missing room cache on transition', activeRoom?.id ?? null);
+    }
+    renderer.setBackgroundCache(DIAG_BYPASS_BACKGROUND_CACHE ? null : (activeRoom?.__backgroundCache ?? null));
     pendingTransitionFirstRenderMark = true;
     roomTransitionSystem.noteExternalTimeline('room_swap_commit_end');
   }

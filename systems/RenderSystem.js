@@ -581,6 +581,25 @@ export function prewarmBackgroundCache(renderer, map, worldObjects = []) {
   ensureBackgroundCache(renderer, map, worldObjects);
 }
 
+export function cloneBackgroundCache(cache) {
+  const sourceCanvas = cache?.canvas;
+  if (!sourceCanvas || sourceCanvas.width <= 0 || sourceCanvas.height <= 0) return null;
+
+  const clonedCanvas = document.createElement('canvas');
+  clonedCanvas.width = sourceCanvas.width;
+  clonedCanvas.height = sourceCanvas.height;
+  const clonedContext = clonedCanvas.getContext('2d', { alpha: true });
+  if (!clonedContext) return null;
+  clonedContext.imageSmoothingEnabled = false;
+  clonedContext.drawImage(sourceCanvas, 0, 0);
+
+  return {
+    ...cache,
+    canvas: clonedCanvas,
+    ctx: clonedContext,
+  };
+}
+
 
 function drawWorldDrop(renderer, camera, drop) {
   if (!drop?.spriteId) return;
@@ -900,6 +919,7 @@ export function renderWorld(renderer, camera, map, player, enemies, npcs, worldO
   const safeAbilityEffects = Array.isArray(abilityEffects) ? abilityEffects : [];
   const safeWorldDrops = Array.isArray(worldDrops) ? worldDrops : [];
   const activeRoomId = activeRoom?.id ?? null;
+  console.log('WORLD RENDER', activeRoomId, map?.length ?? 0);
   ensureBackgroundCache(renderer, map, worldObjects);
   renderer.renderBackground(map, camera);
 
