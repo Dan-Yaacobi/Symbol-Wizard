@@ -57,6 +57,27 @@ function clearExitArea(grid, anchor, radius, mask) {
   carveTrailTile(grid, anchor.x, anchor.y, radius, mask);
 }
 
+function floodRoadMask(mask, start) {
+  const reachable = new Set();
+  const startKey = keyOf(start.x, start.y);
+  if (!mask.has(startKey)) return reachable;
+  const queue = [{ x: start.x, y: start.y }];
+  let index = 0;
+  while (index < queue.length) {
+    const current = queue[index++];
+    const currentKey = keyOf(current.x, current.y);
+    if (reachable.has(currentKey) || !mask.has(currentKey)) continue;
+    reachable.add(currentKey);
+    queue.push(
+      { x: current.x + 1, y: current.y },
+      { x: current.x - 1, y: current.y },
+      { x: current.x, y: current.y + 1 },
+      { x: current.x, y: current.y - 1 },
+    );
+  }
+  return reachable;
+}
+
 function makeTrailPoints(start, target, anchorDirection, config, rng, dimensions) {
   const points = [{ x: start.x, y: start.y }];
   let current = { x: start.x, y: start.y };
@@ -153,6 +174,27 @@ export class PathGenerator {
       if (!grid[y]?.[x]) continue;
       grid[y][x] = tileFrom(tiles.dirt, { type: 'exit-anchor', walkable: true });
       roadMask.add(key);
+    }
+
+    const reachableFromHub = floodRoadMask(roadMask, hub);
+    for (const anchor of allAnchors) {
+      const landingKey = keyOf(anchor.landingX, anchor.landingY);
+      if (reachableFromHub.has(landingKey)) continue;
+      const repairPoints = makeTrailPoints(
+        { x: anchor.landingX, y: anchor.landingY },
+        hub,
+        anchor.direction,
+        config,
+        rng,
+        plan.dimensions,
+      );
+      carveTrailPoints(grid, repairPoints, anchor, config, roadMask, rng);
+      debugEvents.push({
+        type: 'PATH_CONNECTIVITY_REPAIRED',
+        roomId: plan.roomId,
+        anchorId: anchor.id,
+        repairedPoints: repairPoints.length,
+      });
     }
 
     return { roadMask, debugEvents };

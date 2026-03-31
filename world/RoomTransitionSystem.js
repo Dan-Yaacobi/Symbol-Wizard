@@ -466,7 +466,15 @@ export class RoomTransitionSystem {
     const cache = getRoomTransitionCache(targetRoom);
     if (!cache) return null;
     const spawnKey = entranceSpawnCacheKey(targetEntrance, preferredSpawn.x, preferredSpawn.y);
-    const spawn = cache.spawnByEntrance.get(spawnKey) ?? preferredSpawn;
+    const spawn = cache.spawnByEntrance.get(spawnKey);
+    if (!spawn) {
+      this.log('FAIL: transition called but failed — missing precomputed spawn for entrance', {
+        roomId: targetRoom?.id ?? null,
+        entranceId: targetEntrance?.id ?? null,
+        spawnKey,
+      });
+      return null;
+    }
     markSection('resolve_spawn', spawnResolveStart);
 
     const playerUpdateStart = nowMs();
