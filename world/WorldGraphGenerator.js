@@ -1,5 +1,7 @@
-import { generateRoomGraph } from './RoomGraphGenerator.js';
+import { GraphPlanner } from './graph/GraphPlanner.js';
+
+const graphPlanner = new GraphPlanner();
 
 export function generateWorldGraph(options = {}) {
-  return generateRoomGraph(options);
+  return graphPlanner.plan(options);
 }
