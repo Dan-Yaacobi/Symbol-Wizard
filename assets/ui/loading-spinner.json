@@ -1,0 +1,41 @@
+{
+  "id": "ui-loading-spinner",
+  "anchor": {
+    "x": 1,
+    "y": 1
+  },
+  "defaultGrid": {
+    "width": 3,
+    "height": 3
+  },
+  "animations": {
+    "idle": [
+      {
+        "width": 3,
+        "height": 3,
+        "offsetY": 0,
+        "cells": [
+          [{ "ch": " ", "fg": null, "bg": null }, { "ch": "|", "fg": "#cde4ff", "bg": null }, { "ch": " ", "fg": null, "bg": null }],
+          [{ "ch": "-", "fg": "#94c7ff", "bg": null }, { "ch": "•", "fg": "#e8f3ff", "bg": null }, { "ch": "-", "fg": "#94c7ff", "bg": null }],
+          [{ "ch": " ", "fg": null, "bg": null }, { "ch": "|", "fg": "#cde4ff", "bg": null }, { "ch": " ", "fg": null, "bg": null }]
+        ]
+      },
+      {
+        "width": 3,
+        "height": 3,
+        "offsetY": 0,
+        "cells": [
+          [{ "ch": "\\", "fg": "#cde4ff", "bg": null }, { "ch": " ", "fg": null, "bg": null }, { "ch": "/", "fg": "#cde4ff", "bg": null }],
+          [{ "ch": " ", "fg": null, "bg": null }, { "ch": "•", "fg": "#e8f3ff", "bg": null }, { "ch": " ", "fg": null, "bg": null }],
+          [{ "ch": "/", "fg": "#94c7ff", "bg": null }, { "ch": " ", "fg": null, "bg": null }, { "ch": "\\", "fg": "#94c7ff", "bg": null }]
+        ]
+      }
+    ]
+  },
+  "meta": {
+    "isEnemy": false,
+    "enemyId": "ui-loading-spinner",
+    "biomes": [],
+    "spawnWeight": 0
+  }
+}

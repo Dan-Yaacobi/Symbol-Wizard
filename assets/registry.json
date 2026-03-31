@@ -49,6 +49,7 @@
     "item_poison_gland": "items/item_poison_gland.json",
     "item_storm_shard": "items/item_storm_shard.json",
     "item_chitin_fragment": "items/item_chitin_fragment.json",
+    "ui-loading-spinner": "ui/loading-spinner.json",
     "item_moss": "items/item_moss.json",
     "item_arcane_shard": "items/item_arcane_shard.json",
     "item_crystal_dust": "items/item_crystal_dust.json"

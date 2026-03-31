@@ -45,7 +45,7 @@ import { visualTheme } from './data/VisualTheme.js';
 import { rollObjectLoot } from './systems/ObjectInteractionSystem.js';
 import { tryInteract } from './systems/InteractionSystem.js';
 import { loadObjectsFromFolder } from './world/ObjectLibrary.js';
-import { getAnimationFrameCount, getSpriteAsset, loadAllSpriteAssets } from './data/SpriteAssetLoader.js';
+import { getAnimationFrameCount, getSpriteAsset, getSpriteFrame, loadAllSpriteAssets } from './data/SpriteAssetLoader.js';
 import {
   collidesWithBlockingObjectAt,
   cleanupDestroyedObjects,
@@ -95,19 +95,12 @@ const runtimeConfig = new RuntimeConfigRegistry();
 const devToolsPanel = new DevToolsPanel(runtimeConfig);
 runtimeConfig.setLogger((message) => logDev(message));
 
-const objectAssetStart = nowMs();
-await loadObjectsFromFolder('./assets/objects');
-logTiming('asset_loading_objects', objectAssetStart, nowMs());
-const spriteAssetStart = nowMs();
-await loadAllSpriteAssets('./assets');
-logTiming('asset_loading_sprites', spriteAssetStart, nowMs());
-
 const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
 const worldMapManager = new WorldMapManager({ biomeGenerator, roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
 let currentBiomeSeed = randomSeed();
 let pendingDevSeed = String(currentBiomeSeed);
-let activeRoom = worldMapManager.enterStartingWorld(currentBiomeSeed);
-let map = activeRoom.tiles;
+let activeRoom = null;
+let map = [];
 const player = new Player(Math.floor(ROOM_W / 2), Math.floor(ROOM_H / 2));
 ensureEntityFacing(player);
 getCraftableRecipeIds().forEach((recipeId) => player.unlockRecipe(recipeId));
@@ -116,7 +109,16 @@ const enemies = [];
 let enemyAiEnabled = true;
 let applyEnemyTuningToExistingEnemies = false;
 const npcs = [];
-let worldObjects = activeRoom.objects ?? [];
+let worldObjects = [];
+const GameState = Object.freeze({
+  LOADING: 'loading',
+  PLAYING: 'playing',
+});
+let gameState = GameState.LOADING;
+let loadingProgressText = 'Loading...';
+const LOADING_SPRITE_ID = 'ui-loading-spinner';
+let loadingFrameCounter = 0;
+let startupPrewarmStarted = false;
 const performanceProbe = {
   events: [],
   mark(name, details = {}) {
@@ -142,25 +144,35 @@ const roomTransitionSystem = new RoomTransitionSystem({
   onPerfEvent: (name, details) => performanceProbe.mark(name, details),
 });
 let pendingTransitionFirstRenderMark = false;
-let scheduledBackgroundPrewarm = null;
-let backgroundPrewarmIdleSeconds = 0;
 setTransitionCachePerfHook((event, details) => performanceProbe.mark(event, details));
 
 
-function prewarmLikelyFirstTransition(room) {
-  const exits = Array.isArray(room?.exits)
-    ? room.exits
-    : Object.entries(room?.exits ?? {}).map(([id, exit]) => ({ id, ...exit }));
-  const likelyExit = exits.find((exit) => (exit?.interactionType ?? 'exit') === 'exit'
-    && (exit?.targetMapType || exit?.targetMap || exit?.interactionData?.targetMap));
-  if (!likelyExit) return;
+function drawLoadingSpriteFrame(frame, centerX, centerY) {
+  if (!frame?.cells?.length) return;
+  const baseX = Math.floor(centerX - (frame.width / 2));
+  const baseY = Math.floor(centerY - (frame.height / 2));
+  for (let y = 0; y < frame.height; y += 1) {
+    for (let x = 0; x < frame.width; x += 1) {
+      const cell = frame.cells[y]?.[x];
+      if (!cell) continue;
+      const glyph = cell.ch ?? ' ';
+      if ((glyph === ' ' || glyph === '\0') && !cell.bg) continue;
+      renderer.drawUiGlyph(glyph, cell.fg ?? '#d8e4ff', cell.bg ?? 'rgba(0,0,0,0)', baseX + x, baseY + y);
+    }
+  }
+}
 
-  const prewarmStart = nowMs();
-  const result = roomTransitionSystem.prewarmExitTarget(room, likelyExit);
-  logTiming('lazy_system_prewarm_transition_target', prewarmStart, nowMs(), {
-    exitId: likelyExit.id ?? null,
-    targetResolved: Boolean(result?.targetRoom && result?.targetEntrance),
-  });
+function renderLoadingScreen() {
+  renderer.beginFrame();
+  const frameCount = Math.max(1, getAnimationFrameCount(LOADING_SPRITE_ID, 'idle'));
+  const frame = getSpriteAsset(LOADING_SPRITE_ID)
+    ? getSpriteFrame(LOADING_SPRITE_ID, 'idle', Math.floor(loadingFrameCounter / 7) % frameCount)
+    : null;
+  drawLoadingSpriteFrame(frame, Math.floor(VIEW_W / 2), Math.floor(VIEW_H / 2) - 3);
+  const loadingLabel = loadingProgressText || 'Loading...';
+  renderer.drawUiText(loadingLabel, '#e6f2ff', 'rgba(0,0,0,0)', Math.floor((VIEW_W - loadingLabel.length) / 2), Math.floor(VIEW_H / 2) + 5);
+  renderer.composite();
+  loadingFrameCounter += 1;
 }
 
 function randomSeed() {
@@ -209,49 +221,6 @@ function syncActiveRoomCollections(room) {
   for (const npc of room?.npcs ?? []) npcs.push(npc);
 }
 
-function scheduleBackgroundPrewarm(rendererInstance, room, reason = 'unknown') {
-  if (!rendererInstance || !room?.tiles) return;
-  const roomId = room?.id ?? null;
-  if (scheduledBackgroundPrewarm?.roomId === roomId) return;
-
-  const createdAt = nowMs();
-  scheduledBackgroundPrewarm = {
-    roomId,
-    reason,
-    createdAt,
-    execute: () => {
-      const startMs = nowMs();
-      performanceProbe.mark('prewarmBackgroundCache_start', { roomId, reason });
-      prewarmBackgroundCache(rendererInstance, room.tiles, room.objects ?? []);
-      const endMs = nowMs();
-      const durationMs = Number((endMs - startMs).toFixed(3));
-      performanceProbe.mark('prewarmBackgroundCache_end', { roomId, reason, durationMs });
-      if (runtimeConfig.get('debug.logBackgroundPrewarmPerf')) {
-        console.info('[RenderTiming]', {
-          phase: 'prewarm_background_cache',
-          reason,
-          roomId,
-          queuedForMs: Number((startMs - createdAt).toFixed(3)),
-          durationMs,
-        });
-      }
-    },
-  };
-
-  performanceProbe.mark('scheduleBackgroundPrewarm', {
-    roomId,
-    reason,
-  });
-}
-
-function flushBackgroundPrewarmIfSafe() {
-  if (!scheduledBackgroundPrewarm) return;
-  const isTransitioning = roomTransitionSystem.isTransitionActive();
-  const isPlayerMoving = Math.abs(player.vx) > 0.01 || Math.abs(player.vy) > 0.01;
-  if (isTransitioning || isPlayerMoving || dialogueManager?.isOpen) return;
-  scheduledBackgroundPrewarm.execute();
-  scheduledBackgroundPrewarm = null;
-}
 function spawnEnemyInActiveRoom(enemyType, position) {
   const previewEnemy = new Enemy(enemyType, Math.round(position?.x ?? 0), Math.round(position?.y ?? 0));
   const spawnSearch = tryFindSpawnPosition(position ?? { x: 0, y: 0 }, {
@@ -287,15 +256,51 @@ function resolveInitialSpawn(room) {
   return resolveValidRoomSpawn(room, spawnBase);
 }
 
-syncActiveRoomCollections(activeRoom);
-syncRoomEnemies(activeRoom);
-scheduleBackgroundPrewarm(renderer, activeRoom, 'startup');
-prewarmLikelyFirstTransition(activeRoom);
-if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
-const initialSpawn = resolveInitialSpawn(activeRoom);
-player.x = initialSpawn.x;
-player.y = initialSpawn.y;
-camera.follow(player);
+async function waitForFirstComposite() {
+  await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+async function runInitialPrewarm() {
+  loadingProgressText = 'Loading assets...';
+  const objectAssetStart = nowMs();
+  await loadObjectsFromFolder('./assets/objects');
+  logTiming('asset_loading_objects', objectAssetStart, nowMs());
+  const spriteAssetStart = nowMs();
+  await loadAllSpriteAssets('./assets');
+  logTiming('asset_loading_sprites', spriteAssetStart, nowMs());
+
+  loadingProgressText = 'Generating world...';
+  activeRoom = worldMapManager.enterStartingWorld(currentBiomeSeed);
+  map = activeRoom?.tiles ?? [];
+
+  loadingProgressText = 'Building transition cache...';
+  const preloadRooms = new Set([activeRoom]);
+  const exits = Array.isArray(activeRoom?.exits)
+    ? activeRoom.exits
+    : Object.entries(activeRoom?.exits ?? {}).map(([id, exit]) => ({ id, ...exit }));
+  for (const exit of exits) {
+    const target = roomTransitionSystem.prewarmExitTarget(activeRoom, exit)?.targetRoom ?? null;
+    if (target) preloadRooms.add(target);
+  }
+
+  loadingProgressText = 'Preparing renderer...';
+  for (const room of preloadRooms) {
+    if (!room?.tiles) continue;
+    prewarmBackgroundCache(renderer, room.tiles, room.objects ?? []);
+    room.__backgroundCache = renderer.backgroundCache;
+  }
+
+  loadingProgressText = 'Finalizing startup...';
+  syncActiveRoomCollections(activeRoom);
+  syncRoomEnemies(activeRoom);
+  if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
+  const initialSpawn = resolveInitialSpawn(activeRoom);
+  player.x = initialSpawn.x;
+  player.y = initialSpawn.y;
+  renderer.setBackgroundCache(activeRoom?.__backgroundCache ?? null);
+  camera.follow(player);
+}
+
 let projectiles = [];
 let goldPiles = [];
 let worldDrops = [];
@@ -734,15 +739,11 @@ devToolsPanel.setMapTools({
 logBoot('main scene entered');
 logDiag('app entered main scene');
 logDiag('running startup path', { href: window.location.href, pathname: window.location.pathname });
-logBoot('world node found', { width: map?.[0]?.length ?? 0, height: map?.length ?? 0, mapType: activeRoom?.type, roomId: activeRoom.id });
+logBoot('world node found', { width: map?.[0]?.length ?? 0, height: map?.length ?? 0, mapType: activeRoom?.type ?? null, roomId: activeRoom?.id ?? null });
 logBoot('camera node found', { zoom: 1, current: true, position: { x: camera.x, y: camera.y } });
 logBoot('player spawned', { x: player.x, y: player.y });
 logBoot('map generated');
 logBoot('HUD initialized');
-
-setTimeout(() => {
-  logDiag('app still alive after 1 second');
-}, 1000);
 
 if (diagMode) {
   const diagBanner = document.createElement('div');
@@ -1386,6 +1387,9 @@ function logPerformanceWindow(now) {
 let last = performance.now();
 
 if (diagMinimalMode) {
+  if (!Array.isArray(map) || map.length === 0 || !Array.isArray(map[0])) {
+    map = Array.from({ length: ROOM_H }, () => Array.from({ length: ROOM_W }, () => ({ char: ' ', fg: '#2a5f3a', bg: '#173823', walkable: true })));
+  }
   for (let y = 0; y < map.length; y += 1) {
     for (let x = 0; x < map[0].length; x += 1) {
       map[y][x] = { char: ' ', fg: '#2a5f3a', bg: '#173823', walkable: true };
@@ -1424,6 +1428,24 @@ function tick(now) {
 
   if (!startupCompleteLogged) {
     logDiag('game root _ready');
+  }
+
+  if (gameState === GameState.LOADING) {
+    renderLoadingScreen();
+    if (!startupPrewarmStarted) {
+      startupPrewarmStarted = true;
+      waitForFirstComposite().then(async () => {
+        try {
+          await runInitialPrewarm();
+          gameState = GameState.PLAYING;
+        } catch (error) {
+          console.error('[Startup] Initial prewarm failed', error);
+          loadingProgressText = 'Loading failed (see console)';
+        }
+      });
+    }
+    requestAnimationFrame(tick);
+    return;
   }
 
   timed('input', framePerf, () => {
@@ -1601,13 +1623,6 @@ function tick(now) {
   const spellbookOpen = spellbook.isOpen();
 
   if (!roomTransitionSystem.isTransitionActive() && !dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
-    backgroundPrewarmIdleSeconds += dt;
-  } else {
-    backgroundPrewarmIdleSeconds = 0;
-  }
-  if (backgroundPrewarmIdleSeconds >= 0.25) flushBackgroundPrewarmIfSafe();
-
-  if (!roomTransitionSystem.isTransitionActive() && !dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
     timed('player', framePerf, () => handlePlayer(dt));
   } else {
     player.vx = 0;
@@ -1635,9 +1650,7 @@ function tick(now) {
     roomTransitionSystem.noteExternalTimeline('camera_viewport_update_end');
     syncRoomEnemies(activeRoom);
     if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
-    roomTransitionSystem.noteExternalTimeline('renderer_related_work_start', { operation: 'background_cache_prewarm' });
-    scheduleBackgroundPrewarm(renderer, activeRoom, 'room_transition');
-    roomTransitionSystem.noteExternalTimeline('renderer_related_work_end', { operation: 'background_cache_prewarm' });
+    renderer.setBackgroundCache(activeRoom?.__backgroundCache ?? null);
     pendingTransitionFirstRenderMark = true;
     roomTransitionSystem.noteExternalTimeline('room_swap_commit_end');
   }
