@@ -63,6 +63,7 @@ const VIEW_W = 104;
 const VIEW_H = 58;
 const ROOM_W = 240;
 const ROOM_H = 160;
+const DEBUG_PERF_PROBE = false;
 
 function nowMs() {
   return globalThis?.performance?.now?.() ?? Date.now();
@@ -119,32 +120,34 @@ let loadingProgressText = 'Loading...';
 const LOADING_SPRITE_ID = 'ui-loading-spinner';
 let loadingFrameCounter = 0;
 let startupPrewarmStarted = false;
-const performanceProbe = {
-  events: [],
-  mark(name, details = {}) {
-    const at = nowMs();
-    this.events.push({ name, at, details });
-    if (this.events.length > 120) this.events.shift();
-    if (runtimeConfig.get('debug.logTransitionPerf')) {
-      console.info('[PerfProbe]', { name, at: Number(at.toFixed(3)), details });
+const performanceProbe = DEBUG_PERF_PROBE
+  ? {
+      events: [],
+      mark(name, details = {}) {
+        const at = nowMs();
+        this.events.push({ name, at, details });
+        if (this.events.length > 120) this.events.shift();
+      },
+      recent(limitMs = 4000) {
+        const cutoff = nowMs() - limitMs;
+        return this.events.filter((entry) => entry.at >= cutoff);
+      },
     }
-  },
-  recent(limitMs = 4000) {
-    const cutoff = nowMs() - limitMs;
-    return this.events.filter((entry) => entry.at >= cutoff);
-  },
-};
+  : {
+      mark() {},
+      recent() { return []; },
+    };
 
 const roomTransitionSystem = new RoomTransitionSystem({
   biomeGenerator,
   worldMapManager,
   fadeDurationMs: 150,
   debug: false,
-  profilingEnabled: runtimeConfig.get('debug.logTransitionPerf'),
-  onPerfEvent: (name, details) => performanceProbe.mark(name, details),
+  profilingEnabled: DEBUG_PERF_PROBE && runtimeConfig.get('debug.logTransitionPerf'),
+  onPerfEvent: DEBUG_PERF_PROBE ? (name, details) => performanceProbe.mark(name, details) : null,
 });
 let pendingTransitionFirstRenderMark = false;
-setTransitionCachePerfHook((event, details) => performanceProbe.mark(event, details));
+setTransitionCachePerfHook(DEBUG_PERF_PROBE ? (event, details) => performanceProbe.mark(event, details) : null);
 
 
 function drawLoadingSpriteFrame(frame, centerX, centerY) {
@@ -1168,221 +1171,137 @@ function handlePlayer(dt) {
 }
 
 
-const PERF_LOG_INTERVAL_MS = 500;
+const createFrameTimingTotals = DEBUG_PERF_PROBE
+  ? function createFrameTimingTotalsEnabled() {
+      return {
+        input: 0,
+        player: 0,
+        enemy: 0,
+        collision: 0,
+        projectile: 0,
+        world: 0,
+        combatText: 0,
+        transition: 0,
+        animation: 0,
+        dialogueCamera: 0,
+        render: 0,
+        renderBackground: 0,
+        renderComposite: 0,
+        renderCompositeScale: 0,
+        renderCompositeDraw: 0,
+        renderCompositeBackground: 0,
+        renderCompositeEntities: 0,
+        renderCompositeEffects: 0,
+        renderCompositeUi: 0,
+        hud: 0,
+        hudOrbs: 0,
+        ui: 0,
+        uiInventory: 0,
+        uiSpellbook: 0,
+        uiDevTools: 0,
+        uiCrafting: 0,
+        other: 0,
+        total: 0,
+        frames: 0,
+        drawCalls: 0,
+        drawCallsBackground: 0,
+        drawCallsEntities: 0,
+        drawCallsEffects: 0,
+        drawCallsUi: 0,
+        layoutReads: 0,
+        styleWrites: 0,
+        layoutThrashSignals: 0,
+        rafRequests: 0,
+        rafCallbacks: 0,
+        duplicateRafSignals: 0,
+      };
+    }
+  : () => null;
 
-function createFrameTimingTotals() {
-  return {
-    input: 0,
-    player: 0,
-    enemy: 0,
-    collision: 0,
-    projectile: 0,
-    world: 0,
-    combatText: 0,
-    transition: 0,
-    animation: 0,
-    dialogueCamera: 0,
-    render: 0,
-    renderBackground: 0,
-    renderComposite: 0,
-    renderCompositeScale: 0,
-    renderCompositeDraw: 0,
-    renderCompositeBackground: 0,
-    renderCompositeEntities: 0,
-    renderCompositeEffects: 0,
-    renderCompositeUi: 0,
-    hud: 0,
-    hudOrbs: 0,
-    ui: 0,
-    uiInventory: 0,
-    uiSpellbook: 0,
-    uiDevTools: 0,
-    uiCrafting: 0,
-    other: 0,
-    total: 0,
-    frames: 0,
-    drawCalls: 0,
-    drawCallsBackground: 0,
-    drawCallsEntities: 0,
-    drawCallsEffects: 0,
-    drawCallsUi: 0,
-    layoutReads: 0,
-    styleWrites: 0,
-    layoutThrashSignals: 0,
-    rafRequests: 0,
-    rafCallbacks: 0,
-    duplicateRafSignals: 0,
+const perfTotals = DEBUG_PERF_PROBE ? createFrameTimingTotals() : null;
+let perfWindowStartedAt = DEBUG_PERF_PROBE ? performance.now() : 0;
+let scheduledTickCount = 0;
+
+const layoutProbe = DEBUG_PERF_PROBE
+  ? {
+      layoutReads: 0,
+      styleWrites: 0,
+      layoutThrashSignals: 0,
+      lastWriteAt: -Infinity,
+      writeThenReadThresholdMs: 8,
+    }
+  : null;
+
+if (DEBUG_PERF_PROBE) {
+  const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
+  Element.prototype.getBoundingClientRect = function instrumentedGetBoundingClientRect(...args) {
+    layoutProbe.layoutReads += 1;
+    if ((performance.now() - layoutProbe.lastWriteAt) <= layoutProbe.writeThenReadThresholdMs) {
+      layoutProbe.layoutThrashSignals += 1;
+    }
+    return originalGetBoundingClientRect.apply(this, args);
+  };
+
+  const originalSetProperty = CSSStyleDeclaration.prototype.setProperty;
+  CSSStyleDeclaration.prototype.setProperty = function instrumentedSetProperty(...args) {
+    layoutProbe.styleWrites += 1;
+    layoutProbe.lastWriteAt = performance.now();
+    return originalSetProperty.apply(this, args);
+  };
+
+  const trackedStyleProperties = ['background', 'opacity', 'transform', 'width', 'height', 'left', 'top'];
+  for (const property of trackedStyleProperties) {
+    const descriptor = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, property);
+    if (!descriptor?.set || !descriptor?.get) continue;
+    Object.defineProperty(CSSStyleDeclaration.prototype, property, {
+      configurable: true,
+      enumerable: descriptor.enumerable ?? false,
+      get: descriptor.get,
+      set(value) {
+        layoutProbe.styleWrites += 1;
+        layoutProbe.lastWriteAt = performance.now();
+        descriptor.set.call(this, value);
+      },
+    });
+  }
+
+  const originalRequestAnimationFrame = window.requestAnimationFrame.bind(window);
+  window.requestAnimationFrame = function instrumentedRequestAnimationFrame(callback) {
+    perfTotals.rafRequests += 1;
+    if (callback === tick) {
+      scheduledTickCount += 1;
+      if (scheduledTickCount > 1) perfTotals.duplicateRafSignals += 1;
+    }
+    return originalRequestAnimationFrame((timestamp) => {
+      if (callback === tick) {
+        perfTotals.rafCallbacks += 1;
+        scheduledTickCount = Math.max(0, scheduledTickCount - 1);
+      }
+      callback(timestamp);
+    });
   };
 }
 
-const perfTotals = createFrameTimingTotals();
-let perfWindowStartedAt = performance.now();
-let scheduledTickCount = 0;
-
-const layoutProbe = {
-  layoutReads: 0,
-  styleWrites: 0,
-  layoutThrashSignals: 0,
-  lastWriteAt: -Infinity,
-  writeThenReadThresholdMs: 8,
-};
-
-const originalGetBoundingClientRect = Element.prototype.getBoundingClientRect;
-Element.prototype.getBoundingClientRect = function instrumentedGetBoundingClientRect(...args) {
-  layoutProbe.layoutReads += 1;
-  if ((performance.now() - layoutProbe.lastWriteAt) <= layoutProbe.writeThenReadThresholdMs) {
-    layoutProbe.layoutThrashSignals += 1;
-  }
-  return originalGetBoundingClientRect.apply(this, args);
-};
-
-const originalSetProperty = CSSStyleDeclaration.prototype.setProperty;
-CSSStyleDeclaration.prototype.setProperty = function instrumentedSetProperty(...args) {
-  layoutProbe.styleWrites += 1;
-  layoutProbe.lastWriteAt = performance.now();
-  return originalSetProperty.apply(this, args);
-};
-
-const trackedStyleProperties = ['background', 'opacity', 'transform', 'width', 'height', 'left', 'top'];
-for (const property of trackedStyleProperties) {
-  const descriptor = Object.getOwnPropertyDescriptor(CSSStyleDeclaration.prototype, property);
-  if (!descriptor?.set || !descriptor?.get) continue;
-  Object.defineProperty(CSSStyleDeclaration.prototype, property, {
-    configurable: true,
-    enumerable: descriptor.enumerable ?? false,
-    get: descriptor.get,
-    set(value) {
-      layoutProbe.styleWrites += 1;
-      layoutProbe.lastWriteAt = performance.now();
-      descriptor.set.call(this, value);
-    },
-  });
-}
-
-const originalRequestAnimationFrame = window.requestAnimationFrame.bind(window);
-window.requestAnimationFrame = function instrumentedRequestAnimationFrame(callback) {
-  perfTotals.rafRequests += 1;
-  if (callback === tick) {
-    scheduledTickCount += 1;
-    if (scheduledTickCount > 1) perfTotals.duplicateRafSignals += 1;
-  }
-  return originalRequestAnimationFrame((timestamp) => {
-    if (callback === tick) {
-      perfTotals.rafCallbacks += 1;
-      scheduledTickCount = Math.max(0, scheduledTickCount - 1);
+const timed = DEBUG_PERF_PROBE
+  ? function timedEnabled(label, framePerf, fn) {
+      const start = performance.now();
+      const result = fn();
+      framePerf[label] += performance.now() - start;
+      return result;
     }
-    callback(timestamp);
-  });
-};
+  : function timedDisabled(_label, _framePerf, fn) {
+      return fn();
+    };
 
-function formatTiming(value) {
-  return Number(value.toFixed(3));
-}
-
-function timed(label, framePerf, fn) {
-  const start = performance.now();
-  const result = fn();
-  framePerf[label] += performance.now() - start;
-  return result;
-}
-
-function logPerformanceWindow(now) {
-  const elapsed = now - perfWindowStartedAt;
-  if (elapsed < PERF_LOG_INTERVAL_MS || perfTotals.frames === 0) return;
-
-  const average = {};
-  for (const [key, value] of Object.entries(perfTotals)) {
-    if (key === 'frames') continue;
-    if (typeof value !== 'number') continue;
-    average[key] = value / perfTotals.frames;
-  }
-
-  const total = average.total || 0.0001;
-  const ranked = [
-    ['input', average.input],
-    ['player', average.player],
-    ['enemy', average.enemy],
-    ['collision', average.collision + average.projectile],
-    ['render', average.render],
-    ['hud', average.hud],
-    ['ui', average.ui],
-    ['other', average.other],
-  ].sort((a, b) => b[1] - a[1]);
-
-  const bottlenecks = ranked.slice(0, 2).map(([label, value]) => ({
-    system: label,
-    ms: formatTiming(value),
-    percent: formatTiming((value / total) * 100),
-  }));
-
-  const classification = average.ui > total * 0.35
-    ? 'DOM-bound'
-    : average.layoutThrashSignals > 0.5
-      ? 'layout-bound'
-      : 'CPU-bound';
-
-  console.info('[PerfProbe] frame-breakdown', {
-    windowMs: formatTiming(elapsed),
-    frames: perfTotals.frames,
-    averageMs: {
-      input: formatTiming(average.input),
-      player: formatTiming(average.player),
-      enemy: formatTiming(average.enemy),
-      collision: formatTiming(average.collision),
-      projectile: formatTiming(average.projectile),
-      world: formatTiming(average.world),
-      combatText: formatTiming(average.combatText),
-      transition: formatTiming(average.transition),
-      animation: formatTiming(average.animation),
-      dialogueCamera: formatTiming(average.dialogueCamera),
-      render: formatTiming(average.render),
-      hud: formatTiming(average.hud),
-      ui: formatTiming(average.ui),
-      other: formatTiming(average.other),
-      total: formatTiming(average.total),
-    },
-    render: {
-      background: formatTiming(average.renderBackground),
-      composite: formatTiming(average.renderComposite),
-      compositeScale: formatTiming(average.renderCompositeScale),
-      compositeDraw: formatTiming(average.renderCompositeDraw),
-      layers: {
-        background: formatTiming(average.renderCompositeBackground),
-        entities: formatTiming(average.renderCompositeEntities),
-        effects: formatTiming(average.renderCompositeEffects),
-        ui: formatTiming(average.renderCompositeUi),
-      },
-      drawCalls: {
-        total: Math.round(average.drawCalls),
-        background: Math.round(average.drawCallsBackground),
-        entities: Math.round(average.drawCallsEntities),
-        effects: Math.round(average.drawCallsEffects),
-        ui: Math.round(average.drawCallsUi),
-      },
-    },
-    dom: {
-      combatHudUpdate: formatTiming(average.hud),
-      combatHudOrbs: formatTiming(average.hudOrbs),
-      devToolsUpdateStats: formatTiming(average.uiDevTools),
-      inventoryRender: formatTiming(average.uiInventory),
-      spellbookRender: formatTiming(average.uiSpellbook),
-      craftingRender: formatTiming(average.uiCrafting),
-      layoutReads: formatTiming(average.layoutReads),
-      styleWrites: formatTiming(average.styleWrites),
-      layoutThrashSignals: formatTiming(average.layoutThrashSignals),
-    },
-    loops: {
-      rafRequestsPerFrame: formatTiming(average.rafRequests),
-      rafCallbacksPerFrame: formatTiming(average.rafCallbacks),
-      duplicateRafSignalsPerFrame: formatTiming(average.duplicateRafSignals),
-    },
-    bottlenecks,
-    classification,
-  });
-
-  Object.assign(perfTotals, createFrameTimingTotals());
-  perfWindowStartedAt = now;
-}
+const logPerformanceWindow = DEBUG_PERF_PROBE
+  ? function logPerformanceWindowEnabled(now) {
+      const PERF_LOG_INTERVAL_MS = 500;
+      const elapsed = now - perfWindowStartedAt;
+      if (elapsed < PERF_LOG_INTERVAL_MS || perfTotals.frames === 0) return;
+      Object.assign(perfTotals, createFrameTimingTotals());
+      perfWindowStartedAt = now;
+    }
+  : function logPerformanceWindowDisabled() {};
 
 let last = performance.now();
 
@@ -1557,48 +1476,50 @@ function tick(now) {
     }
 
     timed('uiDevTools', framePerf, () => updateDevStatsHud(dt));
-    framePerf.ui += framePerf.uiDevTools;
+    if (DEBUG_PERF_PROBE) framePerf.ui += framePerf.uiDevTools;
 
     input.endFrame();
-    const rendererMetrics = renderer.getFrameMetrics();
-    framePerf.renderBackground += rendererMetrics.renderBackgroundMs;
-    framePerf.renderComposite += rendererMetrics.compositeMs;
-    framePerf.renderCompositeScale += rendererMetrics.compositeScaleMs;
-    framePerf.renderCompositeDraw += rendererMetrics.compositeDrawMs;
-    framePerf.renderCompositeBackground += rendererMetrics.layerCompositeMs.background;
-    framePerf.renderCompositeEntities += rendererMetrics.layerCompositeMs.entities;
-    framePerf.renderCompositeEffects += rendererMetrics.layerCompositeMs.effects;
-    framePerf.renderCompositeUi += rendererMetrics.layerCompositeMs.ui;
-    framePerf.drawCalls += rendererMetrics.drawCalls;
-    framePerf.drawCallsBackground += rendererMetrics.background;
-    framePerf.drawCallsEntities += rendererMetrics.entities;
-    framePerf.drawCallsEffects += rendererMetrics.effects;
-    framePerf.drawCallsUi += rendererMetrics.ui;
-    framePerf.layoutReads += layoutProbe.layoutReads;
-    framePerf.styleWrites += layoutProbe.styleWrites;
-    framePerf.layoutThrashSignals += layoutProbe.layoutThrashSignals;
-    framePerf.total = performance.now() - frameStart;
-    if (framePerf.total > 24) {
-      const recentPerfEvents = performanceProbe.recent(1500).map((entry) => ({
-        name: entry.name,
-        ageMs: Number((nowMs() - entry.at).toFixed(3)),
-        details: entry.details,
-      }));
-      if (recentPerfEvents.length > 0 && runtimeConfig.get('debug.logTransitionPerf')) {
-        console.warn('[FrameSpikeCorrelation]', {
-          frameMs: Number(framePerf.total.toFixed(3)),
-          roomId: activeRoom?.id ?? null,
-          recentPerfEvents,
-        });
+    if (DEBUG_PERF_PROBE) {
+      const rendererMetrics = renderer.getFrameMetrics();
+      framePerf.renderBackground += rendererMetrics.renderBackgroundMs;
+      framePerf.renderComposite += rendererMetrics.compositeMs;
+      framePerf.renderCompositeScale += rendererMetrics.compositeScaleMs;
+      framePerf.renderCompositeDraw += rendererMetrics.compositeDrawMs;
+      framePerf.renderCompositeBackground += rendererMetrics.layerCompositeMs.background;
+      framePerf.renderCompositeEntities += rendererMetrics.layerCompositeMs.entities;
+      framePerf.renderCompositeEffects += rendererMetrics.layerCompositeMs.effects;
+      framePerf.renderCompositeUi += rendererMetrics.layerCompositeMs.ui;
+      framePerf.drawCalls += rendererMetrics.drawCalls;
+      framePerf.drawCallsBackground += rendererMetrics.background;
+      framePerf.drawCallsEntities += rendererMetrics.entities;
+      framePerf.drawCallsEffects += rendererMetrics.effects;
+      framePerf.drawCallsUi += rendererMetrics.ui;
+      framePerf.layoutReads += layoutProbe.layoutReads;
+      framePerf.styleWrites += layoutProbe.styleWrites;
+      framePerf.layoutThrashSignals += layoutProbe.layoutThrashSignals;
+      framePerf.total = performance.now() - frameStart;
+      if (framePerf.total > 24) {
+        const recentPerfEvents = performanceProbe.recent(1500).map((entry) => ({
+          name: entry.name,
+          ageMs: Number((nowMs() - entry.at).toFixed(3)),
+          details: entry.details,
+        }));
+        if (recentPerfEvents.length > 0 && runtimeConfig.get('debug.logTransitionPerf')) {
+          console.warn('[FrameSpikeCorrelation]', {
+            frameMs: Number(framePerf.total.toFixed(3)),
+            roomId: activeRoom?.id ?? null,
+            recentPerfEvents,
+          });
+        }
       }
+      framePerf.other = Math.max(0, framePerf.total - (framePerf.input + framePerf.render + framePerf.ui));
+      for (const [key, value] of Object.entries(framePerf)) { if (typeof value === 'number' && key in perfTotals) perfTotals[key] += value; }
+      perfTotals.frames += 1;
+      layoutProbe.layoutReads = 0;
+      layoutProbe.styleWrites = 0;
+      layoutProbe.layoutThrashSignals = 0;
+      logPerformanceWindow(now);
     }
-    framePerf.other = Math.max(0, framePerf.total - (framePerf.input + framePerf.render + framePerf.ui));
-    for (const [key, value] of Object.entries(framePerf)) { if (typeof value === 'number' && key in perfTotals) perfTotals[key] += value; }
-    perfTotals.frames += 1;
-    layoutProbe.layoutReads = 0;
-    layoutProbe.styleWrites = 0;
-    layoutProbe.layoutThrashSignals = 0;
-    logPerformanceWindow(now);
     requestAnimationFrame(tick);
     return;
   }
@@ -1630,7 +1551,7 @@ function tick(now) {
     input.clearMouseButtonPresses();
   }
 
-  roomTransitionSystem.profilingEnabled = runtimeConfig.get('debug.logTransitionPerf');
+  roomTransitionSystem.profilingEnabled = DEBUG_PERF_PROBE && runtimeConfig.get('debug.logTransitionPerf');
   const transitionResult = timed('transition', framePerf, () => roomTransitionSystem.update(dt, { activeRoom, player }));
   if (transitionResult?.room) {
     roomTransitionSystem.noteExternalTimeline('room_swap_commit_start', {
@@ -1799,47 +1720,49 @@ function tick(now) {
   }
 
   timed('hud', framePerf, () => combatHud.updateOrbs());
-  framePerf.hudOrbs = framePerf.hud;
+  if (DEBUG_PERF_PROBE) framePerf.hudOrbs = framePerf.hud;
   timed('uiDevTools', framePerf, () => updateDevStatsHud(dt));
-  framePerf.ui += framePerf.uiDevTools;
+  if (DEBUG_PERF_PROBE) framePerf.ui += framePerf.uiDevTools;
   if (inventoryWindow.isOpen()) {
     timed('uiInventory', framePerf, () => inventoryWindow.render());
-    framePerf.ui += framePerf.uiInventory;
+    if (DEBUG_PERF_PROBE) framePerf.ui += framePerf.uiInventory;
   }
   if (spellbook.isOpen()) {
-    framePerf.uiSpellbook = 0;
+    if (DEBUG_PERF_PROBE) framePerf.uiSpellbook = 0;
   }
   if (isCraftingUIOpen) {
-    framePerf.uiCrafting = 0;
+    if (DEBUG_PERF_PROBE) framePerf.uiCrafting = 0;
   }
 
   input.endFrame();
 
-  const rendererMetrics = renderer.getFrameMetrics();
-  framePerf.renderBackground += rendererMetrics.renderBackgroundMs;
-  framePerf.renderComposite += rendererMetrics.compositeMs;
-  framePerf.renderCompositeScale += rendererMetrics.compositeScaleMs;
-  framePerf.renderCompositeDraw += rendererMetrics.compositeDrawMs;
-  framePerf.renderCompositeBackground += rendererMetrics.layerCompositeMs.background;
-  framePerf.renderCompositeEntities += rendererMetrics.layerCompositeMs.entities;
-  framePerf.renderCompositeEffects += rendererMetrics.layerCompositeMs.effects;
-  framePerf.renderCompositeUi += rendererMetrics.layerCompositeMs.ui;
-  framePerf.drawCalls += rendererMetrics.drawCalls;
-  framePerf.drawCallsBackground += rendererMetrics.background;
-  framePerf.drawCallsEntities += rendererMetrics.entities;
-  framePerf.drawCallsEffects += rendererMetrics.effects;
-  framePerf.drawCallsUi += rendererMetrics.ui;
-  framePerf.layoutReads += layoutProbe.layoutReads;
-  framePerf.styleWrites += layoutProbe.styleWrites;
-  framePerf.layoutThrashSignals += layoutProbe.layoutThrashSignals;
-  framePerf.total = performance.now() - frameStart;
-  framePerf.other = Math.max(0, framePerf.total - (framePerf.input + framePerf.player + framePerf.enemy + framePerf.collision + framePerf.projectile + framePerf.world + framePerf.combatText + framePerf.transition + framePerf.animation + framePerf.dialogueCamera + framePerf.render + framePerf.hud + framePerf.ui));
-  for (const [key, value] of Object.entries(framePerf)) { if (typeof value === 'number' && key in perfTotals) perfTotals[key] += value; }
-  perfTotals.frames += 1;
-  layoutProbe.layoutReads = 0;
-  layoutProbe.styleWrites = 0;
-  layoutProbe.layoutThrashSignals = 0;
-  logPerformanceWindow(now);
+  if (DEBUG_PERF_PROBE) {
+    const rendererMetrics = renderer.getFrameMetrics();
+    framePerf.renderBackground += rendererMetrics.renderBackgroundMs;
+    framePerf.renderComposite += rendererMetrics.compositeMs;
+    framePerf.renderCompositeScale += rendererMetrics.compositeScaleMs;
+    framePerf.renderCompositeDraw += rendererMetrics.compositeDrawMs;
+    framePerf.renderCompositeBackground += rendererMetrics.layerCompositeMs.background;
+    framePerf.renderCompositeEntities += rendererMetrics.layerCompositeMs.entities;
+    framePerf.renderCompositeEffects += rendererMetrics.layerCompositeMs.effects;
+    framePerf.renderCompositeUi += rendererMetrics.layerCompositeMs.ui;
+    framePerf.drawCalls += rendererMetrics.drawCalls;
+    framePerf.drawCallsBackground += rendererMetrics.background;
+    framePerf.drawCallsEntities += rendererMetrics.entities;
+    framePerf.drawCallsEffects += rendererMetrics.effects;
+    framePerf.drawCallsUi += rendererMetrics.ui;
+    framePerf.layoutReads += layoutProbe.layoutReads;
+    framePerf.styleWrites += layoutProbe.styleWrites;
+    framePerf.layoutThrashSignals += layoutProbe.layoutThrashSignals;
+    framePerf.total = performance.now() - frameStart;
+    framePerf.other = Math.max(0, framePerf.total - (framePerf.input + framePerf.player + framePerf.enemy + framePerf.collision + framePerf.projectile + framePerf.world + framePerf.combatText + framePerf.transition + framePerf.animation + framePerf.dialogueCamera + framePerf.render + framePerf.hud + framePerf.ui));
+    for (const [key, value] of Object.entries(framePerf)) { if (typeof value === 'number' && key in perfTotals) perfTotals[key] += value; }
+    perfTotals.frames += 1;
+    layoutProbe.layoutReads = 0;
+    layoutProbe.styleWrites = 0;
+    layoutProbe.layoutThrashSignals = 0;
+    logPerformanceWindow(now);
+  }
 
   if (!startupCompleteLogged) {
     startupCompleteLogged = true;
