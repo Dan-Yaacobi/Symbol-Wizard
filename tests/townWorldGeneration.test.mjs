@@ -158,6 +158,9 @@ function run() {
   }
   assert.ok(safeZoneWalkable >= 30, 'Forest entry should open into a broad, walkable safety zone.');
   assert.ok(forest.metadata?.reachability?.reachableTiles >= forest.metadata?.reachability?.minimumReachableArea, 'Forest entry connectivity validation should guarantee a sufficiently large reachable area.');
+  const forestTransitionDiagnostics = forest.__transitionCache?.connectivityByEntrance?.get('entrance:forest_entry_from_town');
+  assert.ok(forestTransitionDiagnostics, 'Forest transition cache should include diagnostics for the town-linked entrance.');
+  assert.equal(forestTransitionDiagnostics.connected, true, 'Town-linked forest entrance spawn should be connected to the forest traversable component.');
 
   const forestRoomExit = forest.exits.find((exit) => exit.targetRoomId);
   assert.ok(forestRoomExit, 'Forest start room should expose an internal room transition.');

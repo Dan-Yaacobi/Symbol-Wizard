@@ -191,24 +191,40 @@ function ensureForestEntranceReachable(room, exits, entryId, roadWidth = MIN_ROA
       if (candidate?.position) pathTargets.push(candidate.position);
       else if (Number.isFinite(candidate?.x) && Number.isFinite(candidate?.y)) pathTargets.push({ x: candidate.x, y: candidate.y });
     }
-    const connectPoint = pathTargets
-      .map((point) => nearestReachablePoint(reachable, point))
-      .find((point) => point && (point.x !== entrance.landingX || point.y !== entrance.landingY));
+    pathTargets.push(
+      { x: Math.floor((room.tiles[0]?.length ?? 1) / 2), y: Math.floor((room.tiles.length ?? 1) / 2) },
+      { x: Math.floor((room.tiles[0]?.length ?? 1) * 0.25), y: Math.floor((room.tiles.length ?? 1) * 0.25) },
+      { x: Math.floor((room.tiles[0]?.length ?? 1) * 0.75), y: Math.floor((room.tiles.length ?? 1) * 0.25) },
+      { x: Math.floor((room.tiles[0]?.length ?? 1) * 0.25), y: Math.floor((room.tiles.length ?? 1) * 0.75) },
+      { x: Math.floor((room.tiles[0]?.length ?? 1) * 0.75), y: Math.floor((room.tiles.length ?? 1) * 0.75) },
+    );
 
-    const repairTarget = connectPoint ?? exitPoint;
-    console.warn('[WorldMapManager] Forest open-area connectivity repair', { entryId, reachableTiles: reachable.size, repairTarget });
-    carvePath(room.tiles, spawn, repairTarget, {
-      width: Math.max(MIN_ROAD_WIDTH, roadWidth),
-      jitterBias: 0.2,
-      carvedMask: roadMask,
-      removableObjects: room.objects ?? [],
+    const candidateTargets = pathTargets.filter((point) => point && Number.isFinite(point.x) && Number.isFinite(point.y));
+    const usedTargets = [];
+    for (const candidate of candidateTargets) {
+      const candidateKey = `${candidate.x},${candidate.y}`;
+      if (reachable.has(candidateKey)) continue;
+      usedTargets.push({ x: candidate.x, y: candidate.y });
+      carvePath(room.tiles, spawn, candidate, {
+        width: Math.max(MIN_ROAD_WIDTH, roadWidth),
+        jitterBias: 0.2,
+        carvedMask: roadMask,
+        removableObjects: room.objects ?? [],
+      });
+      carveEntranceSafetyZone(room.tiles, spawn, {
+        radius: ENTRANCE_CLEAR_ZONE_RADIUS + 2,
+        carvedMask: roadMask,
+        removableObjects: room.objects ?? [],
+      });
+      reachable = floodFillWalkable(room.tiles, spawn, buildCollidableMask(room.objects ?? []));
+      if (reachable.size >= minimumReachableArea) break;
+    }
+    console.warn('[WorldMapManager] Forest open-area connectivity repair', {
+      entryId,
+      reachableTiles: reachable.size,
+      minimumReachableArea,
+      repairedTargets: usedTargets,
     });
-    carveEntranceSafetyZone(room.tiles, spawn, {
-      radius: ENTRANCE_CLEAR_ZONE_RADIUS + 2,
-      carvedMask: roadMask,
-      removableObjects: room.objects ?? [],
-    });
-    reachable = floodFillWalkable(room.tiles, spawn, buildCollidableMask(room.objects ?? []));
   }
 
   room.collisionMap = buildCollisionMap(room.tiles, room.objects ?? []);
@@ -333,7 +349,28 @@ function normalizeForestRoom(room, { biomeId, biomeSeed, mapId, returnLink = nul
   if (!hasStructuralForestChanges && room?.__transitionCache?.spawnByEntrance instanceof Map) {
     normalizedRoom.__transitionCache = room.__transitionCache;
   } else {
-    buildRoomTransitionCache(normalizedRoom);
+    buildRoomTransitionCache(normalizedRoom, { primaryEntranceId: 'forest_entry_from_town' });
+  }
+
+  const forestTownEntrance = normalizedRoom.entrances?.forest_entry_from_town ?? null;
+  if (forestTownEntrance && normalizedRoom.__transitionCache?.connectivityByEntrance instanceof Map) {
+    const requested = {
+      x: Math.round(forestTownEntrance.spawn?.x ?? forestTownEntrance.landingX ?? forestTownEntrance.x ?? 0),
+      y: Math.round(forestTownEntrance.spawn?.y ?? forestTownEntrance.landingY ?? forestTownEntrance.y ?? 0),
+    };
+    const spawnKey = forestTownEntrance.id ? `entrance:${forestTownEntrance.id}` : `preferred:${requested.x},${requested.y}`;
+    const diagnostics = normalizedRoom.__transitionCache.connectivityByEntrance.get(spawnKey) ?? null;
+    if (!diagnostics?.connected) {
+      console.error('[WorldMapManager] Forest town-linked entrance failed connectivity validation during generation', {
+        roomId: normalizedRoom.id,
+        entranceId: forestTownEntrance.id ?? 'forest_entry_from_town',
+        requestedSpawn: diagnostics?.requested ?? requested,
+        correctedSpawn: diagnostics?.corrected ?? null,
+        repaired: true,
+      });
+      ensureForestEntranceReachable(normalizedRoom, normalizedRoom.exits, 'forest_entry_from_town', Math.max(MIN_ROAD_WIDTH, returnLink?.roadWidth ?? MIN_ROAD_WIDTH));
+      buildRoomTransitionCache(normalizedRoom, { primaryEntranceId: 'forest_entry_from_town' });
+    }
   }
 
   return normalizedRoom;

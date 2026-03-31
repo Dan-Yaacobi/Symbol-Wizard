@@ -116,23 +116,39 @@ function buildPathConnectivitySet(room, blockedTiles, pathMask = null) {
     }
   }
 
-  const connected = new Set();
-  const queue = [...seeds];
-  let index = 0;
-  while (index < queue.length) {
-    const current = queue[index++];
-    const key = tileKey(current.x, current.y);
-    if (connected.has(key)) continue;
-    if (!isOpenSpawnTile(room, blockedTiles, new Set(), current.x, current.y)) continue;
-    connected.add(key);
-    queue.push(
-      { x: current.x + 1, y: current.y },
-      { x: current.x - 1, y: current.y },
-      { x: current.x, y: current.y + 1 },
-      { x: current.x, y: current.y - 1 },
-    );
+  const floodComponent = (start) => {
+    const connected = new Set();
+    const queue = [start];
+    let index = 0;
+    while (index < queue.length) {
+      const current = queue[index++];
+      const key = tileKey(current.x, current.y);
+      if (connected.has(key)) continue;
+      if (!isOpenSpawnTile(room, blockedTiles, new Set(), current.x, current.y)) continue;
+      connected.add(key);
+      queue.push(
+        { x: current.x + 1, y: current.y },
+        { x: current.x - 1, y: current.y },
+        { x: current.x, y: current.y + 1 },
+        { x: current.x, y: current.y - 1 },
+      );
+    }
+    return connected;
+  };
+
+  if (seeds.length === 0) return new Set();
+
+  let largestComponent = new Set();
+  const visited = new Set();
+  for (const seed of seeds) {
+    const key = tileKey(seed.x, seed.y);
+    if (visited.has(key)) continue;
+    const component = floodComponent(seed);
+    for (const tile of component) visited.add(tile);
+    if (component.size > largestComponent.size) largestComponent = component;
   }
-  return connected;
+
+  return largestComponent;
 }
 
 function isValidSpawnTile(room, blockedTiles, exitTriggerTiles, pathConnectivity, x, y) {
@@ -201,6 +217,23 @@ function findSpawnPosition(room, blockedTiles, exitTriggerTiles, pathConnectivit
   return { ...(nearest ?? { x: startX, y: startY }), corrected: nearest !== null };
 }
 
+function isConnectedToPath(pathConnectivity, x, y) {
+  return !(pathConnectivity instanceof Set) || pathConnectivity.size === 0 || pathConnectivity.has(tileKey(x, y));
+}
+
+function selectConnectivityAnchor(room, options = {}) {
+  if (Number.isFinite(options?.connectivityAnchor?.x) && Number.isFinite(options?.connectivityAnchor?.y)) {
+    return {
+      x: Math.round(options.connectivityAnchor.x),
+      y: Math.round(options.connectivityAnchor.y),
+    };
+  }
+  const primaryEntranceId = options?.primaryEntranceId ?? null;
+  const primaryEntrance = primaryEntranceId ? room?.entrances?.[primaryEntranceId] : null;
+  if (primaryEntrance) return getEntranceSpawnTarget(room, primaryEntrance);
+  return null;
+}
+
 function buildBlockedTiles(room) {
   const blockedTiles = new Set();
   for (const object of room?.objects ?? []) {
@@ -216,8 +249,31 @@ export function buildRoomTransitionCache(room, options = {}) {
   emitTransitionCachePerf('buildRoomTransitionCache_start', { roomId: room?.id ?? null });
   const blockedTiles = options.blockedMask instanceof Set ? new Set(options.blockedMask) : buildBlockedTiles(room);
   const exitTriggerTiles = collectExitTriggerTiles(room);
-  const pathConnectivity = buildPathConnectivitySet(room, blockedTiles, options.pathMask);
+  const anchor = selectConnectivityAnchor(room, options);
+  const basePathConnectivity = buildPathConnectivitySet(room, blockedTiles, options.pathMask);
+  const pathConnectivity = anchor && isOpenSpawnTile(room, blockedTiles, new Set(), anchor.x, anchor.y)
+    ? (() => {
+      const queue = [{ x: anchor.x, y: anchor.y }];
+      const connected = new Set();
+      let index = 0;
+      while (index < queue.length) {
+        const point = queue[index++];
+        const key = tileKey(point.x, point.y);
+        if (connected.has(key)) continue;
+        if (!isOpenSpawnTile(room, blockedTiles, new Set(), point.x, point.y)) continue;
+        connected.add(key);
+        queue.push(
+          { x: point.x + 1, y: point.y },
+          { x: point.x - 1, y: point.y },
+          { x: point.x, y: point.y + 1 },
+          { x: point.x, y: point.y - 1 },
+        );
+      }
+      return connected;
+    })()
+    : basePathConnectivity;
   const spawnByEntrance = new Map();
+  const connectivityByEntrance = new Map();
 
   for (const entrance of Object.values(room?.entrances ?? {})) {
     const preferredSpawn = getEntranceSpawnTarget(room, entrance);
@@ -236,13 +292,31 @@ export function buildRoomTransitionCache(room, options = {}) {
         entranceId: entrance?.id ?? null,
         requested: preferredSpawn,
         corrected: { x: spawn.x, y: spawn.y },
+        connected: isConnectedToPath(pathConnectivity, spawn.x, spawn.y),
+      });
+    }
+    const connected = isConnectedToPath(pathConnectivity, spawn.x, spawn.y);
+    if (!connected) {
+      console.error('[TransitionCache] Entrance spawn failed connectivity validation', {
+        roomId: room?.id ?? null,
+        entranceId: entrance?.id ?? null,
+        requested: preferredSpawn,
+        corrected: { x: spawn.x, y: spawn.y },
       });
     }
     spawnByEntrance.set(spawnKey, { x: spawn.x, y: spawn.y });
+    connectivityByEntrance.set(spawnKey, {
+      requested: preferredSpawn,
+      corrected: { x: spawn.x, y: spawn.y },
+      connected,
+      correctedDuringBuild: Boolean(spawn.corrected),
+    });
   }
 
   room.__transitionCache = {
     spawnByEntrance,
+    connectivityByEntrance,
+    pathConnectivity,
   };
 
   emitTransitionCachePerf('buildRoomTransitionCache_end', {
