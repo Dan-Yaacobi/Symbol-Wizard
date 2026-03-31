@@ -14,6 +14,7 @@ import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/Comb
 import * as LootSystem from './systems/LootSystem.js';
 import { CombatTextSystem } from './systems/CombatTextSystem.js';
 import { prewarmBackgroundCache, renderWorld } from './systems/RenderSystem.js';
+import { setTransitionCachePerfHook } from './world/TransitionCache.js';
 import { updateEntityAnimation, updateProjectileAnimation } from './systems/AnimationSystem.js';
 import { setEntityState, syncEntityMovementState, updateEntityState } from './systems/EntityStateSystem.js';
 import { ensureEntityFacing, updateFacingFromVelocity } from './systems/FacingSystem.js';
@@ -116,14 +117,35 @@ let enemyAiEnabled = true;
 let applyEnemyTuningToExistingEnemies = false;
 const npcs = [];
 let worldObjects = activeRoom.objects ?? [];
+const performanceProbe = {
+  events: [],
+  mark(name, details = {}) {
+    const at = nowMs();
+    this.events.push({ name, at, details });
+    if (this.events.length > 120) this.events.shift();
+    if (runtimeConfig.get('debug.logTransitionPerf')) {
+      console.info('[PerfProbe]', { name, at: Number(at.toFixed(3)), details });
+    }
+  },
+  recent(limitMs = 4000) {
+    const cutoff = nowMs() - limitMs;
+    return this.events.filter((entry) => entry.at >= cutoff);
+  },
+};
+
 const roomTransitionSystem = new RoomTransitionSystem({
   biomeGenerator,
   worldMapManager,
   fadeDurationMs: 150,
   debug: false,
+  profilingEnabled: runtimeConfig.get('debug.logTransitionPerf'),
+  onPerfEvent: (name, details) => performanceProbe.mark(name, details),
 });
 let pendingTransitionFirstRenderMark = false;
 let scheduledBackgroundPrewarm = null;
+let backgroundPrewarmIdleSeconds = 0;
+setTransitionCachePerfHook((event, details) => performanceProbe.mark(event, details));
+
 
 function prewarmLikelyFirstTransition(room) {
   const exits = Array.isArray(room?.exits)
@@ -192,54 +214,44 @@ function scheduleBackgroundPrewarm(rendererInstance, room, reason = 'unknown') {
   const roomId = room?.id ?? null;
   if (scheduledBackgroundPrewarm?.roomId === roomId) return;
 
-  if (typeof window !== 'undefined') {
-    if (scheduledBackgroundPrewarm?.idleHandle != null && typeof window.cancelIdleCallback === 'function') {
-      window.cancelIdleCallback(scheduledBackgroundPrewarm.idleHandle);
-    }
-    if (scheduledBackgroundPrewarm?.timeoutHandle != null) {
-      window.clearTimeout(scheduledBackgroundPrewarm.timeoutHandle);
-    }
-    if (scheduledBackgroundPrewarm?.rafHandle != null) {
-      window.cancelAnimationFrame(scheduledBackgroundPrewarm.rafHandle);
-    }
-  }
-
-  const executePrewarm = () => {
-    scheduledBackgroundPrewarm = null;
-    const startMs = nowMs();
-    prewarmBackgroundCache(rendererInstance, room.tiles, room.objects ?? []);
-    const endMs = nowMs();
-    console.info('[RenderTiming]', {
-      phase: 'prewarm_background_cache',
-      reason,
-      roomId: room?.id ?? null,
-      durationMs: Number((endMs - startMs).toFixed(3)),
-    });
-  };
-
-  if (typeof window === 'undefined') {
-    executePrewarm();
-    return;
-  }
-
-  const pending = {
+  const createdAt = nowMs();
+  scheduledBackgroundPrewarm = {
     roomId,
-    rafHandle: null,
-    idleHandle: null,
-    timeoutHandle: null,
+    reason,
+    createdAt,
+    execute: () => {
+      const startMs = nowMs();
+      performanceProbe.mark('prewarmBackgroundCache_start', { roomId, reason });
+      prewarmBackgroundCache(rendererInstance, room.tiles, room.objects ?? []);
+      const endMs = nowMs();
+      const durationMs = Number((endMs - startMs).toFixed(3));
+      performanceProbe.mark('prewarmBackgroundCache_end', { roomId, reason, durationMs });
+      if (runtimeConfig.get('debug.logBackgroundPrewarmPerf')) {
+        console.info('[RenderTiming]', {
+          phase: 'prewarm_background_cache',
+          reason,
+          roomId,
+          queuedForMs: Number((startMs - createdAt).toFixed(3)),
+          durationMs,
+        });
+      }
+    },
   };
-  scheduledBackgroundPrewarm = pending;
 
-  const runDuringIdle = () => {
-    if (typeof window.requestIdleCallback === 'function') {
-      pending.idleHandle = window.requestIdleCallback(() => executePrewarm(), { timeout: 150 });
-      return;
-    }
-    pending.timeoutHandle = window.setTimeout(executePrewarm, 0);
-  };
-  pending.rafHandle = window.requestAnimationFrame(runDuringIdle);
+  performanceProbe.mark('scheduleBackgroundPrewarm', {
+    roomId,
+    reason,
+  });
 }
 
+function flushBackgroundPrewarmIfSafe() {
+  if (!scheduledBackgroundPrewarm) return;
+  const isTransitioning = roomTransitionSystem.isTransitionActive();
+  const isPlayerMoving = Math.abs(player.vx) > 0.01 || Math.abs(player.vy) > 0.01;
+  if (isTransitioning || isPlayerMoving || dialogueManager?.isOpen) return;
+  scheduledBackgroundPrewarm.execute();
+  scheduledBackgroundPrewarm = null;
+}
 function spawnEnemyInActiveRoom(enemyType, position) {
   const previewEnemy = new Enemy(enemyType, Math.round(position?.x ?? 0), Math.round(position?.y ?? 0));
   const spawnSearch = tryFindSpawnPosition(position ?? { x: 0, y: 0 }, {
@@ -1522,6 +1534,20 @@ function tick(now) {
     framePerf.styleWrites += layoutProbe.styleWrites;
     framePerf.layoutThrashSignals += layoutProbe.layoutThrashSignals;
     framePerf.total = performance.now() - frameStart;
+    if (framePerf.total > 24) {
+      const recentPerfEvents = performanceProbe.recent(1500).map((entry) => ({
+        name: entry.name,
+        ageMs: Number((nowMs() - entry.at).toFixed(3)),
+        details: entry.details,
+      }));
+      if (recentPerfEvents.length > 0 && runtimeConfig.get('debug.logTransitionPerf')) {
+        console.warn('[FrameSpikeCorrelation]', {
+          frameMs: Number(framePerf.total.toFixed(3)),
+          roomId: activeRoom?.id ?? null,
+          recentPerfEvents,
+        });
+      }
+    }
     framePerf.other = Math.max(0, framePerf.total - (framePerf.input + framePerf.render + framePerf.ui));
     for (const [key, value] of Object.entries(framePerf)) { if (typeof value === 'number' && key in perfTotals) perfTotals[key] += value; }
     perfTotals.frames += 1;
@@ -1553,6 +1579,13 @@ function tick(now) {
   const spellbookOpen = spellbook.isOpen();
 
   if (!roomTransitionSystem.isTransitionActive() && !dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
+    backgroundPrewarmIdleSeconds += dt;
+  } else {
+    backgroundPrewarmIdleSeconds = 0;
+  }
+  if (backgroundPrewarmIdleSeconds >= 0.25) flushBackgroundPrewarmIfSafe();
+
+  if (!roomTransitionSystem.isTransitionActive() && !dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {
     timed('player', framePerf, () => handlePlayer(dt));
   } else {
     player.vx = 0;
@@ -1560,6 +1593,7 @@ function tick(now) {
     input.clearMouseButtonPresses();
   }
 
+  roomTransitionSystem.profilingEnabled = runtimeConfig.get('debug.logTransitionPerf');
   const transitionResult = timed('transition', framePerf, () => roomTransitionSystem.update(dt, { activeRoom, player }));
   if (transitionResult?.room) {
     roomTransitionSystem.noteExternalTimeline('room_swap_commit_start', {

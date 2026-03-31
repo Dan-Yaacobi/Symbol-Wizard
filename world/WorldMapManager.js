@@ -329,7 +329,13 @@ function normalizeForestRoom(room, { biomeId, biomeSeed, mapId, returnLink = nul
     },
   };
 
-  buildRoomTransitionCache(normalizedRoom);
+  const hasStructuralForestChanges = Boolean(returnLink);
+  if (!hasStructuralForestChanges && room?.__transitionCache?.spawnByEntrance instanceof Map) {
+    normalizedRoom.__transitionCache = room.__transitionCache;
+  } else {
+    buildRoomTransitionCache(normalizedRoom);
+  }
+
   return normalizedRoom;
 }
 
