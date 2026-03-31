@@ -320,8 +320,12 @@ export class CombatTextSystem {
       const label = `+ ${name} x${entry.quantity}`;
       const x = entry.x - cameraX;
       const y = entry.y - cameraY;
-      this.#drawOutlinedText(renderer, label, entry.style ?? this.#pickupStyle(), x, y, entry.opacity);
+      this.#drawPrimaryText(renderer, label, entry.style ?? this.#pickupStyle(), x, y, entry.opacity);
     }
+  }
+
+  #drawPrimaryText(renderer, text, style, x, y, opacity) {
+    renderer.drawEffectText(text, style.color, x, y, opacity, 'rgba(0,0,0,0)', style);
   }
 
   #drawOutlinedText(renderer, text, style, x, y, opacity) {
