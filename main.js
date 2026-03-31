@@ -277,17 +277,33 @@ async function runInitialPrewarm() {
   map = activeRoom?.tiles ?? [];
 
   loadingProgressText = 'Building transition cache...';
-  const preloadRooms = new Set([activeRoom]);
-  const exits = Array.isArray(activeRoom?.exits)
-    ? activeRoom.exits
-    : Object.entries(activeRoom?.exits ?? {}).map(([id, exit]) => ({ id, ...exit }));
-  for (const exit of exits) {
-    const target = roomTransitionSystem.prewarmExitTarget(activeRoom, exit)?.targetRoom ?? null;
-    if (target) preloadRooms.add(target);
+  const preloadRooms = new Map();
+  const queue = [activeRoom];
+  const queued = new Set([activeRoom?.id ?? '']);
+
+  while (queue.length > 0) {
+    const room = queue.shift();
+    if (!room?.id) continue;
+    preloadRooms.set(room.id, room);
+    const exits = Array.isArray(room?.exits)
+      ? room.exits
+      : Object.entries(room?.exits ?? {}).map(([id, exit]) => ({ id, ...exit }));
+    for (const exit of exits) {
+      const target = roomTransitionSystem.prewarmExitTarget(room, exit)?.targetRoom ?? null;
+      if (!target?.id || preloadRooms.has(target.id) || queued.has(target.id)) continue;
+      queue.push(target);
+      queued.add(target.id);
+    }
   }
 
+  const prewarmedRoomIds = [...preloadRooms.keys()].sort();
+  console.info('[Startup] Prewarm coverage complete', {
+    totalPrewarmedRooms: prewarmedRoomIds.length,
+    roomIds: prewarmedRoomIds,
+  });
+
   loadingProgressText = 'Preparing renderer...';
-  for (const room of preloadRooms) {
+  for (const room of preloadRooms.values()) {
     if (!room?.tiles) continue;
     prewarmBackgroundCache(renderer, room.tiles, room.objects ?? []);
     room.__backgroundCache = renderer.backgroundCache;

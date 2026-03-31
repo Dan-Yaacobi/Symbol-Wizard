@@ -248,7 +248,7 @@ export class RoomTransitionSystem {
       targetRoom = this.worldMapManager.resolveMapByExit(context.activeRoom, normalizedExit);
       targetEntrance = this.worldMapManager.getEntrance(targetRoom, normalizedExit.targetEntryId);
     } else if (normalizedExit.targetRoomId && normalizedExit.targetEntranceId) {
-      targetWasCached = this.biomeGenerator?.roomCache?.has?.(normalizedExit.targetRoomId) ?? null;
+      targetWasCached = this.biomeGenerator?.hasCachedRoom?.(normalizedExit.targetRoomId) ?? null;
       targetRoom = this.biomeGenerator.loadRoom(normalizedExit.targetRoomId);
       targetEntrance = targetRoom?.entrances?.[normalizedExit.targetEntranceId];
     }
@@ -431,6 +431,9 @@ export class RoomTransitionSystem {
       && (this.preparedTransition?.exit?.id ?? null) === (exit?.id ?? null)
       ? this.preparedTransition
       : null;
+    if (!prepared) {
+      throw new Error('❌ Transition attempted without prewarmed room');
+    }
     markSection('resolve_target', targetResolveStart);
     const normalizedExit = prepared?.normalizedExit ?? this.normalizeExit(context.activeRoom, exit);
     const targetRoom = prepared?.targetRoom ?? null;

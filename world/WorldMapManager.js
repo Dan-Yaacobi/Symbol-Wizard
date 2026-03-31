@@ -424,7 +424,10 @@ export class WorldMapManager {
 
   loadForest(seed, options = {}) {
     const biomeId = this.buildForestBiomeId(seed);
-    const { biome } = this.biomeGenerator.enterBiome(biomeId, seed);
+    const biome = this.biomeGenerator.biomes.has(biomeId)
+      ? this.biomeGenerator.biomes.get(biomeId)
+      : this.biomeGenerator.enterBiome(biomeId, seed).biome;
+    this.biomeGenerator.currentBiome = biome;
     const roomId = options.roomId ?? biome?.startRoomId ?? null;
     const mapId = roomId ? this.buildForestMapId(seed, roomId) : biomeId;
 
@@ -458,9 +461,14 @@ export class WorldMapManager {
           spawn: plannedEntryAnchor?.spawn ? { ...plannedEntryAnchor.spawn } : undefined,
         },
       };
-      this.biomeGenerator.roomCache?.delete?.(roomId);
+      console.info('[WorldMapManager] Preserving biome room cache during loadForest', {
+        biomeId,
+        roomId,
+        reason: 'normal_transition_must_not_invalidate_room_cache',
+      });
     }
-    const room = roomId ? this.biomeGenerator.loadRoom(roomId) : null;
+    const baseRoom = roomId ? this.biomeGenerator.loadRoom(roomId) : null;
+    const room = baseRoom ? JSON.parse(JSON.stringify(baseRoom)) : null;
     const normalized = normalizeForestRoom(room, {
       biomeId,
       biomeSeed: seed,
@@ -539,7 +547,9 @@ export class WorldMapManager {
           roadWidth: exit.width ?? exit.meta?.roadWidth ?? 3,
         }
         : null;
-      return this.mapCache.get(forestMapId) ?? this.loadForest(forestSeed, {
+      const cachedMap = this.mapCache.get(forestMapId) ?? null;
+      if (cachedMap) return cachedMap;
+      return this.loadForest(forestSeed, {
         roomId: exit.targetRoomId,
         returnLink,
       });
@@ -548,7 +558,9 @@ export class WorldMapManager {
     if (exit?.targetMapType === 'forest') {
       const targetRoomId = exit.targetRoomId ?? null;
       const forestMapId = targetRoomId ? this.buildForestMapId(exit.targetSeed, targetRoomId) : null;
-      return (forestMapId ? this.mapCache.get(forestMapId) : null) ?? this.loadForest(exit.targetSeed, {
+      const cachedMap = forestMapId ? this.mapCache.get(forestMapId) : null;
+      if (cachedMap) return cachedMap;
+      return this.loadForest(exit.targetSeed, {
         roomId: targetRoomId,
         returnLink: {
           targetSeed: currentMap.seed,
