@@ -20,9 +20,10 @@ function getRoomTransitionCache(room) {
 }
 
 export class RoomTransitionSystem {
-  constructor({ biomeGenerator, worldMapManager = null, fadeDurationMs = 150, debug = false, profilingEnabled = false, onPerfEvent = null } = {}) {
+  constructor({ biomeGenerator, worldMapManager = null, mapLoader = null, fadeDurationMs = 150, debug = false, profilingEnabled = false, onPerfEvent = null } = {}) {
     this.biomeGenerator = biomeGenerator;
     this.worldMapManager = worldMapManager;
+    this.mapLoader = mapLoader;
     this.fadeDuration = fadeDurationMs / 1000;
     this.debug = debug;
     this.profilingEnabled = profilingEnabled;
@@ -230,27 +231,15 @@ export class RoomTransitionSystem {
     let targetRoom = null;
     let targetEntrance = null;
     let targetWasCached = null;
-    if (normalizedExit.targetMapType && this.worldMapManager) {
-      const mapCache = this.worldMapManager.mapCache;
-      if (mapCache?.has && normalizedExit.targetMapType === 'town') {
-        const townMapId = this.worldMapManager.buildTownMapId(normalizedExit.targetSeed);
-        targetWasCached = mapCache.has(townMapId);
-      } else if (mapCache?.has && normalizedExit.targetMapType === 'house_interior') {
-        const houseMapId = this.worldMapManager.buildMapId('house', normalizedExit.targetSeed);
-        targetWasCached = mapCache.has(houseMapId);
-      } else if (mapCache?.has && normalizedExit.targetMapType === 'forest') {
-        const forestSeed = normalizedExit.targetSeed ?? context.activeRoom?.seed;
-        const forestMapId = normalizedExit.targetRoomId
-          ? this.worldMapManager.buildForestMapId(forestSeed, normalizedExit.targetRoomId)
-          : null;
-        targetWasCached = forestMapId ? mapCache.has(forestMapId) : null;
-      }
-      targetRoom = this.worldMapManager.resolveMapByExit(context.activeRoom, normalizedExit);
-      targetEntrance = this.worldMapManager.getEntrance(targetRoom, normalizedExit.targetEntryId);
-    } else if (normalizedExit.targetRoomId && normalizedExit.targetEntranceId) {
-      targetWasCached = this.biomeGenerator?.hasCachedRoom?.(normalizedExit.targetRoomId) ?? null;
-      targetRoom = this.biomeGenerator.loadRoom(normalizedExit.targetRoomId);
-      targetEntrance = targetRoom?.entrances?.[normalizedExit.targetEntranceId];
+    const request = this.worldMapManager?.buildRequestFromExit?.(context.activeRoom, normalizedExit) ?? null;
+    if (request?.roomId && this.mapLoader) {
+      targetWasCached = this.mapLoader.roomCache.has(request.roomId);
+      targetRoom = this.mapLoader.requestRoom(request.roomId, { priority: 'HIGH', request });
+      targetEntrance = this.worldMapManager?.getEntrance(targetRoom, normalizedExit.targetEntryId ?? normalizedExit.targetEntranceId) ?? null;
+    } else if (this.worldMapManager) {
+      targetRoom = this.worldMapManager.resolveMapByExit(context.activeRoom, normalizedExit, { fromMapLoader: true });
+      targetEntrance = this.worldMapManager.getEntrance(targetRoom, normalizedExit.targetEntryId ?? normalizedExit.targetEntranceId);
+      targetWasCached = this.worldMapManager.mapCache?.has?.(targetRoom?.id ?? '');
     }
 
     this.log('prepareTransitionTarget resolved room target', {
@@ -335,11 +324,8 @@ export class RoomTransitionSystem {
         success: Boolean(this.preparedTransition?.targetRoom && this.preparedTransition?.targetEntrance),
       });
       if (!this.preparedTransition?.targetRoom || !this.preparedTransition?.targetEntrance) {
-        this.log('FAIL: transition preparation failed');
-        this.setPhase('fadeIn');
-        this.phaseTimer = 0;
-        this.pendingExit = null;
-        this.preparedTransition = null;
+        this.log('WAIT: transition target still loading');
+        this.phaseTimer = this.fadeDuration;
         return null;
       }
       this.markTimeline('renderer_swap_start');
