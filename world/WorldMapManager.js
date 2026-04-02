@@ -164,6 +164,12 @@ function ensureForestEntranceReachable(room, exits, entryId, roadWidth = MIN_ROA
 
   if (connectPoint && (connectPoint.x !== entrance.landingX || connectPoint.y !== entrance.landingY)) {
     console.warn('[WorldMapManager] Forest entrance connectivity repair', { entryId, connectPoint });
+    console.warn('[ValidatorViolation] External system modifying validated room', {
+      system: 'WorldMapManager',
+      roomId: room?.id ?? null,
+      field: 'connectivity',
+      entryId,
+    });
     carvePath(room.tiles, { x: entrance.landingX, y: entrance.landingY }, connectPoint, {
       width: Math.max(MIN_ROAD_WIDTH, roadWidth),
       jitterBias: 0.24,
@@ -175,6 +181,13 @@ function ensureForestEntranceReachable(room, exits, entryId, roadWidth = MIN_ROA
 
   if (!reachable.has(exitKey)) {
     console.warn('[WorldMapManager] Forest town exit connectivity repair', { entryId, exitId: exit?.id ?? null });
+    console.warn('[ValidatorViolation] External system modifying validated room', {
+      system: 'WorldMapManager',
+      roomId: room?.id ?? null,
+      field: 'connectivity',
+      entryId,
+      exitId: exit?.id ?? null,
+    });
     carvePath(room.tiles, spawn, exitPoint, {
       width: Math.max(MIN_ROAD_WIDTH, roadWidth),
       jitterBias: 0.3,
@@ -205,6 +218,13 @@ function ensureForestEntranceReachable(room, exits, entryId, roadWidth = MIN_ROA
       const candidateKey = `${candidate.x},${candidate.y}`;
       if (reachable.has(candidateKey)) continue;
       usedTargets.push({ x: candidate.x, y: candidate.y });
+      console.warn('[ValidatorViolation] External system modifying validated room', {
+        system: 'WorldMapManager',
+        roomId: room?.id ?? null,
+        field: 'connectivity',
+        entryId,
+        candidate,
+      });
       carvePath(room.tiles, spawn, candidate, {
         width: Math.max(MIN_ROAD_WIDTH, roadWidth),
         jitterBias: 0.2,

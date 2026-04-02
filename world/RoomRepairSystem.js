@@ -6,10 +6,18 @@ function tileFrom(baseTile, overrides = {}) {
 }
 
 export class RoomRepairSystem {
-  repair({ grid, plan, errors, roadMask }) {
+  repair({ grid, plan, errors, roadMask, validationResult }) {
+    const repairableIssues = Array.isArray(validationResult?.issues)
+      ? validationResult.issues.filter((issue) => issue?.severity === 'repairable')
+      : [];
+    if (!repairableIssues.length) return { applied: false, debugEvents: [] };
+
+    const normalizedErrors = repairableIssues.length
+      ? repairableIssues.map((issue) => ({ type: issue.type, ...(issue.details ?? {}) }))
+      : (errors ?? []);
     const debugEvents = [];
-    for (const error of errors) {
-      if (![ 'TILE_CONSISTENCY', 'PATH_CONSISTENCY', 'CORRIDOR_WIDTH', 'CORRIDOR_BLOCKED', 'LANDING_INVALID', 'LANDING_REACHABILITY', 'SPAWN_COLLISION' ].includes(error.type)) continue;
+    for (const error of normalizedErrors) {
+      if (![ 'TILE_CONSISTENCY', 'PATH_CONSISTENCY', 'CORRIDOR_WIDTH', 'CORRIDOR_BLOCKED', 'LANDING_INVALID', 'LANDING_REACHABILITY', 'SPAWN_COLLISION', 'SPAWN_SAFE_RADIUS_BLOCKED', 'EXIT_UNREACHABLE', 'ANCHOR_UNREACHABLE' ].includes(error.type)) continue;
       const anchor = plan.exitAnchors[error.anchorId] ?? plan.entranceAnchors[error.anchorId];
       if (!anchor) continue;
 
