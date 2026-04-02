@@ -6,15 +6,23 @@ function rafNextFrame() {
 }
 
 export class MapLoader {
-  constructor({ worldMapManager, maxCachedRooms = 5, frameBudgetMs = 8 } = {}) {
+  constructor({
+    worldMapManager,
+    maxCachedRooms = 10,
+    frameBudgetMs = 8,
+    buildBackgroundCache = null,
+  } = {}) {
     this.worldMapManager = worldMapManager;
     this.maxCachedRooms = Math.max(3, maxCachedRooms);
     this.frameBudgetMs = Math.max(2, frameBudgetMs);
+    this.buildBackgroundCache = typeof buildBackgroundCache === 'function' ? buildBackgroundCache : null;
     this.roomCache = new Map();
     this.generationQueue = [];
     this.pendingLoads = new Map();
     this.schedulerRunning = false;
     this.lastFrameAtMs = 0;
+    this.currentRoomId = null;
+    this.transitionTargetRoomId = null;
   }
 
   nextFrame() {
@@ -48,13 +56,14 @@ export class MapLoader {
   }
 
   enqueueRoom(roomId, priority = 'MEDIUM', request = null) {
-    if (!roomId) return;
-    const existing = this.generationQueue.find((task) => task.roomId === roomId && task.status !== 'done');
+    const canonicalRoomId = this.resolveCanonicalRoomId(roomId, request);
+    if (!canonicalRoomId) return;
+    const existing = this.generationQueue.find((task) => task.roomId === canonicalRoomId && task.status !== 'done');
     if (existing) {
       if (this.priorityRank(priority) < this.priorityRank(existing.priority)) existing.priority = priority;
       return;
     }
-    this.generationQueue.push({ roomId, priority, status: 'pending', request });
+    this.generationQueue.push({ roomId: canonicalRoomId, priority, status: 'pending', request });
   }
 
   priorityRank(priority) {
@@ -70,9 +79,14 @@ export class MapLoader {
   }
 
   requestRoom(roomId, { priority = 'MEDIUM', request = null } = {}) {
-    console.info('[MapLoader] requestRoom:', roomId);
-    if (this.roomCache.has(roomId)) return this.roomCache.get(roomId);
-    this.enqueueRoom(roomId, priority, request);
+    const canonicalRoomId = this.resolveCanonicalRoomId(roomId, request);
+    if (!canonicalRoomId) return null;
+    if (this.roomCache.has(canonicalRoomId)) {
+      console.info('[MapLoader] cache hit', canonicalRoomId);
+      return this.roomCache.get(canonicalRoomId);
+    }
+    console.info('[MapLoader] cache miss', canonicalRoomId);
+    if (!this.pendingLoads.has(canonicalRoomId)) this.enqueueRoom(canonicalRoomId, priority, request);
     this.startScheduler();
     return null;
   }
@@ -82,23 +96,27 @@ export class MapLoader {
   }
 
   isRoomReady(roomId) {
-    return this.roomCache.has(roomId);
+    const canonicalRoomId = this.resolveCanonicalRoomId(roomId);
+    return canonicalRoomId ? this.roomCache.has(canonicalRoomId) : false;
   }
 
   getRoom(roomId) {
-    return this.roomCache.get(roomId) ?? null;
+    const canonicalRoomId = this.resolveCanonicalRoomId(roomId);
+    return canonicalRoomId ? (this.roomCache.get(canonicalRoomId) ?? null) : null;
   }
 
   async ensureRoomReady(roomId, { priority = 'HIGH', request = null } = {}) {
-    const cached = this.roomCache.get(roomId);
+    const canonicalRoomId = this.resolveCanonicalRoomId(roomId, request);
+    if (!canonicalRoomId) return null;
+    const cached = this.roomCache.get(canonicalRoomId);
     if (cached) return cached;
-    this.requestRoom(roomId, { priority, request });
-    if (this.pendingLoads.has(roomId)) return this.pendingLoads.get(roomId);
+    this.requestRoom(canonicalRoomId, { priority, request });
+    if (this.pendingLoads.has(canonicalRoomId)) return this.pendingLoads.get(canonicalRoomId);
 
     const waitPromise = new Promise((resolve, reject) => {
       const check = async () => {
         try {
-          const loaded = this.roomCache.get(roomId);
+          const loaded = this.roomCache.get(canonicalRoomId);
           if (loaded) {
             resolve(loaded);
             return;
@@ -111,20 +129,22 @@ export class MapLoader {
       };
       check();
     });
-    this.pendingLoads.set(roomId, waitPromise);
+    this.pendingLoads.set(canonicalRoomId, waitPromise);
     try {
       return await waitPromise;
     } finally {
-      this.pendingLoads.delete(roomId);
+      this.pendingLoads.delete(canonicalRoomId);
     }
   }
 
   async processRoomGeneration(roomId, request = null) {
-    const requestedRoomId = roomId;
+    const requestedRoomId = this.resolveCanonicalRoomId(roomId, request);
+    if (!requestedRoomId) return null;
     await this.nextFrame();
     const room = this.worldMapManager.loadMap(request ?? this.worldMapManager.buildRequestFromRoomId(requestedRoomId), { fromMapLoader: true });
     await this.nextFrame();
     if (room) {
+      this.ensureBackgroundCache(room);
       this.roomCache.set(requestedRoomId, room);
       this.evictIfNeeded(requestedRoomId);
       console.info('[MapLoader] ready:', requestedRoomId);
@@ -132,13 +152,18 @@ export class MapLoader {
     return room;
   }
 
-  evictIfNeeded(activeRoomId) {
+  evictIfNeeded(activeRoomId, pendingRoomId = null) {
     if (this.roomCache.size <= this.maxCachedRooms) return;
+    const protectedIds = this.buildProtectedRoomIds(
+      activeRoomId ?? this.currentRoomId,
+      pendingRoomId ?? this.transitionTargetRoomId,
+    );
     const ids = [...this.roomCache.keys()];
     for (const roomId of ids) {
       if (this.roomCache.size <= this.maxCachedRooms) return;
-      if (roomId === activeRoomId) continue;
+      if (protectedIds.has(roomId)) continue;
       this.roomCache.delete(roomId);
+      console.info('[MapLoader] evicted room', roomId);
     }
   }
 
@@ -187,6 +212,49 @@ export class MapLoader {
       if (depth > 1) {
         this.requestRoom(request.roomId, { priority: 'LOW', request });
       }
+    }
+  }
+
+  resolveCanonicalRoomId(roomId, request = null) {
+    if (request?.roomId) return request.roomId;
+    if (!roomId) return null;
+    return this.worldMapManager.buildRequestFromRoomId(roomId)?.roomId ?? roomId;
+  }
+
+  ensureBackgroundCache(room) {
+    if (!room || room.__backgroundCache) return;
+    if (!this.buildBackgroundCache) return;
+    room.__backgroundCache = this.buildBackgroundCache(room);
+  }
+
+  setCurrentRoom(roomId) {
+    this.currentRoomId = this.resolveCanonicalRoomId(roomId);
+  }
+
+  setTransitionTargetRoom(roomId) {
+    this.transitionTargetRoomId = this.resolveCanonicalRoomId(roomId);
+  }
+
+  buildProtectedRoomIds(activeRoomId, pendingRoomId = null) {
+    const protectedIds = new Set();
+    const canonicalActiveRoomId = this.resolveCanonicalRoomId(activeRoomId);
+    const canonicalPendingRoomId = this.resolveCanonicalRoomId(pendingRoomId);
+    if (canonicalActiveRoomId) protectedIds.add(canonicalActiveRoomId);
+    if (canonicalPendingRoomId) protectedIds.add(canonicalPendingRoomId);
+    if (canonicalActiveRoomId) this.collectNeighborIds(canonicalActiveRoomId, protectedIds);
+    if (canonicalPendingRoomId) this.collectNeighborIds(canonicalPendingRoomId, protectedIds);
+    return protectedIds;
+  }
+
+  collectNeighborIds(roomId, collector) {
+    const room = this.roomCache.get(roomId);
+    if (!room) return;
+    const exits = Array.isArray(room.exits)
+      ? room.exits
+      : Object.entries(room.exits ?? {}).map(([id, exit]) => ({ id, ...exit }));
+    for (const exit of exits) {
+      const request = this.worldMapManager.buildRequestFromExit(room, exit);
+      if (request?.roomId) collector.add(request.roomId);
     }
   }
 }

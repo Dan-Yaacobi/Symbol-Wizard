@@ -101,7 +101,16 @@ runtimeConfig.setLogger((message) => logDev(message));
 
 const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
 const worldMapManager = new WorldMapManager({ biomeGenerator, roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
-const mapLoader = new MapLoader({ worldMapManager, maxCachedRooms: 5, frameBudgetMs: 10 });
+const mapLoader = new MapLoader({
+  worldMapManager,
+  maxCachedRooms: 10,
+  frameBudgetMs: 10,
+  buildBackgroundCache: (room) => {
+    if (!room?.tiles) return null;
+    prewarmBackgroundCache(renderer, room.tiles, room.objects ?? []);
+    return cloneBackgroundCache(renderer.backgroundCache);
+  },
+});
 let currentBiomeSeed = randomSeed();
 let pendingDevSeed = String(currentBiomeSeed);
 let activeRoom = null;
@@ -301,12 +310,8 @@ async function runInitialPrewarm() {
   mapLoader.requestRoom(startRoomId, { priority: 'HIGH', request: { type: 'town', seed: startSeed, roomId: startRoomId } });
   activeRoom = await mapLoader.ensureRoomReady(startRoomId, { priority: 'HIGH', request: { type: 'town', seed: startSeed, roomId: startRoomId } });
   map = activeRoom?.tiles ?? [];
-
+  mapLoader.setCurrentRoom(activeRoom?.id ?? null);
   loadingProgressText = 'Preparing renderer...';
-  if (activeRoom?.tiles) {
-    prewarmBackgroundCache(renderer, activeRoom.tiles, activeRoom.objects ?? []);
-    activeRoom.__backgroundCache = cloneBackgroundCache(renderer.backgroundCache);
-  }
 
   mapLoader.enqueueInitialRooms(activeRoom);
 
@@ -670,11 +675,11 @@ function resetEncounterState() {
   logDev('Encounter reset');
 }
 
-function regenerateWorld(seed = null) {
+async function regenerateWorld(seed = null) {
   const nextSeed = seed === null ? randomSeed() : (Number(seed) >>> 0);
   worldMapManager.regenerate(nextSeed);
   const roomId = worldMapManager.buildTownMapId(nextSeed);
-  const nextActiveRoom = mapLoader.requestRoom(roomId, { priority: 'HIGH', request: { type: 'town', seed: nextSeed, roomId } }) ?? worldMapManager.mapCache.get(roomId);
+  const nextActiveRoom = await mapLoader.ensureRoomReady(roomId, { priority: 'HIGH', request: { type: 'town', seed: nextSeed, roomId } });
   if (!nextActiveRoom) return;
 
   currentBiomeSeed = nextSeed;
@@ -682,6 +687,7 @@ function regenerateWorld(seed = null) {
   roomTransitionSystem.reset();
 
   activeRoom = nextActiveRoom;
+  mapLoader.setCurrentRoom(activeRoom?.id ?? null);
   map = activeRoom.tiles;
   syncActiveRoomCollections(activeRoom);
 
@@ -744,7 +750,7 @@ devToolsPanel.setMapTools({
   regenerate: () => {
     const trimmed = pendingDevSeed.trim();
     const parsedSeed = trimmed.length > 0 && Number.isFinite(Number(trimmed)) ? Number(trimmed) : null;
-    regenerateWorld(parsedSeed);
+    void regenerateWorld(parsedSeed);
   },
   spawnEnemyGroup: () => {
     const facing = ensureEntityFacing(player);
@@ -1602,6 +1608,7 @@ function tick(now) {
       toRoomId: nextRoom?.id ?? null,
     });
     activeRoom = nextRoom;
+    mapLoader.setCurrentRoom(activeRoom?.id ?? null);
     mapLoader.enqueueNeighbors(activeRoom, { priority: 'MEDIUM', depth: 2 });
     map = activeRoom.tiles;
     if (!activeRoom || !Array.isArray(activeRoom.tiles) || activeRoom.tiles.length <= 0) {
@@ -1627,9 +1634,7 @@ function tick(now) {
     roomTransitionSystem.noteExternalTimeline('camera_viewport_update_end');
     syncRoomEnemies(activeRoom);
     if (applyEnemyTuningToExistingEnemies) applyEnemyTuningToAllCurrentEnemies();
-    if (!activeRoom?.__backgroundCache) {
-      console.warn('[BackgroundCache] Missing room cache on transition', activeRoom?.id ?? null);
-    }
+    mapLoader.ensureBackgroundCache(activeRoom);
     renderer.setBackgroundCache(DIAG_BYPASS_BACKGROUND_CACHE ? null : (activeRoom?.__backgroundCache ?? null));
     pendingTransitionFirstRenderMark = true;
     roomTransitionSystem.noteExternalTimeline('room_swap_commit_end');
@@ -1639,13 +1644,16 @@ function tick(now) {
     if (transitionResult.ready) {
       applyRoomTransition(mapLoader.getRoom(transitionResult.targetRoomId));
       pendingTransitionRoomId = null;
+      mapLoader.setTransitionTargetRoom(null);
     } else {
       pendingTransitionRoomId = transitionResult.targetRoomId;
+      mapLoader.setTransitionTargetRoom(pendingTransitionRoomId);
     }
   }
   if (pendingTransitionRoomId && mapLoader.isRoomReady(pendingTransitionRoomId)) {
     applyRoomTransition(mapLoader.getRoom(pendingTransitionRoomId));
     pendingTransitionRoomId = null;
+    mapLoader.setTransitionTargetRoom(null);
   }
 
   if (!roomTransitionSystem.isTransitionActive() && !dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {

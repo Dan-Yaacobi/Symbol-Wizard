@@ -158,7 +158,7 @@ export class BiomeGenerator {
 
   loadRoom(roomId, options = {}) {
     if (!options.fromMapLoader) {
-      console.warn('[MapLoader] Illegal direct room generation detected', { caller: 'BiomeGenerator.loadRoom', roomId });
+      console.warn('[MapLoader] Illegal direct room generation', roomId);
       return null;
     }
     const cachedRoom = this.getCachedRoom(roomId, { caller: 'loadRoom' });
