@@ -405,6 +405,10 @@ export class WorldMapManager {
     this.forestReturnLinks = new Map();
   }
 
+  logIllegalGeneration(roomId) {
+    console.warn('[MapLoader] Illegal direct room generation', roomId ?? null);
+  }
+
   buildMapId(type, seed, suffix = '') {
     return `${type}-${seed}${suffix ? `-${suffix}` : ''}`;
   }
@@ -432,7 +436,7 @@ export class WorldMapManager {
   }
 
   loadMap(request = {}, options = {}) {
-    if (!options.fromMapLoader) console.warn('[MapLoader] Illegal direct room generation detected', { caller: 'WorldMapManager.loadMap', request });
+    if (!options.fromMapLoader) this.logIllegalGeneration(request?.roomId ?? null);
     const type = request.type ?? 'forest';
     if (type === 'town') return this.loadTown(request.seed, options);
     if (type === 'house_interior') return this.loadHouseInterior(request.seed, request.context ?? {}, options);
@@ -440,7 +444,7 @@ export class WorldMapManager {
   }
 
   loadTown(seed, options = {}) {
-    if (!options.fromMapLoader) console.warn('[MapLoader] Illegal direct room generation detected', { caller: 'WorldMapManager.loadTown', seed });
+    if (!options.fromMapLoader) this.logIllegalGeneration(this.buildTownMapId(seed));
     const mapId = this.buildTownMapId(seed);
     if (this.mapCache.has(mapId)) return this.mapCache.get(mapId);
 
@@ -474,7 +478,7 @@ export class WorldMapManager {
 
 
   loadHouseInterior(seed, context = {}, options = {}) {
-    if (!options.fromMapLoader) console.warn('[MapLoader] Illegal direct room generation detected', { caller: 'WorldMapManager.loadHouseInterior', seed });
+    if (!options.fromMapLoader) this.logIllegalGeneration(this.buildMapId('house', seed));
     const mapId = this.buildMapId('house', seed);
     if (this.mapCache.has(mapId)) return this.mapCache.get(mapId);
     const map = this.townGenerator.generateHouseInterior(seed, context);
@@ -483,7 +487,7 @@ export class WorldMapManager {
   }
 
   loadForest(seed, options = {}, loaderOptions = {}) {
-    if (!loaderOptions.fromMapLoader) console.warn('[MapLoader] Illegal direct room generation detected', { caller: 'WorldMapManager.loadForest', seed, roomId: options.roomId ?? null });
+    if (!loaderOptions.fromMapLoader) this.logIllegalGeneration(options.roomId ?? null);
     const biomeId = this.buildForestBiomeId(seed);
     const biome = this.biomeGenerator.biomes.has(biomeId)
       ? this.biomeGenerator.biomes.get(biomeId)
@@ -578,15 +582,14 @@ export class WorldMapManager {
     if (roomId.startsWith('town-')) return { type: 'town', mapType: 'town', biomeId: 'town', seed: roomId.slice(5), roomId };
     if (roomId.startsWith('house-')) return { type: 'house_interior', mapType: 'house_interior', biomeId: 'house_interior', seed: roomId.slice(6), roomId };
     if (roomId.startsWith('forest-')) {
-      const parts = roomId.split('-');
-      if (parts.length >= 3) {
-        const mapType = 'forest';
-        const biomeId = mapType;
+      const [biomeId, seed, ...roomParts] = roomId.split('-');
+      if (biomeId && seed && roomParts.length > 0) {
+        const mapType = biomeId;
         return {
           type: mapType,
           mapType,
           biomeId,
-          seed: parts[1],
+          seed,
           roomId,
         };
       }
@@ -654,7 +657,7 @@ export class WorldMapManager {
   }
 
   resolveMapByExit(currentMap, exit, options = {}) {
-    if (!options.fromMapLoader) console.warn('[MapLoader] Illegal direct room generation detected', { caller: 'WorldMapManager.resolveMapByExit', exitId: exit?.id ?? null });
+    if (!options.fromMapLoader) this.logIllegalGeneration(exit?.targetRoomId ?? null);
     if (exit?.targetMapType === 'town') {
       const townMapId = this.buildTownMapId(exit.targetSeed);
       const town = this.mapCache.get(townMapId) ?? this.loadTown(exit.targetSeed, { fromMapLoader: true });

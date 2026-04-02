@@ -243,12 +243,6 @@ export class RoomTransitionSystem {
       targetEntrance = targetRoom
         ? (this.worldMapManager?.getEntrance(targetRoom, normalizedExit.targetEntryId ?? normalizedExit.targetEntranceId) ?? null)
         : null;
-    } else if (this.worldMapManager) {
-      targetRoom = this.worldMapManager.resolveMapByExit(context.activeRoom, normalizedExit, { fromMapLoader: true });
-      targetRoomId = targetRoom?.id ?? null;
-      ready = Boolean(targetRoom);
-      targetEntrance = this.worldMapManager.getEntrance(targetRoom, normalizedExit.targetEntryId ?? normalizedExit.targetEntranceId);
-      targetWasCached = this.worldMapManager.mapCache?.has?.(targetRoom?.id ?? '');
     }
 
     this.log('prepareTransitionTarget resolved room target', {
