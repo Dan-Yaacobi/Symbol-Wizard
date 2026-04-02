@@ -7,6 +7,7 @@ import { PathGenerator } from './PathGenerator.js';
 import { ExitTriggerSystem } from './ExitTriggerSystem.js';
 import { RoomValidationSystem } from './RoomValidationSystem.js';
 import { RoomRepairSystem } from './RoomRepairSystem.js';
+import { GenerationValidator } from './validation/GenerationValidator.js';
 import { resolvePathGenerationConfig } from './PathGenerationConfig.js';
 import { resolveWorldGenerationConfig } from './WorldGenerationConfig.js';
 import { resolveObjectGenerationConfig } from './ObjectGenerationConfig.js';
@@ -196,7 +197,7 @@ export class RoomGenerator {
 
     const triggers = this.exitTriggerSystem.build({ plan });
 
-    let validation = this.roomValidationSystem.validate({
+    const validationContext = {
       roomNode,
       rooms,
       roomGraph,
@@ -204,27 +205,56 @@ export class RoomGenerator {
       grid,
       triggers,
       objects: [...objects, ...landmarks],
-    });
+      requiredAnchors: [...Object.values(plan.exitAnchors), ...Object.values(plan.entranceAnchors)],
+    };
+    let validatorResult = GenerationValidator.validateRoom({
+      id: roomNode.id,
+      tiles: grid,
+      exits: triggers.exits,
+      entrances: plan.entranceAnchors,
+    }, validationContext);
+    let validation = {
+      valid: validatorResult.valid,
+      errors: validatorResult.issues.map((issue) => ({ type: issue.type, ...(issue.details ?? {}), severity: issue.severity })),
+      debugEvents: validatorResult.issues.length ? [{ type: 'VALIDATION_FAILED', roomId: roomNode.id, issues: validatorResult.issues }] : [],
+    };
+    const logValidatorSummary = (result) => {
+      const fatalCount = result.issues.filter((issue) => issue.severity === 'fatal').length;
+      const repairableCount = result.issues.filter((issue) => issue.severity === 'repairable').length;
+      console.info('[Validator]', {
+        roomId: roomNode.id,
+        valid: result.valid,
+        fatalCount,
+        repairableCount,
+      });
+      if (fatalCount > 0) console.error('[Validator] FATAL room invalid', { roomId: roomNode.id, fatalCount });
+      return { fatalCount, repairableCount };
+    };
+    const counts = logValidatorSummary(validatorResult);
 
     let repairEvents = [];
-    if (!validation.valid) {
+    if (counts.repairableCount > 0 && counts.fatalCount === 0) {
       const repair = this.roomRepairSystem.repair({
         grid,
         plan,
         errors: validation.errors,
         roadMask,
+        validationResult: validatorResult,
       });
       repairEvents = repair.debugEvents;
       if (repair.applied) {
-        validation = this.roomValidationSystem.validate({
-          roomNode,
-          rooms,
-          roomGraph,
-          plan,
-          grid,
-          triggers,
-          objects: [...objects, ...landmarks],
-        });
+        validatorResult = GenerationValidator.validateRoom({
+          id: roomNode.id,
+          tiles: grid,
+          exits: triggers.exits,
+          entrances: plan.entranceAnchors,
+        }, validationContext);
+        validation = {
+          valid: validatorResult.valid,
+          errors: validatorResult.issues.map((issue) => ({ type: issue.type, ...(issue.details ?? {}), severity: issue.severity })),
+          debugEvents: validatorResult.issues.length ? [{ type: 'VALIDATION_FAILED', roomId: roomNode.id, issues: validatorResult.issues }] : [],
+        };
+        logValidatorSummary(validatorResult);
       }
     }
 
@@ -295,12 +325,26 @@ export class RoomGenerator {
           ...repairEvents,
         ],
         validationErrors: validation.errors,
+        validatorIssues: validatorResult.issues,
       },
       state: {
         visited: roomNode.state?.visited ?? false,
       },
       __roomPlan: roomPlan,
+      isGenerationValid: validatorResult.valid,
     };
+
+    const postRealizationValidation = GenerationValidator.validateRoom(room, validationContext);
+    console.info('[Validator]', {
+      roomId: roomNode.id,
+      valid: postRealizationValidation.valid,
+      fatalCount: postRealizationValidation.issues.filter((issue) => issue.severity === 'fatal').length,
+      repairableCount: postRealizationValidation.issues.filter((issue) => issue.severity === 'repairable').length,
+    });
+    if (postRealizationValidation.issues.some((issue) => issue.severity === 'fatal')) {
+      console.error('[Validator] FATAL room invalid', { roomId: roomNode.id, phase: 'post_realizer' });
+      room.isGenerationValid = false;
+    }
 
     buildRoomTransitionCache(room, { pathMask: roadMask, blockedMask: objectBlockedMask });
     return room;
