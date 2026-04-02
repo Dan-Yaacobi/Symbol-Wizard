@@ -168,6 +168,7 @@ const roomTransitionSystem = new RoomTransitionSystem({
   onPerfEvent: DEBUG_PERF_PROBE ? (name, details) => performanceProbe.mark(name, details) : null,
 });
 let pendingTransitionFirstRenderMark = false;
+let pendingTransitionRoomId = null;
 setTransitionCachePerfHook(DEBUG_PERF_PROBE ? (event, details) => performanceProbe.mark(event, details) : null);
 
 
@@ -1594,13 +1595,13 @@ function tick(now) {
   }
 
   roomTransitionSystem.profilingEnabled = DEBUG_PERF_PROBE && runtimeConfig.get('debug.logTransitionPerf');
-  const transitionResult = timed('transition', framePerf, () => roomTransitionSystem.update(dt, { activeRoom, player }));
-  if (transitionResult?.room) {
+  const applyRoomTransition = (nextRoom) => {
+    if (!nextRoom) return;
     roomTransitionSystem.noteExternalTimeline('room_swap_commit_start', {
       fromRoomId: activeRoom?.id ?? null,
-      toRoomId: transitionResult.room?.id ?? null,
+      toRoomId: nextRoom?.id ?? null,
     });
-    activeRoom = transitionResult.room;
+    activeRoom = nextRoom;
     mapLoader.enqueueNeighbors(activeRoom, { priority: 'MEDIUM', depth: 2 });
     map = activeRoom.tiles;
     if (!activeRoom || !Array.isArray(activeRoom.tiles) || activeRoom.tiles.length <= 0) {
@@ -1632,6 +1633,19 @@ function tick(now) {
     renderer.setBackgroundCache(DIAG_BYPASS_BACKGROUND_CACHE ? null : (activeRoom?.__backgroundCache ?? null));
     pendingTransitionFirstRenderMark = true;
     roomTransitionSystem.noteExternalTimeline('room_swap_commit_end');
+  };
+  const transitionResult = timed('transition', framePerf, () => roomTransitionSystem.update(dt, { activeRoom, player }));
+  if (transitionResult?.targetRoomId) {
+    if (transitionResult.ready) {
+      applyRoomTransition(mapLoader.getRoom(transitionResult.targetRoomId));
+      pendingTransitionRoomId = null;
+    } else {
+      pendingTransitionRoomId = transitionResult.targetRoomId;
+    }
+  }
+  if (pendingTransitionRoomId && mapLoader.isRoomReady(pendingTransitionRoomId)) {
+    applyRoomTransition(mapLoader.getRoom(pendingTransitionRoomId));
+    pendingTransitionRoomId = null;
   }
 
   if (!roomTransitionSystem.isTransitionActive() && !dialogueManager.isOpen && !diagMinimalMode && !devCapturing && !spellbookOpen) {

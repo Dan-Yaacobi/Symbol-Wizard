@@ -231,21 +231,31 @@ export class RoomTransitionSystem {
     let targetRoom = null;
     let targetEntrance = null;
     let targetWasCached = null;
+    let targetRoomId = null;
+    let ready = false;
     const request = this.worldMapManager?.buildRequestFromExit?.(context.activeRoom, normalizedExit) ?? null;
     if (request?.roomId && this.mapLoader) {
-      targetWasCached = this.mapLoader.roomCache.has(request.roomId);
-      targetRoom = this.mapLoader.requestRoom(request.roomId, { priority: 'HIGH', request });
-      targetEntrance = this.worldMapManager?.getEntrance(targetRoom, normalizedExit.targetEntryId ?? normalizedExit.targetEntranceId) ?? null;
+      targetRoomId = request.roomId;
+      targetWasCached = this.mapLoader.isRoomReady(request.roomId);
+      this.mapLoader.requestRoom(request.roomId, { priority: 'HIGH', request });
+      ready = this.mapLoader.isRoomReady(request.roomId);
+      targetRoom = ready ? this.mapLoader.getRoom(request.roomId) : null;
+      targetEntrance = targetRoom
+        ? (this.worldMapManager?.getEntrance(targetRoom, normalizedExit.targetEntryId ?? normalizedExit.targetEntranceId) ?? null)
+        : null;
     } else if (this.worldMapManager) {
       targetRoom = this.worldMapManager.resolveMapByExit(context.activeRoom, normalizedExit, { fromMapLoader: true });
+      targetRoomId = targetRoom?.id ?? null;
+      ready = Boolean(targetRoom);
       targetEntrance = this.worldMapManager.getEntrance(targetRoom, normalizedExit.targetEntryId ?? normalizedExit.targetEntranceId);
       targetWasCached = this.worldMapManager.mapCache?.has?.(targetRoom?.id ?? '');
     }
 
     this.log('prepareTransitionTarget resolved room target', {
-      targetRoomId: targetRoom?.id ?? normalizedExit.targetRoomId ?? null,
+      targetRoomId: targetRoomId ?? targetRoom?.id ?? normalizedExit.targetRoomId ?? null,
       alreadyCached: targetWasCached,
       newlyGenerated: targetWasCached === false && Boolean(targetRoom),
+      ready,
     });
 
     const endMs = nowMs();
@@ -253,6 +263,8 @@ export class RoomTransitionSystem {
       details: {
         targetRoomResolved: Boolean(targetRoom),
         targetEntranceResolved: Boolean(targetEntrance),
+        targetRoomId,
+        ready,
       },
     });
     this.logPhase('transition_target_resolve', startMs, endMs, {
@@ -262,22 +274,28 @@ export class RoomTransitionSystem {
       targetRoomResolved: Boolean(targetRoom),
       targetEntranceResolved: Boolean(targetEntrance),
       mapCacheHit: Boolean(targetRoom && this.worldMapManager?.mapCache?.has?.(targetRoom.id)),
+      targetRoomId,
+      ready,
     });
 
-    if (!targetRoom || !targetEntrance) {
+    if (!targetRoomId) {
       return {
         exit,
         normalizedExit,
+        targetRoomId: null,
         targetRoom: null,
         targetEntrance: null,
+        ready: false,
       };
     }
 
     return {
       exit,
       normalizedExit,
+      targetRoomId,
       targetRoom,
       targetEntrance,
+      ready,
       fromRoomId: context.activeRoom?.id ?? null,
     };
   }
@@ -321,12 +339,19 @@ export class RoomTransitionSystem {
       const prepareStartMs = nowMs();
       this.preparedTransition = this.prepareTransitionTarget(context, this.pendingExit);
       this.logPhase('transition_target_prepare', prepareStartMs, nowMs(), {
-        success: Boolean(this.preparedTransition?.targetRoom && this.preparedTransition?.targetEntrance),
+        success: Boolean(this.preparedTransition?.targetRoomId),
       });
-      if (!this.preparedTransition?.targetRoom || !this.preparedTransition?.targetEntrance) {
+      if (!this.preparedTransition?.targetRoomId) {
         this.log('WAIT: transition target still loading');
         this.phaseTimer = this.fadeDuration;
         return null;
+      }
+      if (!this.preparedTransition.ready) {
+        console.info('[Transition] waiting for room:', this.preparedTransition.targetRoomId);
+        return {
+          targetRoomId: this.preparedTransition.targetRoomId,
+          ready: false,
+        };
       }
       this.markTimeline('renderer_swap_start');
       const transitionResult = this.switchRoom(context, this.pendingExit);
@@ -334,7 +359,7 @@ export class RoomTransitionSystem {
       this.setPhase('fadeIn');
       this.phaseTimer = 0;
       this.pendingExit = null;
-      if (!transitionResult?.room) {
+      if (!transitionResult?.targetRoomId) {
         this.preparedTransition = null;
       }
       return transitionResult;
@@ -422,8 +447,11 @@ export class RoomTransitionSystem {
     }
     markSection('resolve_target', targetResolveStart);
     const normalizedExit = prepared?.normalizedExit ?? this.normalizeExit(context.activeRoom, exit);
-    const targetRoom = prepared?.targetRoom ?? null;
-    const targetEntrance = prepared?.targetEntrance ?? null;
+    const targetRoomId = prepared?.targetRoomId ?? null;
+    const targetRoom = targetRoomId && this.mapLoader
+      ? this.mapLoader.getRoom(targetRoomId)
+      : (prepared?.targetRoom ?? null);
+    const targetEntrance = this.worldMapManager?.getEntrance(targetRoom, normalizedExit.targetEntryId ?? normalizedExit.targetEntranceId) ?? null;
     this.log('switchRoom entered', {
       roomId: targetRoom?.id ?? normalizedExit?.targetRoomId ?? null,
       preparedTransitionExists: Boolean(prepared),
@@ -487,6 +515,8 @@ export class RoomTransitionSystem {
     this.exitTriggerLockTimer = 0.2;
 
     return {
+      targetRoomId: targetRoom.id,
+      ready: true,
       room: targetRoom,
     };
   }
