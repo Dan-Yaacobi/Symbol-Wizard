@@ -70,6 +70,7 @@ export class MapLoader {
   }
 
   requestRoom(roomId, { priority = 'MEDIUM', request = null } = {}) {
+    console.info('[MapLoader] requestRoom:', roomId);
     if (this.roomCache.has(roomId)) return this.roomCache.get(roomId);
     this.enqueueRoom(roomId, priority, request);
     this.startScheduler();
@@ -78,6 +79,14 @@ export class MapLoader {
 
   async loadRoom(roomId, options = {}) {
     return this.ensureRoomReady(roomId, options);
+  }
+
+  isRoomReady(roomId) {
+    return this.roomCache.has(roomId);
+  }
+
+  getRoom(roomId) {
+    return this.roomCache.get(roomId) ?? null;
   }
 
   async ensureRoomReady(roomId, { priority = 'HIGH', request = null } = {}) {
@@ -111,14 +120,14 @@ export class MapLoader {
   }
 
   async processRoomGeneration(roomId, request = null) {
-    const room = this.worldMapManager.loadMap(request ?? this.worldMapManager.buildRequestFromRoomId(roomId), { fromMapLoader: true });
+    const requestedRoomId = roomId;
     await this.nextFrame();
+    const room = this.worldMapManager.loadMap(request ?? this.worldMapManager.buildRequestFromRoomId(requestedRoomId), { fromMapLoader: true });
     await this.nextFrame();
-    await this.nextFrame();
-    await this.nextFrame();
-    if (room?.id) {
-      this.roomCache.set(room.id, room);
-      this.evictIfNeeded(room.id);
+    if (room) {
+      this.roomCache.set(requestedRoomId, room);
+      this.evictIfNeeded(requestedRoomId);
+      console.info('[MapLoader] ready:', requestedRoomId);
     }
     return room;
   }

@@ -469,10 +469,14 @@ export class WorldMapManager {
       ? this.biomeGenerator.biomes.get(biomeId)
       : this.biomeGenerator.enterBiome(biomeId, seed, { fromMapLoader: true }).biome;
     this.biomeGenerator.currentBiome = biome;
-    const roomId = options.roomId ?? biome?.startRoomId ?? null;
-    const mapId = roomId ? this.buildForestMapId(seed, roomId) : biomeId;
+    const requestedRoomId = options.roomId ?? null;
+    const canonicalPrefix = `forest-${seed}-`;
+    const roomNodeId = requestedRoomId?.startsWith(canonicalPrefix)
+      ? requestedRoomId.slice(canonicalPrefix.length)
+      : (requestedRoomId ?? biome?.startRoomId ?? null);
+    const mapId = roomNodeId ? this.buildForestMapId(seed, roomNodeId) : biomeId;
 
-    if (options.returnLink && roomId === biome?.startRoomId) {
+    if (options.returnLink && roomNodeId === biome?.startRoomId) {
       this.forestReturnLinks.set(biomeId, { ...options.returnLink });
     }
 
@@ -481,8 +485,8 @@ export class WorldMapManager {
     }
 
     const rememberedReturnLink = this.forestReturnLinks.get(biomeId) ?? null;
-    const returnLink = roomId === biome?.startRoomId ? (options.returnLink ?? rememberedReturnLink) : null;
-    const roomNode = roomId ? this.biomeGenerator.getRoomNode(roomId) : null;
+    const returnLink = roomNodeId === biome?.startRoomId ? (options.returnLink ?? rememberedReturnLink) : null;
+    const roomNode = roomNodeId ? this.biomeGenerator.getRoomNode(roomNodeId) : null;
     if (roomNode && returnLink) {
       const plannedEntryAnchor = buildForestEntryAnchor({
         tiles: Array.from({ length: this.biomeGenerator.roomHeight }, () => Array.from({ length: this.biomeGenerator.roomWidth }, () => ({}))),
@@ -504,11 +508,11 @@ export class WorldMapManager {
       };
       console.info('[WorldMapManager] Preserving biome room cache during loadForest', {
         biomeId,
-        roomId,
+        roomId: roomNodeId,
         reason: 'normal_transition_must_not_invalidate_room_cache',
       });
     }
-    const baseRoom = roomId ? this.biomeGenerator.loadRoom(roomId, { fromMapLoader: true }) : null;
+    const baseRoom = roomNodeId ? this.biomeGenerator.loadRoom(roomNodeId, { fromMapLoader: true }) : null;
     const room = baseRoom ? JSON.parse(JSON.stringify(baseRoom)) : null;
     const normalized = normalizeForestRoom(room, {
       biomeId,
@@ -551,12 +555,20 @@ export class WorldMapManager {
 
   buildRequestFromRoomId(roomId) {
     if (!roomId) return null;
-    if (roomId.startsWith('town-')) return { type: 'town', seed: roomId.slice(5), roomId };
-    if (roomId.startsWith('house-')) return { type: 'house_interior', seed: roomId.slice(6), roomId };
+    if (roomId.startsWith('town-')) return { type: 'town', mapType: 'town', biomeId: 'town', seed: roomId.slice(5), roomId };
+    if (roomId.startsWith('house-')) return { type: 'house_interior', mapType: 'house_interior', biomeId: 'house_interior', seed: roomId.slice(6), roomId };
     if (roomId.startsWith('forest-')) {
       const parts = roomId.split('-');
-      if (parts.length >= 4) {
-        return { type: 'forest', seed: parts[1], roomId: parts.slice(2).join('-') };
+      if (parts.length >= 3) {
+        const mapType = 'forest';
+        const biomeId = mapType;
+        return {
+          type: mapType,
+          mapType,
+          biomeId,
+          seed: parts[1],
+          roomId,
+        };
       }
     }
     return null;
@@ -565,11 +577,19 @@ export class WorldMapManager {
   buildRequestFromExit(currentMap, exit) {
     if (!exit) return null;
     if (exit.targetMapType === 'town') {
-      return { type: 'town', seed: exit.targetSeed, roomId: this.buildTownMapId(exit.targetSeed) };
+      return {
+        type: 'town',
+        mapType: 'town',
+        biomeId: 'town',
+        seed: exit.targetSeed,
+        roomId: this.buildTownMapId(exit.targetSeed),
+      };
     }
     if (exit.targetMapType === 'house_interior') {
       return {
         type: 'house_interior',
+        mapType: 'house_interior',
+        biomeId: 'house_interior',
         seed: exit.targetSeed,
         roomId: this.buildMapId('house', exit.targetSeed),
         context: {
@@ -583,12 +603,15 @@ export class WorldMapManager {
     }
     if (exit.targetMapType === 'forest' || exit.targetRoomId) {
       const forestSeed = exit.targetSeed ?? currentMap?.seed;
-      const biomeId = this.buildForestBiomeId(forestSeed);
-      const biome = this.biomeGenerator.biomes.has(biomeId)
-        ? this.biomeGenerator.biomes.get(biomeId)
-        : this.biomeGenerator.enterBiome(biomeId, forestSeed, { fromMapLoader: true }).biome;
-      const roomId = exit.targetRoomId ?? biome?.startRoomId ?? null;
-      if (!roomId) return null;
+      const biomeMapId = this.buildForestBiomeId(forestSeed);
+      const biome = this.biomeGenerator.biomes.has(biomeMapId)
+        ? this.biomeGenerator.biomes.get(biomeMapId)
+        : this.biomeGenerator.enterBiome(biomeMapId, forestSeed, { fromMapLoader: true }).biome;
+      const roomNodeId = exit.targetRoomId ?? biome?.startRoomId ?? null;
+      if (!roomNodeId) return null;
+      const mapType = 'forest';
+      const biomeId = mapType;
+      const canonicalRoomId = `${biomeId}-${forestSeed}-${roomNodeId}`;
       const returnLink = currentMap?.type === 'town'
         ? {
           targetSeed: currentMap.seed,
@@ -598,7 +621,14 @@ export class WorldMapManager {
           roadWidth: exit.width ?? exit.meta?.roadWidth ?? 3,
         }
         : null;
-      return { type: 'forest', seed: forestSeed, roomId, roomMapId: this.buildForestMapId(forestSeed, roomId), returnLink };
+      return {
+        type: mapType,
+        mapType,
+        biomeId,
+        seed: forestSeed,
+        roomId: canonicalRoomId,
+        returnLink,
+      };
     }
     return null;
   }
