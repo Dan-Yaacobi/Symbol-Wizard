@@ -8,6 +8,7 @@ import { Enemy } from './entities/Enemy.js';
 import { BiomeGenerator } from './world/BiomeGenerator.js';
 import { WorldMapManager } from './world/WorldMapManager.js';
 import { RoomTransitionSystem } from './world/RoomTransitionSystem.js';
+import { MapLoader } from './world/runtime/MapLoader.js';
 import { spawnEnemyGroup } from './world/EnemySpawnSystem.js';
 import { updateEnemies } from './systems/AISystem.js';
 import { updateEnemyPlayerInteractions, updateProjectiles } from './systems/CombatSystem.js';
@@ -37,6 +38,7 @@ import { AbilitySystem } from './systems/AbilitySystem.js';
 import { SpellbookWindow } from './ui/SpellbookWindow.js';
 import { SpellCraftingWindow } from './ui/SpellCraftingWindow.js';
 import { InventoryWindow } from './ui/InventoryWindow.js';
+import { StartScreen } from './ui/StartScreen.js';
 import { AbilityBar } from './ui/AbilityBar.js';
 import { PrefabEditorScreen } from './ui/PrefabEditorScreen.js';
 import { SpriteEditorScreen } from './ui/SpriteEditorScreen.js';
@@ -99,6 +101,7 @@ runtimeConfig.setLogger((message) => logDev(message));
 
 const biomeGenerator = new BiomeGenerator({ roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
 const worldMapManager = new WorldMapManager({ biomeGenerator, roomWidth: ROOM_W, roomHeight: ROOM_H, runtimeConfig });
+const mapLoader = new MapLoader({ worldMapManager, maxCachedRooms: 5, frameBudgetMs: 10 });
 let currentBiomeSeed = randomSeed();
 let pendingDevSeed = String(currentBiomeSeed);
 let activeRoom = null;
@@ -114,6 +117,7 @@ const npcs = [];
 let worldObjects = [];
 const GameState = Object.freeze({
   LOADING: 'loading',
+  START_SCREEN: 'start_screen',
   PLAYING: 'playing',
 });
 let gameState = GameState.LOADING;
@@ -121,6 +125,21 @@ let loadingProgressText = 'Loading...';
 const LOADING_SPRITE_ID = 'ui-loading-spinner';
 let loadingFrameCounter = 0;
 let startupPrewarmStarted = false;
+const startScreen = new StartScreen({
+  onStart: async () => {
+    if (!activeRoom?.id) return;
+    const readyRoom = await mapLoader.ensureRoomReady(activeRoom.id, { priority: 'HIGH', request: worldMapManager.buildRequestFromRoomId(activeRoom.id) });
+    if (!readyRoom) return;
+    activeRoom = readyRoom;
+    map = activeRoom.tiles;
+    syncActiveRoomCollections(activeRoom);
+    syncRoomEnemies(activeRoom);
+    renderer.setBackgroundCache(DIAG_BYPASS_BACKGROUND_CACHE ? null : (activeRoom?.__backgroundCache ?? null));
+    startScreen.unmount();
+    gameState = GameState.PLAYING;
+  },
+});
+startScreen.mount();
 const performanceProbe = DEBUG_PERF_PROBE
   ? {
       events: [],
@@ -142,6 +161,7 @@ const performanceProbe = DEBUG_PERF_PROBE
 const roomTransitionSystem = new RoomTransitionSystem({
   biomeGenerator,
   worldMapManager,
+  mapLoader,
   fadeDurationMs: 150,
   debug: false,
   profilingEnabled: DEBUG_PERF_PROBE && runtimeConfig.get('debug.logTransitionPerf'),
@@ -273,51 +293,21 @@ async function runInitialPrewarm() {
   await loadAllSpriteAssets('./assets');
   logTiming('asset_loading_sprites', spriteAssetStart, nowMs());
 
-  loadingProgressText = 'Generating world...';
-  activeRoom = worldMapManager.enterStartingWorld(currentBiomeSeed);
+  loadingProgressText = 'Scheduling world generation...';
+  const startSeed = currentBiomeSeed;
+  const startRoomId = worldMapManager.buildTownMapId(startSeed);
+  mapLoader.startScheduler();
+  mapLoader.requestRoom(startRoomId, { priority: 'HIGH', request: { type: 'town', seed: startSeed, roomId: startRoomId } });
+  activeRoom = await mapLoader.ensureRoomReady(startRoomId, { priority: 'HIGH', request: { type: 'town', seed: startSeed, roomId: startRoomId } });
   map = activeRoom?.tiles ?? [];
-  if (!activeRoom || !Array.isArray(activeRoom.tiles) || activeRoom.tiles.length <= 0) {
-    console.warn('[Startup] Active room missing tiles', {
-      roomId: activeRoom?.id ?? null,
-      tileCount: activeRoom?.tiles?.length ?? 0,
-    });
-  }
-
-  loadingProgressText = 'Building transition cache...';
-  const preloadRooms = new Map();
-  const queue = [activeRoom];
-  const queued = new Set([activeRoom?.id ?? '']);
-
-  while (queue.length > 0) {
-    const room = queue.shift();
-    if (!room?.id) continue;
-    preloadRooms.set(room.id, room);
-    const exits = Array.isArray(room?.exits)
-      ? room.exits
-      : Object.entries(room?.exits ?? {}).map(([id, exit]) => ({ id, ...exit }));
-    for (const exit of exits) {
-      const target = roomTransitionSystem.prewarmExitTarget(room, exit)?.targetRoom ?? null;
-      if (!target?.id || preloadRooms.has(target.id) || queued.has(target.id)) continue;
-      queue.push(target);
-      queued.add(target.id);
-    }
-  }
-
-  const prewarmedRoomIds = [...preloadRooms.keys()].sort();
-  console.info('[Startup] Prewarm coverage complete', {
-    totalPrewarmedRooms: prewarmedRoomIds.length,
-    roomIds: prewarmedRoomIds,
-  });
 
   loadingProgressText = 'Preparing renderer...';
-  for (const room of preloadRooms.values()) {
-    if (!room?.tiles) continue;
-    prewarmBackgroundCache(renderer, room.tiles, room.objects ?? []);
-    room.__backgroundCache = cloneBackgroundCache(renderer.backgroundCache);
-    if (!room.__backgroundCache) {
-      console.warn('[BackgroundCache] Missing background cache after prewarm', room.id);
-    }
+  if (activeRoom?.tiles) {
+    prewarmBackgroundCache(renderer, activeRoom.tiles, activeRoom.objects ?? []);
+    activeRoom.__backgroundCache = cloneBackgroundCache(renderer.backgroundCache);
   }
+
+  mapLoader.enqueueInitialRooms(activeRoom);
 
   loadingProgressText = 'Finalizing startup...';
   syncActiveRoomCollections(activeRoom);
@@ -681,7 +671,9 @@ function resetEncounterState() {
 
 function regenerateWorld(seed = null) {
   const nextSeed = seed === null ? randomSeed() : (Number(seed) >>> 0);
-  const nextActiveRoom = worldMapManager.regenerate(nextSeed);
+  worldMapManager.regenerate(nextSeed);
+  const roomId = worldMapManager.buildTownMapId(nextSeed);
+  const nextActiveRoom = mapLoader.requestRoom(roomId, { priority: 'HIGH', request: { type: 'town', seed: nextSeed, roomId } }) ?? worldMapManager.mapCache.get(roomId);
   if (!nextActiveRoom) return;
 
   currentBiomeSeed = nextSeed;
@@ -1396,7 +1388,8 @@ function tick(now) {
       waitForFirstComposite().then(async () => {
         try {
           await runInitialPrewarm();
-          gameState = GameState.PLAYING;
+          startScreen.setReady(true);
+          gameState = GameState.START_SCREEN;
         } catch (error) {
           console.error('[Startup] Initial prewarm failed', error);
           loadingProgressText = 'Loading failed (see console)';
@@ -1483,6 +1476,15 @@ function tick(now) {
   });
 
 
+
+
+  if (gameState === GameState.START_SCREEN) {
+    const queue = mapLoader.getQueueSnapshot();
+    startScreen.setProgress(`Preparing rooms: ${queue.done}/${queue.total || 1}`);
+    renderLoadingScreen();
+    requestAnimationFrame(tick);
+    return;
+  }
 
   if (prefabEditor.isOpen) {
     timed('render', framePerf, () => {
@@ -1599,6 +1601,7 @@ function tick(now) {
       toRoomId: transitionResult.room?.id ?? null,
     });
     activeRoom = transitionResult.room;
+    mapLoader.enqueueNeighbors(activeRoom, { priority: 'MEDIUM', depth: 2 });
     map = activeRoom.tiles;
     if (!activeRoom || !Array.isArray(activeRoom.tiles) || activeRoom.tiles.length <= 0) {
       console.warn('[RoomTransition] Active room has no tiles', {

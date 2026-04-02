@@ -1388,3 +1388,26 @@ body {
   font: 12px/1.4 ui-monospace, monospace;
 }
 .sprite-editor__status[data-error='1'] { color: #ff8c8c; }
+
+.start-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 9, 16, 0.92);
+  color: #d8e4ff;
+  font-family: monospace;
+}
+
+.start-screen__panel {
+  border: 1px solid #4b5b73;
+  padding: 16px;
+  min-width: 280px;
+  background: #0c1725;
+}
+
+.start-screen__panel button:disabled {
+  opacity: 0.5;
+}

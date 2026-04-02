@@ -74,7 +74,7 @@ export class BiomeGenerator {
     return cacheKey ? this.roomCache.has(cacheKey) : false;
   }
 
-  enterBiome(biomeId, seed = randomSeed()) {
+  enterBiome(biomeId, seed = randomSeed(), _options = {}) {
     const alreadyLoaded = this.biomes.has(biomeId);
     console.info('[BiomeGenerator] enterBiome', {
       biomeId,
@@ -120,17 +120,16 @@ export class BiomeGenerator {
       reason: 'normal_biome_entry_must_preserve_room_cache',
     });
 
-    const startRoom = this.loadRoom(this.currentBiome.startRoomId);
     return {
       biome: this.currentBiome,
-      startRoom,
+      startRoom: null,
     };
   }
 
-  regenerateBiome(biomeId, seed = randomSeed()) {
+  regenerateBiome(biomeId, seed = randomSeed(), options = {}) {
     this.biomes.delete(biomeId);
     this.clearRoomCache({ caller: 'regenerateBiome', reason: 'explicit_reset_event', biomeId });
-    return this.enterBiome(biomeId, seed);
+    return this.enterBiome(biomeId, seed, options);
   }
 
 
@@ -157,7 +156,8 @@ export class BiomeGenerator {
     return this.currentBiome?.rooms.get(roomId) ?? null;
   }
 
-  loadRoom(roomId) {
+  loadRoom(roomId, options = {}) {
+    if (!options.fromMapLoader) console.warn('[MapLoader] Illegal direct room generation detected', { caller: "BiomeGenerator.loadRoom", roomId });
     const cachedRoom = this.getCachedRoom(roomId, { caller: 'loadRoom' });
     if (cachedRoom) return cachedRoom;
 

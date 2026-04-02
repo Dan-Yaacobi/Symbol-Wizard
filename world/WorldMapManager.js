@@ -411,14 +411,16 @@ export class WorldMapManager {
     return this.enterStartingWorld(seed);
   }
 
-  loadMap(request = {}) {
+  loadMap(request = {}, options = {}) {
+    if (!options.fromMapLoader) console.warn('[MapLoader] Illegal direct room generation detected', { caller: 'WorldMapManager.loadMap', request });
     const type = request.type ?? 'forest';
-    if (type === 'town') return this.loadTown(request.seed);
-    if (type === 'house_interior') return this.loadHouseInterior(request.seed, request.context ?? {});
-    return this.loadForest(request.seed, request);
+    if (type === 'town') return this.loadTown(request.seed, options);
+    if (type === 'house_interior') return this.loadHouseInterior(request.seed, request.context ?? {}, options);
+    return this.loadForest(request.seed, request, options);
   }
 
-  loadTown(seed) {
+  loadTown(seed, options = {}) {
+    if (!options.fromMapLoader) console.warn('[MapLoader] Illegal direct room generation detected', { caller: 'WorldMapManager.loadTown', seed });
     const mapId = this.buildTownMapId(seed);
     if (this.mapCache.has(mapId)) return this.mapCache.get(mapId);
 
@@ -429,7 +431,7 @@ export class WorldMapManager {
     const forestExit = town.exits?.find((candidate) => candidate.targetMapType === 'forest');
     if (forestExit?.targetSeed) {
       const biomeId = this.buildForestBiomeId(forestExit.targetSeed);
-      const { biome } = this.biomeGenerator.enterBiome(biomeId, forestExit.targetSeed);
+      const { biome } = this.biomeGenerator.enterBiome(biomeId, forestExit.targetSeed, { fromMapLoader: true });
       const targetRoomId = forestExit.targetRoomId ?? biome?.startRoomId ?? null;
       if (targetRoomId) {
         forestExit.targetId = targetRoomId;
@@ -451,7 +453,8 @@ export class WorldMapManager {
   }
 
 
-  loadHouseInterior(seed, context = {}) {
+  loadHouseInterior(seed, context = {}, options = {}) {
+    if (!options.fromMapLoader) console.warn('[MapLoader] Illegal direct room generation detected', { caller: 'WorldMapManager.loadHouseInterior', seed });
     const mapId = this.buildMapId('house', seed);
     if (this.mapCache.has(mapId)) return this.mapCache.get(mapId);
     const map = this.townGenerator.generateHouseInterior(seed, context);
@@ -459,11 +462,12 @@ export class WorldMapManager {
     return map;
   }
 
-  loadForest(seed, options = {}) {
+  loadForest(seed, options = {}, loaderOptions = {}) {
+    if (!loaderOptions.fromMapLoader) console.warn('[MapLoader] Illegal direct room generation detected', { caller: 'WorldMapManager.loadForest', seed, roomId: options.roomId ?? null });
     const biomeId = this.buildForestBiomeId(seed);
     const biome = this.biomeGenerator.biomes.has(biomeId)
       ? this.biomeGenerator.biomes.get(biomeId)
-      : this.biomeGenerator.enterBiome(biomeId, seed).biome;
+      : this.biomeGenerator.enterBiome(biomeId, seed, { fromMapLoader: true }).biome;
     this.biomeGenerator.currentBiome = biome;
     const roomId = options.roomId ?? biome?.startRoomId ?? null;
     const mapId = roomId ? this.buildForestMapId(seed, roomId) : biomeId;
@@ -504,7 +508,7 @@ export class WorldMapManager {
         reason: 'normal_transition_must_not_invalidate_room_cache',
       });
     }
-    const baseRoom = roomId ? this.biomeGenerator.loadRoom(roomId) : null;
+    const baseRoom = roomId ? this.biomeGenerator.loadRoom(roomId, { fromMapLoader: true }) : null;
     const room = baseRoom ? JSON.parse(JSON.stringify(baseRoom)) : null;
     const normalized = normalizeForestRoom(room, {
       biomeId,
@@ -514,7 +518,7 @@ export class WorldMapManager {
     });
 
     if (normalized && returnLink?.targetSeed) {
-      const town = this.loadTown(returnLink.targetSeed);
+      const town = this.loadTown(returnLink.targetSeed, { fromMapLoader: true });
       const entryId = returnLink.targetEntryId ?? 'town_exit_main';
       const townExit = town.exits?.find((candidate) => candidate.id === entryId)
         ?? town.exits?.find((candidate) => candidate.targetMapType === 'forest');
@@ -545,10 +549,65 @@ export class WorldMapManager {
     return normalized;
   }
 
-  resolveMapByExit(currentMap, exit) {
+  buildRequestFromRoomId(roomId) {
+    if (!roomId) return null;
+    if (roomId.startsWith('town-')) return { type: 'town', seed: roomId.slice(5), roomId };
+    if (roomId.startsWith('house-')) return { type: 'house_interior', seed: roomId.slice(6), roomId };
+    if (roomId.startsWith('forest-')) {
+      const parts = roomId.split('-');
+      if (parts.length >= 4) {
+        return { type: 'forest', seed: parts[1], roomId: parts.slice(2).join('-') };
+      }
+    }
+    return null;
+  }
+
+  buildRequestFromExit(currentMap, exit) {
+    if (!exit) return null;
+    if (exit.targetMapType === 'town') {
+      return { type: 'town', seed: exit.targetSeed, roomId: this.buildTownMapId(exit.targetSeed) };
+    }
+    if (exit.targetMapType === 'house_interior') {
+      return {
+        type: 'house_interior',
+        seed: exit.targetSeed,
+        roomId: this.buildMapId('house', exit.targetSeed),
+        context: {
+          parentTownSeed: exit.meta?.parentTownSeed,
+          returnEntryId: exit.meta?.returnEntryId,
+          returnPosition: exit.meta?.returnPosition,
+          houseId: exit.meta?.houseId,
+          houseIndex: exit.meta?.houseIndex,
+        },
+      };
+    }
+    if (exit.targetMapType === 'forest' || exit.targetRoomId) {
+      const forestSeed = exit.targetSeed ?? currentMap?.seed;
+      const biomeId = this.buildForestBiomeId(forestSeed);
+      const biome = this.biomeGenerator.biomes.has(biomeId)
+        ? this.biomeGenerator.biomes.get(biomeId)
+        : this.biomeGenerator.enterBiome(biomeId, forestSeed, { fromMapLoader: true }).biome;
+      const roomId = exit.targetRoomId ?? biome?.startRoomId ?? null;
+      if (!roomId) return null;
+      const returnLink = currentMap?.type === 'town'
+        ? {
+          targetSeed: currentMap.seed,
+          targetEntryId: exit.id,
+          townExitSide: exit.meta?.exitSide ?? currentMap.metadata?.townExitSide ?? 'top',
+          townExitPosition: exit.position ?? exit.meta?.townExitPosition ?? currentMap.metadata?.townExitPosition ?? null,
+          roadWidth: exit.width ?? exit.meta?.roadWidth ?? 3,
+        }
+        : null;
+      return { type: 'forest', seed: forestSeed, roomId, roomMapId: this.buildForestMapId(forestSeed, roomId), returnLink };
+    }
+    return null;
+  }
+
+  resolveMapByExit(currentMap, exit, options = {}) {
+    if (!options.fromMapLoader) console.warn('[MapLoader] Illegal direct room generation detected', { caller: 'WorldMapManager.resolveMapByExit', exitId: exit?.id ?? null });
     if (exit?.targetMapType === 'town') {
       const townMapId = this.buildTownMapId(exit.targetSeed);
-      const town = this.mapCache.get(townMapId) ?? this.loadTown(exit.targetSeed);
+      const town = this.mapCache.get(townMapId) ?? this.loadTown(exit.targetSeed, { fromMapLoader: true });
       if (exit.targetEntryId && exit.meta?.returnPosition && !town.entrances?.[exit.targetEntryId]) {
         town.entrances[exit.targetEntryId] = {
           id: exit.targetEntryId,
@@ -569,7 +628,7 @@ export class WorldMapManager {
         returnPosition: exit.meta?.returnPosition,
         houseId: exit.meta?.houseId,
         houseIndex: exit.meta?.houseIndex,
-      });
+      }, { fromMapLoader: true });
     }
 
     if (exit?.targetRoomId) {
@@ -589,7 +648,7 @@ export class WorldMapManager {
       return this.loadForest(forestSeed, {
         roomId: exit.targetRoomId,
         returnLink,
-      });
+      }, { fromMapLoader: true });
     }
 
     if (exit?.targetMapType === 'forest') {
@@ -605,7 +664,7 @@ export class WorldMapManager {
           townExitSide: exit.meta?.exitSide ?? currentMap.metadata?.townExitSide ?? 'top',
           roadWidth: exit.width ?? exit.meta?.roadWidth ?? 3,
         },
-      });
+      }, { fromMapLoader: true });
     }
 
     return null;
