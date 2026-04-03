@@ -1,3 +1,5 @@
+import { createRoomGenerationStepper } from '../generation/GenerationStepper.js';
+
 function rafNextFrame() {
   if (typeof globalThis?.requestAnimationFrame === 'function') {
     return new Promise((resolve) => globalThis.requestAnimationFrame(() => resolve()));
@@ -140,9 +142,22 @@ export class MapLoader {
   async processRoomGeneration(roomId, request = null) {
     const requestedRoomId = this.resolveCanonicalRoomId(roomId, request);
     if (!requestedRoomId) return null;
-    await this.nextFrame();
-    const room = this.worldMapManager.loadMap(request ?? this.worldMapManager.buildRequestFromRoomId(requestedRoomId), { fromMapLoader: true });
-    await this.nextFrame();
+
+    const generationRequest = request ?? this.worldMapManager.buildRequestFromRoomId(requestedRoomId);
+    const stepper = createRoomGenerationStepper(generationRequest, {
+      worldMapManager: this.worldMapManager,
+    });
+
+    while (!stepper.isDone()) {
+      const start = this.nowMs();
+      await stepper.runNextStep();
+      if ((this.nowMs() - start) > this.frameBudgetMs) {
+        await this.nextFrame();
+      }
+      await this.nextFrame();
+    }
+
+    const room = stepper.getResult();
     if (room) {
       this.ensureBackgroundCache(room);
       this.roomCache.set(requestedRoomId, room);
