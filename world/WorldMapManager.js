@@ -124,6 +124,12 @@ function carveForestEntry(room, entryId, direction, roadWidth = MIN_ROAD_WIDTH) 
   carveEntranceSafetyZone(room.tiles, landing, { radius: ENTRANCE_CLEAR_ZONE_RADIUS, removableObjects: room.objects ?? [] });
 
   room.entrances = room.entrances ?? {};
+  console.warn('[ValidatorViolation] external mutation after validation', {
+    system: 'WorldMapManager',
+    roomId: room?.id ?? null,
+    field: 'entrances',
+    entryId,
+  });
   room.entrances[entryId] = {
     id: entryId,
     x: anchor.x,
@@ -164,7 +170,7 @@ function ensureForestEntranceReachable(room, exits, entryId, roadWidth = MIN_ROA
 
   if (connectPoint && (connectPoint.x !== entrance.landingX || connectPoint.y !== entrance.landingY)) {
     console.warn('[WorldMapManager] Forest entrance connectivity repair', { entryId, connectPoint });
-    console.warn('[ValidatorViolation] External system modifying validated room', {
+    console.warn('[ValidatorViolation] external mutation after validation', {
       system: 'WorldMapManager',
       roomId: room?.id ?? null,
       field: 'connectivity',
@@ -181,7 +187,7 @@ function ensureForestEntranceReachable(room, exits, entryId, roadWidth = MIN_ROA
 
   if (!reachable.has(exitKey)) {
     console.warn('[WorldMapManager] Forest town exit connectivity repair', { entryId, exitId: exit?.id ?? null });
-    console.warn('[ValidatorViolation] External system modifying validated room', {
+    console.warn('[ValidatorViolation] external mutation after validation', {
       system: 'WorldMapManager',
       roomId: room?.id ?? null,
       field: 'connectivity',
@@ -218,7 +224,7 @@ function ensureForestEntranceReachable(room, exits, entryId, roadWidth = MIN_ROA
       const candidateKey = `${candidate.x},${candidate.y}`;
       if (reachable.has(candidateKey)) continue;
       usedTargets.push({ x: candidate.x, y: candidate.y });
-      console.warn('[ValidatorViolation] External system modifying validated room', {
+      console.warn('[ValidatorViolation] external mutation after validation', {
         system: 'WorldMapManager',
         roomId: room?.id ?? null,
         field: 'connectivity',
