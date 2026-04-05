@@ -5,7 +5,6 @@ import { RoomPlanner } from './RoomPlanner.js';
 import { ExitAnchorSystem } from './ExitAnchorSystem.js';
 import { PathGenerator } from './PathGenerator.js';
 import { ExitTriggerSystem } from './ExitTriggerSystem.js';
-import { RoomValidationSystem } from './RoomValidationSystem.js';
 import { RoomRepairSystem } from './RoomRepairSystem.js';
 import { GenerationValidator } from './validation/GenerationValidator.js';
 import { resolvePathGenerationConfig } from './PathGenerationConfig.js';
@@ -91,7 +90,6 @@ export class RoomGenerator {
     this.exitAnchorSystem = new ExitAnchorSystem();
     this.pathGenerator = new PathGenerator();
     this.exitTriggerSystem = new ExitTriggerSystem();
-    this.roomValidationSystem = new RoomValidationSystem();
     this.roomRepairSystem = new RoomRepairSystem();
   }
 
@@ -215,7 +213,7 @@ export class RoomGenerator {
     }, validationContext);
     let validation = {
       valid: validatorResult.valid,
-      errors: validatorResult.issues.map((issue) => ({ type: issue.type, ...(issue.details ?? {}), severity: issue.severity })),
+      errors: validatorResult.issues.map((issue) => ({ type: issue.type, ...(issue.data ?? {}), severity: issue.severity })),
       debugEvents: validatorResult.issues.length ? [{ type: 'VALIDATION_FAILED', roomId: roomNode.id, issues: validatorResult.issues }] : [],
     };
     const logValidatorSummary = (result) => {
@@ -251,7 +249,7 @@ export class RoomGenerator {
         }, validationContext);
         validation = {
           valid: validatorResult.valid,
-          errors: validatorResult.issues.map((issue) => ({ type: issue.type, ...(issue.details ?? {}), severity: issue.severity })),
+          errors: validatorResult.issues.map((issue) => ({ type: issue.type, ...(issue.data ?? {}), severity: issue.severity })),
           debugEvents: validatorResult.issues.length ? [{ type: 'VALIDATION_FAILED', roomId: roomNode.id, issues: validatorResult.issues }] : [],
         };
         logValidatorSummary(validatorResult);

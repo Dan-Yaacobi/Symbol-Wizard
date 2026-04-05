@@ -13,7 +13,7 @@ export class RoomRepairSystem {
     if (!repairableIssues.length) return { applied: false, debugEvents: [] };
 
     const normalizedErrors = repairableIssues.length
-      ? repairableIssues.map((issue) => ({ type: issue.type, ...(issue.details ?? {}) }))
+      ? repairableIssues.map((issue) => ({ type: issue.type, ...(issue.data ?? {}) }))
       : (errors ?? []);
     const debugEvents = [];
     for (const error of normalizedErrors) {

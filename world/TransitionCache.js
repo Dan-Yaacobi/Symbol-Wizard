@@ -294,7 +294,7 @@ export function buildRoomTransitionCache(room, options = {}) {
         corrected: { x: spawn.x, y: spawn.y },
         connected: isConnectedToPath(pathConnectivity, spawn.x, spawn.y),
       });
-      console.warn('[ValidatorViolation] External system modifying validated room', {
+      console.warn('[ValidatorViolation] external mutation after validation', {
         system: 'TransitionCache',
         roomId: room?.id ?? null,
         field: 'spawn',
